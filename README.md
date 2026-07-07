@@ -236,6 +236,21 @@ Each entity/account run is an independent transaction with its own `sync_logs`
 row (`running → success | partial | failed`), timing, and insert/update/fail
 counts. A failure in one entity does not roll back the others.
 
+## Frontend (Command Center UI)
+
+A production-ready **React + TypeScript** dashboard lives in [`frontend/`](frontend/).
+It consumes the REST APIs above (no duplicated business logic) and provides the
+executive overview, priority queue, alerts, campaign/keyword health, search-term
+explorer, budget monitoring, trends, and report downloads — with global account +
+date-window filters and header-based role auth.
+
+```bash
+cd frontend && npm install && npm run dev   # http://localhost:5173 (proxies to :8000)
+```
+
+Stack: Vite, React 18, TanStack Query, Axios, React Router, Recharts, Tailwind.
+Details: [frontend/README.md](frontend/README.md).
+
 ## Configuration
 
 All configuration is environment-driven (`.env` locally, real env vars in prod).
