@@ -6,18 +6,41 @@ In Docker:    handled by the container entrypoint (migrations then uvicorn).
 
 from __future__ import annotations
 
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.router import api_router
 from app.config.logging import configure_logging, get_logger
 from app.config.settings import get_settings
+from app.database.session import session_scope
+from app.repositories.audit_log import AuditLogRepository
 from app.tasks.scheduler import shutdown_scheduler, start_scheduler
 
 log = get_logger(__name__)
+
+# Methods that mutate state are always audited (Module 13).
+_AUDITED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _record_audit(request: Request, status_code: int, duration_ms: int) -> None:
+    """Best-effort audit write; never breaks the request on failure."""
+    try:
+        with session_scope() as db:
+            AuditLogRepository(db).record(
+                actor=request.headers.get("X-Actor"),
+                role=(request.headers.get("X-Role") or "").lower() or None,
+                method=request.method,
+                path=request.url.path,
+                status_code=status_code,
+                duration_ms=duration_ms,
+                client_ip=request.client.host if request.client else None,
+            )
+    except Exception as exc:  # noqa: BLE001 - auditing must not affect responses
+        log.warning("audit.write_failed", error=str(exc))
 
 
 @asynccontextmanager
@@ -57,6 +80,16 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def audit_middleware(request: Request, call_next):  # noqa: ANN001,ANN202
+        start = time.monotonic()
+        response = await call_next(request)
+        if settings.audit_enabled and request.method in _AUDITED_METHODS:
+            _record_audit(
+                request, response.status_code, int((time.monotonic() - start) * 1000)
+            )
+        return response
 
     app.include_router(api_router, prefix=settings.api_prefix)
 

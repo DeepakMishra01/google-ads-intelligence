@@ -201,6 +201,30 @@ Base path: `/api/v1`
 
 Full details: [docs/api.md](docs/api.md) (or the live Swagger UI).
 
+### Phase 2 — Operations Command Center
+
+A read-only operational console layered on the Phase 1 data. It answers "what
+changed, what needs attention, and where should I spend my next hour?" — no AI,
+no campaign changes. All scoring rules live in one place
+([`app/config/ops_rules.py`](app/config/ops_rules.py)).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/dashboard/overview` | Executive overview (spend, counts, disapprovals, sync health) |
+| GET | `/campaigns/health` | Campaign **health score** (0-100), issues, priority |
+| GET | `/keywords/health` | Keyword health + Quality Score diagnosis |
+| GET | `/budgets/monitoring` | Budget risk (healthy/warning/critical) + EOD projection |
+| GET | `/searchterms/explore` | Filter/sort/paginate search terms |
+| GET | `/priorities` | **Priority engine** — ranked task list |
+| GET | `/trends/metrics`, `/trends/growth`, `/trends/compare` | Trend analytics |
+| GET/POST/PATCH | `/alerts`, `/alerts/evaluate`, `/alerts/{id}` | **Alert engine** — list, generate, resolve/dismiss |
+| GET | `/reports/{period}?format=json\|csv\|excel` | Daily/weekly/monthly reports |
+| GET | `/dashboard/top-spenders`, `/dashboard/quality-score`, `/dashboard/priorities`, `/dashboard/alerts`, … | Speed-optimized dashboard aliases |
+| GET | `/audit/logs` | Audit trail (admin only) |
+
+Full details, scoring formulas, and rule reference:
+[docs/command-center.md](docs/command-center.md).
+
 ## Sync engine
 
 - **Hourly** — light refresh of recent campaign performance (2-day window).
@@ -233,10 +257,13 @@ pytest --cov=app  # with coverage
 - [Deployment guide](docs/deployment.md)
 - [Google Ads API configuration](docs/google-ads-setup.md)
 - [API reference](docs/api.md)
+- [Operations Command Center (Phase 2)](docs/command-center.md)
 
-## Roadmap to Phase 2
+## Roadmap to Phase 3
 
-The historical snapshot tables and the read APIs are the contract Phase 2 builds
-on. AI agents will consume `/dashboard/*` and `/metrics` (or read snapshots
-directly) to detect anomalies, recommend optimizations, and — eventually — act.
-No schema changes are required to start Phase 2.
+Phase 1 (data layer) and Phase 2 (Operations Command Center) are complete and
+read-only. The health score, priority engine, and alert engine are pure,
+deterministic services with their rules in one config file — so Phase 3 AI agents
+can consume the exact same signals the console shows humans, and act on the
+`recommendation`/`suggested_action` placeholders already threaded through the
+APIs. No schema changes are required to start Phase 3.

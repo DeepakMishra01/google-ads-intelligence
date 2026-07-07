@@ -14,6 +14,9 @@ import os
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
 os.environ.setdefault("APP_LOG_JSON", "false")
 os.environ.setdefault("GOOGLE_ADS_LOGIN_CUSTOMER_ID", "1234567890")
+# The audit middleware writes to the configured (Postgres) DB, not the SQLite
+# test DB; disable it so mutating-endpoint tests don't touch an external server.
+os.environ.setdefault("AUDIT_ENABLED", "false")
 
 from collections.abc import Iterator  # noqa: E402
 from datetime import date, timedelta  # noqa: E402
@@ -56,6 +59,16 @@ def db_session(session_factory) -> Iterator[Session]:
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture(autouse=True)
+def _clear_dashboard_cache() -> Iterator[None]:
+    """The dashboard TTL cache is process-global; reset it around every test."""
+    from app.utils.cache import dashboard_cache
+
+    dashboard_cache.clear()
+    yield
+    dashboard_cache.clear()
 
 
 @pytest.fixture

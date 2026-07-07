@@ -9,7 +9,9 @@ from app.database.base import Base
 from app.models.account import Account
 from app.models.ad import Ad, AdSnapshot
 from app.models.ad_group import AdGroup, AdGroupSnapshot
+from app.models.alert import Alert, AlertSeverity, AlertStatus
 from app.models.api_token import ApiToken
+from app.models.audit_log import AuditLog
 from app.models.budget import Budget, BudgetSnapshot
 from app.models.campaign import (
     Campaign,
@@ -47,4 +49,8 @@ __all__ = [
     "ApiToken",
     "User",
     "UserRole",
+    "Alert",
+    "AlertSeverity",
+    "AlertStatus",
+    "AuditLog",
 ]

@@ -43,3 +43,12 @@ class SyncLogRepository(BaseRepository[SyncLog]):
     def latest(self) -> SyncLog | None:
         stmt = select(SyncLog).order_by(desc(SyncLog.started_at)).limit(1)
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def last_successful(self) -> SyncLog | None:
+        stmt = (
+            select(SyncLog)
+            .where(SyncLog.status == "success")
+            .order_by(desc(SyncLog.finished_at))
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalar_one_or_none()

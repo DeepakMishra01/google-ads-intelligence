@@ -66,8 +66,10 @@ class Settings(BaseSettings):
     sync_retry_backoff_seconds: int = 30
     sync_default_lookback_days: int = 7
 
-    # --- Security ---
+    # --- Security / audit ---
     api_key: str = ""
+    audit_enabled: bool = True  # write an audit row for mutating requests
+    db_connect_timeout: int = 10  # seconds; bounds hangs to an unreachable DB
 
     # ------------------------------------------------------------------ #
     # Validators / derived values

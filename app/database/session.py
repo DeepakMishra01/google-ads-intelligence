@@ -14,12 +14,19 @@ _settings = get_settings()
 
 # A single shared engine per process. `pool_pre_ping` recycles dead connections
 # (important for long-lived scheduler processes hitting a remote Postgres).
+# `connect_timeout` bounds how long a request can hang if the DB is unreachable,
+# so a down database fails fast instead of stalling on TCP SYN retransmission.
+_connect_args: dict = {}
+if _settings.sqlalchemy_database_uri.startswith("postgresql"):
+    _connect_args["connect_timeout"] = _settings.db_connect_timeout
+
 engine = create_engine(
     _settings.sqlalchemy_database_uri,
     echo=_settings.db_echo,
     pool_size=_settings.db_pool_size,
     max_overflow=_settings.db_max_overflow,
     pool_pre_ping=True,
+    connect_args=_connect_args,
     future=True,
 )
 
