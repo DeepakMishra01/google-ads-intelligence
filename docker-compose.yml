@@ -1,0 +1,41 @@
+name: google-ads-intelligence
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ads}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ads}
+      POSTGRES_DB: ${POSTGRES_DB:-ads_intelligence}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ads} -d ${POSTGRES_DB:-ads_intelligence}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Point the app at the compose network's db service (overrides .env).
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ads}:${POSTGRES_PASSWORD:-ads}@db:5432/${POSTGRES_DB:-ads_intelligence}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

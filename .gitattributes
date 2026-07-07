@@ -1,0 +1,11 @@
+# Keep shell scripts LF so they run inside Linux containers even when the repo
+# is checked out on Windows.
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+
+# Normalize line endings for common text types.
+*.py text
+*.md text
+*.yml text
+*.yaml text
+*.toml text
