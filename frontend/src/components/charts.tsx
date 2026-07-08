@@ -42,6 +42,7 @@ export function SpendAreaChart({ data, height = 240 }: { data: TrendPoint[]; hei
           stroke={CHART_COLORS.cost}
           strokeWidth={2}
           fill="url(#spend)"
+          isAnimationActive={false}
         />
       </AreaChart>
     </ResponsiveContainer>
@@ -61,7 +62,7 @@ export function EngagementChart({ data, height = 240 }: { data: TrendPoint[]; he
           contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="clicks" name="Clicks" stroke={CHART_COLORS.clicks} strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="clicks" name="Clicks" stroke={CHART_COLORS.clicks} strokeWidth={2} dot={false} isAnimationActive={false} />
         <Line
           type="monotone"
           dataKey="impressions"
@@ -88,8 +89,8 @@ export function GrowthChart({ data, height = 240 }: { data: GrowthPoint[]; heigh
           contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="campaigns" name="Campaigns" stroke="#2563eb" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="keywords" name="Keywords" stroke="#16a34a" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="campaigns" name="Campaigns" stroke="#2563eb" strokeWidth={2} dot={false} isAnimationActive={false} />
+        <Line type="monotone" dataKey="keywords" name="Keywords" stroke="#16a34a" strokeWidth={2} dot={false} isAnimationActive={false} />
         <Line
           type="monotone"
           dataKey="search_terms"

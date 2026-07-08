@@ -14,7 +14,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        // Explicit IPv4 — on Windows "localhost" may resolve to ::1 where the
+        // backend (bound to 127.0.0.1) does not listen.
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
     },

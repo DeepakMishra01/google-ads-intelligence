@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app import __version__
 from app.api.router import api_router
@@ -72,6 +73,9 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
         lifespan=lifespan,
     )
+
+    # Compress JSON/report payloads over ~500 bytes (tables, trends, exports).
+    app.add_middleware(GZipMiddleware, minimum_size=500)
 
     # CORS is permissive by default for an internal tool; tighten in production.
     app.add_middleware(

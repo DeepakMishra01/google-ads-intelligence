@@ -17,6 +17,8 @@ os.environ.setdefault("GOOGLE_ADS_LOGIN_CUSTOMER_ID", "1234567890")
 # The audit middleware writes to the configured (Postgres) DB, not the SQLite
 # test DB; disable it so mutating-endpoint tests don't touch an external server.
 os.environ.setdefault("AUDIT_ENABLED", "false")
+# Force a clean, self-contained config regardless of any local .env on disk.
+os.environ["API_KEY"] = ""
 
 from collections.abc import Iterator  # noqa: E402
 from datetime import date, timedelta  # noqa: E402

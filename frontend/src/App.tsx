@@ -1,17 +1,23 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import LoginPage from "./auth/LoginPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
-import AlertsPage from "./pages/AlertsPage";
-import BudgetsPage from "./pages/BudgetsPage";
-import CampaignHealthPage from "./pages/CampaignHealthPage";
-import KeywordHealthPage from "./pages/KeywordHealthPage";
-import OverviewPage from "./pages/OverviewPage";
-import PriorityQueuePage from "./pages/PriorityQueuePage";
-import ReportsPage from "./pages/ReportsPage";
-import SearchTermsPage from "./pages/SearchTermsPage";
-import TrendsPage from "./pages/TrendsPage";
+import { Spinner } from "./components/ui";
 import type { ReactNode } from "react";
+
+// Pages are code-split so the initial bundle only carries the shell + the first
+// route the user lands on; the rest load on navigation.
+const OverviewPage = lazy(() => import("./pages/OverviewPage"));
+const PriorityQueuePage = lazy(() => import("./pages/PriorityQueuePage"));
+const AlertsPage = lazy(() => import("./pages/AlertsPage"));
+const CampaignHealthPage = lazy(() => import("./pages/CampaignHealthPage"));
+const KeywordHealthPage = lazy(() => import("./pages/KeywordHealthPage"));
+const SearchTermsPage = lazy(() => import("./pages/SearchTermsPage"));
+const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
+const TrendsPage = lazy(() => import("./pages/TrendsPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session } = useAuth();
@@ -21,26 +27,30 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        element={
-          <RequireAuth>
-            <Layout />
-          </RequireAuth>
-        }
-      >
-        <Route path="/" element={<OverviewPage />} />
-        <Route path="/priorities" element={<PriorityQueuePage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
-        <Route path="/campaigns" element={<CampaignHealthPage />} />
-        <Route path="/keywords" element={<KeywordHealthPage />} />
-        <Route path="/search-terms" element={<SearchTermsPage />} />
-        <Route path="/budgets" element={<BudgetsPage />} />
-        <Route path="/trends" element={<TrendsPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ErrorBoundary>
+      <Suspense fallback={<Spinner label="Loading…" />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            element={
+              <RequireAuth>
+                <Layout />
+              </RequireAuth>
+            }
+          >
+            <Route path="/" element={<OverviewPage />} />
+            <Route path="/priorities" element={<PriorityQueuePage />} />
+            <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/campaigns" element={<CampaignHealthPage />} />
+            <Route path="/keywords" element={<KeywordHealthPage />} />
+            <Route path="/search-terms" element={<SearchTermsPage />} />
+            <Route path="/budgets" element={<BudgetsPage />} />
+            <Route path="/trends" element={<TrendsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
