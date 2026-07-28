@@ -195,6 +195,25 @@ class AdCopyService:
     # ------------------------------------------------------------------ #
     # keyword scoring + grouping
     # ------------------------------------------------------------------ #
+    def _brand_keywords(self, brief) -> set[str]:
+        """Pure brand terms — the college name, abbreviation, aliases, +location."""
+        base = brief.brand.lower()
+        short = brief.short.lower()
+        terms = {base, short, *[a.lower() for a in brief.aliases]}
+        # Add a "... college" variant only when the name has no institution word.
+        inst = ("university", "institute", "school", "college", "academy")
+        if not any(w in base for w in inst):
+            terms.add(f"{base} college")
+        if not any(w in short for w in inst):
+            terms.add(f"{short} college")
+        if brief.exam:
+            terms.add(brief.exam.lower())
+        if brief.location:
+            loc = brief.location.lower()
+            terms.add(f"{base} {loc}")
+            terms.add(f"{short} {loc}")
+        return {t.strip() for t in terms if t.strip()}
+
     def _keyword_plan(self, brief) -> list[dict[str, Any]]:
         """Generate a clean brand + intent keyword plan (the strategist baseline).
 
@@ -236,11 +255,15 @@ class AdCopyService:
 
         # Drop broad-match spillover: keep only keywords that mention this campus.
         historical = [kw for kw in raw_kw if is_relevant(kw["keyword"])]
-        # Merge the generated brand plan for coverage (dedupe by text).
+        brand_set = self._brand_keywords(brief)
+        # Merge the generated brand plan + pure brand keywords (dedupe by text).
         seen = {kw["keyword"].lower() for kw in historical}
-        candidates = historical + [
-            p for p in self._keyword_plan(brief) if p["keyword"].lower() not in seen
-        ]
+        empty = {"source": "suggested", "search_volume": None, "competition": None,
+                 "historical_clicks": None, "historical_ctr": None,
+                 "historical_cpc": None, "quality_score": None}
+        extras = [{"keyword": b, **empty} for b in sorted(brand_set)]
+        extras += self._keyword_plan(brief)
+        candidates = historical + [e for e in extras if e["keyword"].lower() not in seen]
 
         brand_terms = brief.patterns()
         insights: list[dict[str, Any]] = []
@@ -249,13 +272,16 @@ class AdCopyService:
             merged = {**kw, "commercial_intent": cls["commercial_intent"],
                       "intent_confidence": cls["confidence"]}
             sc = score_keyword(merged)
-            # Suggested keywords have no metrics; give them a relevance floor so a
-            # clean brand plan still surfaces above nothing.
+            # Pure brand terms → Brand ad group, ranked highest (they convert best).
+            is_brand_kw = kw["keyword"].lower() in brand_set
+            intent = "brand" if is_brand_kw else cls["intent"]
             score = sc["score"] if kw.get("source") != "suggested" else max(sc["score"], 55.0)
+            if is_brand_kw:
+                score = max(score, 80.0)
             insights.append(
                 {
                     "keyword": kw["keyword"],
-                    "intent": cls["intent"],
+                    "intent": intent,
                     "intent_confidence": cls["confidence"],
                     "score": round(score, 1),
                     "source": kw.get("source", "historical"),
@@ -293,7 +319,10 @@ class AdCopyService:
                     "match_keywords": match_keywords,
                 }
             )
-        out.sort(key=lambda g: len(g["keywords"]), reverse=True)
+        # Brand ad group first, then the high-intent groups, then the rest.
+        order = ["brand", "admission", "application", "registration", "deadline",
+                 "fees", "course", "eligibility", "placement", "location"]
+        out.sort(key=lambda g: (order.index(g["intent"]) if g["intent"] in order else 99))
         return out
 
     # ------------------------------------------------------------------ #
