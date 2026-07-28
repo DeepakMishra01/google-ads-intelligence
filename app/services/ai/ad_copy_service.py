@@ -52,8 +52,25 @@ def _fit(text: str, limit: int) -> str | None:
     return t if 1 <= len(t) <= limit else None
 
 
+# Programme/degree acronyms that must stay upper-cased in headlines.
+_ACRONYMS = {
+    "mba", "pgdm", "pgpm", "bba", "bca", "mca", "mbbs", "bds", "llb", "llm", "phd",
+    "bpt", "bams", "bhms", "msc", "bsc", "mcom", "bcom", "ba", "ma", "cuet", "cat",
+    "nmat", "micat", "clat", "gate", "iit", "nit", "iim", "ug", "pg",
+}
+
+
 def _titlecase(s: str) -> str:
-    return " ".join(w.capitalize() for w in s.split())
+    out: list[str] = []
+    for w in s.split():
+        wl = w.lower().strip(".")
+        if wl in _ACRONYMS:
+            out.append(wl.upper())
+        elif wl in ("btech", "b.tech"):
+            out.append("B.Tech")
+        else:
+            out.append(w.capitalize())
+    return " ".join(out)
 
 
 class AdCopyService:
@@ -254,13 +271,18 @@ class AdCopyService:
         prompt = (
             f"Campus: {brief.brand} ({brief.location}). Programmes: {', '.join(brief.programs)}."
             + (f" Entrance exam: {brief.exam}." if brief.exam else "")
-            + f"\nTop keywords (real): {', '.join(context['top_keywords'])}"
+            + "\nTop keywords (real, use these intents directly): "
+            + ", ".join(context["top_keywords"])
             + f"\nWinning historical headlines: {', '.join(context['historical_headlines'])}"
             + f"\nVerified landing-page facts: {', '.join(context['landing_facts']) or 'none'}"
             + (f"\nTone: {context['tone']}" if context.get("tone") else "")
+            + "\nMost headlines MUST reflect the specific intents in the top keywords "
+            "(e.g. fees, fee structure, courses, placements, the exact programme like "
+            "MBA/PGDM/B.Tech, online, admission, application form, the entrance exam) — "
+            "not generic slogans. Include the brand name in most headlines."
             + "\nReturn JSON: {\"headlines\":[{\"text\":\"..\",\"reason\":\"..\"}] (15 items), "
             "\"descriptions\":[{\"text\":\"..\",\"reason\":\"..\"}] (4 items), "
-            "\"callouts\":[\"..\"] (4 items)}. Each reason must cite the data it came from."
+            "\"callouts\":[\"..\"] (4 items)}. Each reason must cite the keyword it came from."
         )
         raw = self.llm.complete(system=system, prompt=prompt, max_tokens=2000)
         data = json.loads(re.search(r"\{.*\}", raw, re.S).group())
@@ -290,40 +312,106 @@ class AdCopyService:
                             "pinned_position": None})
         return out
 
+    def _kw_headline(self, short: str, keyword: str) -> str | None:
+        """Turn a real keyword into a clean, brand-cased headline (<=30 chars)."""
+        h = _titlecase(keyword)
+        # Force the brand's own casing (e.g. MICA not Mica).
+        h = re.sub(rf"(?i)\b{re.escape(short)}\b", short, h)
+        if short.lower() not in keyword.lower():
+            h = f"{short} {h}"
+        return _fit(h, H_MAX)
+
     def _template_assets(self, context: dict[str, Any]) -> dict[str, Any]:
+        """Deterministic generation driven by the campus's REAL keyword intents.
+
+        Instead of fixed slogans, headlines/descriptions are built around the
+        intents that actually appear in the account's top keywords (fees,
+        courses, placements, online, programme, admission, exam), so the copy is
+        specific to how people really search for this campus.
+        """
         brief = context["brief"]
-        prog = brief.programs[0]
+        s = brief.short
         loc = brief.location
         exam = brief.exam
 
-        hl: list[tuple[str, str]] = [
-            (brief.short, "Brand headline — highest relevance for brand searches."),
-            (f"{brief.short} Admissions 2026", "Brand + admissions intent + year."),
-            (f"Apply to {brief.short} 2026", "Direct application CTA (top converting intent)."),
-            (f"{brief.short} - Apply Online", "Apply-online — cheapest historical intent."),
-            (f"{prog} at {brief.short}", f"Programme-specific ({prog})."),
-            (f"{brief.short} {prog} Program", "Programme match for course searches."),
-            ("Admissions Open 2026", "Urgency / open-now signal."),
-            (f"{brief.short} Application Form", "Matches 'application form' search theme."),
-            ("Check Eligibility & Apply", "Eligibility → apply funnel step."),
-            ("Limited Seats - Apply Now", "Scarcity CTA."),
-            ("Book Your Seat Today", "Action CTA."),
-            ("Enquire About Admissions", "Soft-conversion CTA."),
-            ("Scholarships Available", "Benefit hook (verify per campus)."),
-            ("Placement Assistance", "Benefit hook (verify per campus)."),
-            ("Applications Closing Soon", "Urgency / deadline signal."),
-            (f"{brief.short} Official Admissions", "Brand + trust signal."),
+        # Keep only brand-relevant terms — bid keywords first (cleanest), then any
+        # brand-containing search terms. This drops broad-match spillover junk
+        # ("ccc apply", "bursary application") that isn't about this campus.
+        patterns = brief.patterns()
+
+        def is_brand(kw: str) -> bool:
+            low = kw.lower()
+            return any(p in low for p in patterns)
+
+        ordered = list(dict.fromkeys([*context["keyword_themes"], *context["top_keywords"]]))
+        brand_kw = [kw for kw in ordered if is_brand(kw)]
+        # Intent detection uses brand-relevant keywords (fall back to all if none).
+        blob = " ".join(brand_kw or ordered).lower()
+
+        def has(*ws: str) -> bool:
+            return any(w in blob for w in ws)
+
+        f_fees = has("fee")
+        f_courses = has("course")
+        f_place = has("placement")
+        f_online = has("online", "distance")
+        f_admit = has("admission")
+        f_elig = has("eligibility", "eligible", "cutoff", "cut off")
+        f_schol = has("scholarship")
+        progs = [
+            p for p, kw in [("MBA", "mba"), ("PGDM", "pgdm"), ("B.Tech", "btech"),
+                            ("BBA", "bba"), ("BCA", "bca"), ("LLB", "llb")] if kw in blob
         ]
-        if loc:
-            hl.insert(6, (f"Study at {brief.short}, {loc}", f"Location intent ({loc})."))
-            hl.append((f"Top College in {loc}", f"Location-based discovery ({loc})."))
+        if not progs:  # fall back to the configured programme
+            progs = [brief.programs[0]]
+
+        # Candidate headlines, ranked: brand → real programme/intent → exam/location → CTA.
+        hl: list[tuple[str, str]] = [
+            (s, "Brand headline — top relevance for brand searches."),
+            (f"{s} Admission 2026", "Brand + 'admission' — a top keyword intent."),
+            (f"Apply to {s} 2026", "Direct application CTA."),
+        ]
+        for p in progs[:2]:
+            hl.append((f"{s} {p} Admission", f"'{p}' appears in your top keywords."))
+        if f_fees:
+            hl.append((f"{s} Fees & Courses", "'fees' is your most-searched intent."))
+            hl.append((f"{s} Fee Structure 2026", "Matches 'fee structure' searches."))
+        if f_courses:
+            hl.append((f"{s} Courses & Programmes", "'courses' is a top keyword intent."))
+        if f_place:
+            hl.append((f"{s} Placements & Careers", "'placement' is a top keyword intent."))
+        if f_online:
+            hl.append((f"{s} Online Programmes", "'online/distance' is a top keyword intent."))
+        if f_admit:
+            hl.append((f"{s} Application Form 2026", "Matches 'application form' searches."))
         if exam:
-            hl.insert(7, (f"{exam} Registration Open", f"Entrance-exam intent ({exam})."))
+            hl.append((f"{exam} Registration 2026", f"Entrance exam ({exam}) intent."))
             hl.append((f"Register for {exam} 2026", f"Exam registration ({exam})."))
-        # Enrich from real winning keyword themes.
-        for theme in context["keyword_themes"][:4]:
-            if any(w in theme.lower() for w in ("apply", "admission", "form", "registration")):
-                hl.append((_titlecase(theme), f"Derived from winning keyword theme '{theme}'."))
+        if loc:
+            hl.append((f"{s} {loc} Admission", f"Brand + location ({loc}) — your keyword style."))
+        if f_elig:
+            hl.append((f"{s} Eligibility & Cutoff", "Eligibility/cutoff intent."))
+        if f_schol:
+            hl.append((f"{s} Scholarships 2026", "Scholarship intent."))
+        # A few built verbatim from the top BRAND keywords (authentic phrasing).
+        for kw in brand_kw[:6]:
+            h = self._kw_headline(s, kw)
+            if h:
+                hl.append((h, f"Built directly from your real keyword '{kw}'."))
+        # Brand + generic fallbacks to top up to 15 (used only if needed).
+        study = f"Study at {s}, {loc}" if loc else f"Study at {s}"
+        hl += [
+            (f"{s} Admissions 2026", "Brand + admissions + year."),
+            (f"{s} {progs[0]} 2026", f"Brand + programme ({progs[0]})."),
+            (f"{s} Application Form", "Application-form intent."),
+            (study, f"Brand{' + location' if loc else ''} awareness."),
+            (f"Apply Online to {s}", "Apply-online CTA."),
+            (f"{s} Official Admissions", "Brand + trust signal."),
+            ("Admissions Open 2026", "Open-now signal."),
+            ("Check Eligibility & Apply", "Eligibility → apply."),
+            ("Enquire About Admissions", "Soft-conversion CTA."),
+            ("Applications Closing Soon", "Deadline urgency."),
+        ]
 
         headlines: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -332,30 +420,38 @@ class AdCopyService:
             if fitted and fitted.lower() not in seen:
                 seen.add(fitted.lower())
                 headlines.append({"text": fitted, "length": len(fitted), "reason": reason,
-                                  "pinned_position": 1 if fitted == brief.short else None})
+                                  "pinned_position": 1 if fitted == s else None})
             if len(headlines) >= 15:
                 break
 
-        # Use the short name in descriptions so long brand names never overflow.
-        loc_frag = f", {loc}" if loc else ""
-        s = brief.short
+        # Descriptions weave in the SAME real intents.
+        detail_bits = []
+        if f_courses or f_fees:
+            detail_bits.append("courses & fees")
+        if f_place:
+            detail_bits.append("placements")
+        if f_schol:
+            detail_bits.append("scholarships")
+        detail = ", ".join(detail_bits[:3]) or "programmes, fees & placements"
+        prog0 = progs[0]
+
         dl: list[tuple[str, str]] = [
-            (f"{s} admissions are open. Fill the online application form in minutes today.",
-             "Application-form intent + urgency."),
-            (f"Apply to {s} for the 2026 batch. Explore programmes, fees & scholarships now.",
-             "Admissions + key info + CTA."),
-            (f"Study {prog} at {s}{loc_frag}. Placement support & scholarships. Apply now.",
-             f"Programme ({prog}) + benefits + CTA."),
-            (f"Take the next step at {s}. Check eligibility & apply online today.",
-             "Eligibility → apply CTA."),
-            (f"Limited seats for the 2026 batch at {s}. Enquire today & secure your admission.",
-             "Scarcity + soft-conversion CTA."),
-            (f"Looking to join {s}? Get admission details, dates & fees. Apply online now.",
-             "Question hook + info + CTA."),
+            (f"Apply to {s} for 2026. Get {detail} & admission details. Enquire online now.",
+             f"Admission + real intents ({detail})."),
+            (f"{s} admissions open. Check {'fees, ' if f_fees else ''}courses "
+             f"& eligibility. Apply today.",
+             "Admission + fees/courses/eligibility intents."),
+            (f"Join {prog0} at {s}. {'Strong placements. ' if f_place else ''}"
+             f"Apply for the 2026 batch now.",
+             f"Programme ({prog0}) + placement intent."),
+            (f"Looking for {s} {'fees & ' if f_fees else ''}admission details? "
+             f"Apply online for 2026.",
+             "Question hook around fees/admission searches."),
+            (f"Register for {exam} 2026 & apply to {s}. Dates, eligibility & fees inside.",
+             f"Exam ({exam}) path.") if exam else
+            (f"{s} 2026 admissions. Explore {detail} and apply online in minutes.",
+             "Admission + real intents."),
         ]
-        if exam:
-            dl.insert(1, (f"Register for {exam} 2026 & apply to {s}. Dates & eligibility inside.",
-                          f"Exam ({exam}) registration path."))
         descriptions: list[dict[str, Any]] = []
         seen_d: set[str] = set()
         for text, reason in dl:
