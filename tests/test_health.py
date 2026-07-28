@@ -17,7 +17,7 @@ def test_liveness(client):
     assert resp.json() == {"status": "ok"}
 
 
-def test_root(client):
-    resp = client.get("/")
+def test_meta(client):
+    resp = client.get("/api/v1/meta")
     assert resp.status_code == 200
     assert resp.json()["service"] == "google-ads-intelligence"

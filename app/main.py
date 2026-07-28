@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api.router import api_router
@@ -97,8 +100,9 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router, prefix=settings.api_prefix)
 
-    @app.get("/", tags=["root"], summary="Service metadata")
-    def root() -> dict:
+    # Service metadata (stable JSON contract, independent of whether the UI is built).
+    @app.get(f"{settings.api_prefix}/meta", tags=["root"], summary="Service metadata")
+    def meta() -> dict:
         return {
             "service": "google-ads-intelligence",
             "version": __version__,
@@ -106,7 +110,46 @@ def create_app() -> FastAPI:
             "api_prefix": settings.api_prefix,
         }
 
+    _mount_frontend(app, settings.api_prefix)
     return app
+
+
+def _mount_frontend(app: FastAPI, api_prefix: str) -> None:
+    """Serve the built React app from FastAPI so the whole product is ONE process.
+
+    When ``frontend/dist`` exists (``npm run build``), static assets are served and
+    any non-API/deep-link route falls back to ``index.html`` for client-side routing.
+    When it doesn't (dev/tests), the root returns the service metadata instead — so
+    nothing here depends on a separate Vite dev server that can crash.
+    """
+    dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    index = dist / "index.html"
+
+    if not index.exists():
+        @app.get("/", tags=["root"], summary="Service metadata")
+        def root() -> dict:
+            return {
+                "service": "google-ads-intelligence",
+                "docs": "/docs",
+                "api_prefix": api_prefix,
+                "ui": "not built — run `npm --prefix frontend run build`",
+            }
+        return
+
+    if (dist / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+    # Reserved prefixes that must never be shadowed by the SPA fallback.
+    reserved = (api_prefix.strip("/"), "docs", "redoc", "openapi.json", "assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str) -> FileResponse:
+        if full_path.split("/", 1)[0] in reserved:
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = dist / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)  # SPA client-side route → index.html
 
 
 app = create_app()
