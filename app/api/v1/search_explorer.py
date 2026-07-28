@@ -18,7 +18,7 @@ def explore(
     account_id: int | None = Query(None),
     campaign_id: int | None = Query(None, description="Internal campaign id."),
     ad_group_id: int | None = Query(None, description="Internal ad group id."),
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=3650),
     min_clicks: int = Query(0, ge=0),
     min_cost: float = Query(0.0, ge=0),
     min_ctr: float | None = Query(None, ge=0, le=1, description="Minimum CTR (0-1)."),

@@ -18,7 +18,7 @@ from app.services.dashboard_service import DashboardService
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 # Common query params reused across endpoints.
-_Days = Query(30, ge=1, le=365, description="Lookback window in days.")
+_Days = Query(30, ge=1, le=3650, description="Lookback window in days.")
 _Account = Query(None, description="Filter by internal account id.")
 _Limit = Query(20, ge=1, le=200)
 

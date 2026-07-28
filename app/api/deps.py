@@ -58,7 +58,7 @@ class OpsFilters:
 
 def get_ops_filters(
     account_id: int | None = Query(None, description="Filter by internal account id."),
-    days: int = Query(30, ge=1, le=1825, description="Lookback window in days (up to 5y / 'All')."),
+    days: int = Query(30, ge=1, le=3650, description="Lookback window in days (up to 10y / 'All')."),
     start: date | None = Query(None, description="Custom range start (overrides days)."),
     end: date | None = Query(None, description="Custom range end (overrides days)."),
 ) -> OpsFilters:

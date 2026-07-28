@@ -33,7 +33,7 @@ _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 @router.get("/top-spenders", response_model=list[CampaignPerformanceRow])
 def top_spenders(
     account_id: int | None = Query(None),
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=3650),
     limit: int = Query(20, ge=1, le=200),
     svc: DashboardService = Depends(get_dashboard_service),
 ) -> list[CampaignPerformanceRow]:
@@ -46,7 +46,7 @@ def top_spenders(
 @router.get("/highest-cpc", response_model=list[CampaignPerformanceRow])
 def highest_cpc(
     account_id: int | None = Query(None),
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=3650),
     limit: int = Query(20, ge=1, le=200),
     svc: DashboardService = Depends(get_dashboard_service),
 ) -> list[CampaignPerformanceRow]:
@@ -56,7 +56,7 @@ def highest_cpc(
 @router.get("/lowest-ctr", response_model=list[CampaignPerformanceRow])
 def lowest_ctr(
     account_id: int | None = Query(None),
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=3650),
     limit: int = Query(20, ge=1, le=200),
     svc: DashboardService = Depends(get_dashboard_service),
 ) -> list[CampaignPerformanceRow]:
@@ -66,7 +66,7 @@ def lowest_ctr(
 @router.get("/quality-score", response_model=list[KeywordHealthRow])
 def quality_score(
     account_id: int | None = Query(None),
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=3650),
     limit: int = Query(50, ge=1, le=500),
     svc: KeywordHealthService = Depends(get_keyword_health_service),
 ) -> list[KeywordHealthRow]:
@@ -79,7 +79,7 @@ def quality_score(
 @router.get("/spend-trend", response_model=list[DailySpendPoint])
 def spend_trend(
     account_id: int | None = Query(None),
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=3650),
     svc: TrendService = Depends(get_trend_service),
 ) -> list[DailySpendPoint]:
     return [
@@ -97,7 +97,7 @@ def spend_trend(
 @router.get("/searchterm-trend", response_model=list[GrowthPoint])
 def searchterm_trend(
     account_id: int | None = Query(None),
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=3650),
     svc: TrendService = Depends(get_trend_service),
 ) -> list[GrowthPoint]:
     return [GrowthPoint(**r) for r in svc.growth_series(account_id=account_id, days=days)]
