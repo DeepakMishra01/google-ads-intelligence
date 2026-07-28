@@ -24,23 +24,34 @@ log = get_logger(__name__)
 
 # Keyword cues used to bucket on-page text into strategist-relevant facts.
 _CUES = {
+    # Whole-word programme tokens only — avoids loose matches like "ba" inside "Aruba".
     "courses": [
-        "mba", "pgdm", "pgpm", "b.tech", "btech", "bba", "b.com", "ba ", "course", "program",
+        r"\bmba\b", r"\bpgdm\b", r"\bpgpm\b", r"\bb\.?tech\b", r"\bbba\b", r"\bbca\b",
+        r"\bmca\b", r"\bb\.?com\b", r"\bm\.?tech\b", r"\bph\.?d\b", r"\bdiploma\b",
+        r"\bcourse\b", r"\bprogramme\b", r"\bspecial[ai]sation\b",
     ],
-    "fees": ["fee", "fees", "tuition", "₹", "inr ", "cost"],
-    "eligibility": [
-        "eligibility", "eligible", "criteria", "qualification", "cat/", "cat ", "graduat",
-    ],
-    "scholarships": ["scholarship", "financial aid", "waiver"],
-    "placements": ["placement", "recruiter", "package", "lpa", "ctc", "highest salary"],
-    "rankings": ["rank", "ranked", "nirf", "top b-school", "#1"],
-    "accreditations": ["naac", "aicte", "ugc", "aacsb", "nba", "accredit", "approved by"],
-    "admission_dates": ["admission", "apply", "intake", "batch 2026", "batch 2027", "session"],
-    "deadlines": ["last date", "deadline", "closes", "apply before", "final date"],
+    "fees": [r"\bfees?\b", r"\btuition\b", "₹", r"\blpa\b", r"\bper (year|annum|semester)\b"],
+    "eligibility": [r"\beligibility\b", r"\beligible\b", r"\bcriteria\b", r"\bqualification\b"],
+    "scholarships": [r"\bscholarship", r"\bfinancial aid\b", r"\bwaiver\b"],
+    "placements": [r"\bplacement", r"\brecruiter", r"\bpackage\b", r"\blpa\b", r"highest salary"],
+    "rankings": [r"\bnirf\b", r"\branked\b", r"top b-school"],
+    "accreditations": [r"\bnaac\b", r"\baicte\b", r"\bugc\b", r"\baacsb\b", r"\bnba\b", "accredit"],
+    "admission_dates": [r"\badmission", r"\bintake\b", r"\bbatch 202[567]\b", r"\bsession 202"],
+    "deadlines": [r"\blast date\b", r"\bdeadline\b", r"\bapply before\b", r"\bfinal date\b"],
 }
-_CTA_WORDS = [
-    "apply", "enquire", "register", "download", "book", "get in touch", "call", "admission",
-]
+_CTA_WORDS = ["apply", "enquire", "register", "download", "book", "get in touch"]
+
+# Lines that are clearly form controls / junk, not real page content.
+_JUNK_RE = re.compile(r"\(\s*\+?\d{1,4}\s*\)")  # phone country codes e.g. "Aruba (+297)"
+
+
+def _is_junk_line(ln: str) -> bool:
+    low = ln.strip().lower()
+    if _JUNK_RE.search(ln):  # dropdown of dialling codes
+        return True
+    if low.startswith(("select ", "choose ", "please select")) or low.endswith(("*", ":")):
+        return True
+    return low in ("select program", "select course", "select state", "select city", "none")
 
 
 class LandingPageService:
@@ -137,14 +148,16 @@ class LandingPageService:
             re.sub(r"\s+", " ", ln).strip()
             for ln in soup.get_text("\n").splitlines()
         ]
-        page_lines = [ln for ln in page_lines if 3 <= len(ln) <= 160]
+        page_lines = [
+            ln for ln in page_lines if 3 <= len(ln) <= 160 and not _is_junk_line(ln)
+        ]
         buckets: dict[str, list[str]] = {k: [] for k in _CUES}
         for ln in page_lines:
             low = ln.lower()
             for bucket, cues in _CUES.items():
                 if len(buckets[bucket]) >= 8 or ln in buckets[bucket]:
                     continue
-                if any(c in low for c in cues):
+                if any(re.search(c, low) for c in cues):
                     buckets[bucket].append(ln)
 
         # USPs / highlights: short punchy H2/H3 lines.

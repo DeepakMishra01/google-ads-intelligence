@@ -195,20 +195,69 @@ class AdCopyService:
     # ------------------------------------------------------------------ #
     # keyword scoring + grouping
     # ------------------------------------------------------------------ #
+    def _keyword_plan(self, brief) -> list[dict[str, Any]]:
+        """Generate a clean brand + intent keyword plan (the strategist baseline).
+
+        Mirrors how these accounts actually bid — the brand paired with admission
+        intents — so the campaign gets relevant keywords even when historical data
+        is thin or polluted with broad-match spillover.
+        """
+        # For long names (GIBS Business School, Goa Institute of Management) people
+        # search the short form (gibs, gim); for 1-2 word brands use the full name.
+        base = (brief.short if len(brief.brand.split()) >= 3 else brief.brand).lower()
+        empty = {"source": "suggested", "search_volume": None, "competition": None,
+                 "historical_clicks": None, "historical_ctr": None,
+                 "historical_cpc": None, "quality_score": None}
+        terms = [
+            base,
+            f"{base} admission", f"{base} admissions 2026", f"{base} apply online",
+            f"{base} application form", f"{base} admission form", f"{base} fees",
+            f"{base} fee structure", f"{base} courses", f"{base} eligibility",
+            f"{base} placements", f"{base} last date to apply",
+        ]
+        for p in brief.programs:
+            pl = p.lower()
+            if pl in ("admissions", "admission"):
+                continue
+            terms += [f"{base} {pl}", f"{base} {pl} admission", f"{base} {pl} fees"]
+        if brief.location:
+            terms.append(f"{base} {brief.location.lower()} admission")
+        if brief.exam:
+            ex = brief.exam.lower()
+            terms += [f"{ex} registration", f"{ex} 2026", f"register for {ex}",
+                      f"{ex} application form", f"{ex} last date"]
+        return [{"keyword": t, **empty} for t in dict.fromkeys(terms)]
+
     def _score_keywords(self, brief, raw_kw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        patterns = brief.patterns()
+
+        def is_relevant(kw: str) -> bool:
+            return any(p in kw.lower() for p in patterns)
+
+        # Drop broad-match spillover: keep only keywords that mention this campus.
+        historical = [kw for kw in raw_kw if is_relevant(kw["keyword"])]
+        # Merge the generated brand plan for coverage (dedupe by text).
+        seen = {kw["keyword"].lower() for kw in historical}
+        candidates = historical + [
+            p for p in self._keyword_plan(brief) if p["keyword"].lower() not in seen
+        ]
+
         brand_terms = brief.patterns()
         insights: list[dict[str, Any]] = []
-        for kw in raw_kw:
+        for kw in candidates:
             cls = intent_classifier.classify(kw["keyword"], brand_terms=brand_terms)
             merged = {**kw, "commercial_intent": cls["commercial_intent"],
                       "intent_confidence": cls["confidence"]}
             sc = score_keyword(merged)
+            # Suggested keywords have no metrics; give them a relevance floor so a
+            # clean brand plan still surfaces above nothing.
+            score = sc["score"] if kw.get("source") != "suggested" else max(sc["score"], 55.0)
             insights.append(
                 {
                     "keyword": kw["keyword"],
                     "intent": cls["intent"],
                     "intent_confidence": cls["confidence"],
-                    "score": sc["score"],
+                    "score": round(score, 1),
                     "source": kw.get("source", "historical"),
                     "search_volume": kw.get("search_volume"),
                     "competition": kw.get("competition"),
