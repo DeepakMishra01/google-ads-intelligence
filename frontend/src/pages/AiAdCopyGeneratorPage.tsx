@@ -58,6 +58,70 @@ function Chips({ items, tone = "slate" }: { items: string[]; tone?: "slate" | "b
   );
 }
 
+function CopyChip({ text, label }: { text: string; label: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      className="btn-ghost h-7 gap-1 px-2 text-xs text-slate-500"
+      onClick={() => {
+        navigator.clipboard?.writeText(text);
+        setDone(true);
+        setTimeout(() => setDone(false), 1200);
+      }}
+    >
+      {done ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+      {done ? "Copied" : label}
+    </button>
+  );
+}
+
+function CampaignKeywords({
+  groups,
+}: {
+  groups: {
+    name: string;
+    recommended_match_types: string[];
+    recommended_bid: number | null;
+    match_keywords: string[];
+  }[];
+}) {
+  const all = groups.flatMap((g) => g.match_keywords).join("\n");
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs text-slate-500">
+          Paste these into Google Ads when building the campaign. [exact] · "phrase" · broad.
+        </span>
+        <CopyChip text={all} label="Copy all keywords" />
+      </div>
+      {groups.map((g) => (
+        <div key={g.name} className="mb-3 rounded-md bg-slate-50 p-2.5">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-700">
+              {g.name}{" "}
+              <span className="text-xs font-normal text-slate-400">
+                (ad group · {g.recommended_match_types.join(" / ")}
+                {g.recommended_bid ? ` · bid ${money(g.recommended_bid)}` : ""})
+              </span>
+            </span>
+            <CopyChip text={g.match_keywords.join("\n")} label="Copy group" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {g.match_keywords.map((k, i) => (
+              <span
+                key={i}
+                className="rounded-md bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200"
+              >
+                {k}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AssetList({ assets, limit }: { assets: GeneratedAsset[]; limit: number }) {
   const [copied, setCopied] = useState<number | null>(null);
   const copy = (text: string, i: number) => {
@@ -426,6 +490,11 @@ export default function AiAdCopyGeneratorPage() {
             </Section>
 
             {/* Campaign recommendation */}
+            {/* Paste-ready campaign keywords */}
+            <Section title="Keywords to add to the campaign" hint="match-type formatted, ready to paste">
+              <CampaignKeywords groups={result.keyword_groups} />
+            </Section>
+
             <Section title="Recommended campaign structure">
               <div className="mb-3 text-sm">
                 <span className="font-medium text-slate-800">{result.campaign_recommendation.campaign_name}</span>
@@ -440,20 +509,13 @@ export default function AiAdCopyGeneratorPage() {
                 <div><span className="text-slate-500">Schedule:</span> {result.campaign_recommendation.ad_schedule}</div>
                 <div><span className="text-slate-500">Audience:</span> {result.campaign_recommendation.audience_observation}</div>
               </div>
-              <div className="mt-3">
-                {result.keyword_groups.map((g) => (
-                  <div key={g.name} className="mb-2 rounded-md bg-slate-50 p-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">{g.name}</span>
-                      <span className="text-xs text-slate-400">
-                        {g.recommended_match_types.join(" / ")}
-                        {g.recommended_bid ? ` · bid ${money(g.recommended_bid)}` : ""}
-                      </span>
-                    </div>
-                    <Chips items={g.keywords} />
-                  </div>
-                ))}
-              </div>
+              {result.campaign_recommendation.structure_notes.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+                  {result.campaign_recommendation.structure_notes.map((n, i) => (
+                    <li key={i}>{n}</li>
+                  ))}
+                </ul>
+              )}
             </Section>
 
             {/* Quality prediction */}

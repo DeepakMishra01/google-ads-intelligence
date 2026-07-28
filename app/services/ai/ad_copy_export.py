@@ -119,7 +119,7 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
     for n in a.get("negative_keywords", []):
         es.append(["Negative Keyword", n])
 
-    # Keywords
+    # Keywords (scored intelligence)
     ks = wb.create_sheet("Keywords")
     _header(ks, ["Keyword", "Intent", "Score", "Source", "Clicks", "CTR", "CPC", "QS"])
     for kw in (gen.keyword_snapshot or {}).get("keywords", []):
@@ -128,6 +128,15 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
             kw.get("historical_clicks"), kw.get("historical_ctr"),
             kw.get("historical_cpc"), kw.get("quality_score"),
         ])
+
+    # Campaign Keywords (paste-ready, grouped by ad group + match type)
+    ck = wb.create_sheet("Campaign Keywords")
+    _header(ck, ["Ad Group", "Keyword (paste into Google Ads)", "Match Types", "Suggested Bid"])
+    for grp in (gen.keyword_snapshot or {}).get("groups", []):
+        match_types = ", ".join(grp.get("recommended_match_types", []))
+        bid = grp.get("recommended_bid")
+        for kw in grp.get("match_keywords", []):
+            ck.append([grp.get("name"), kw, match_types, bid])
 
     # widen text columns a little
     for sheet in wb.worksheets:

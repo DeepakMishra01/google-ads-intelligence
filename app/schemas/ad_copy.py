@@ -104,6 +104,7 @@ class KeywordGroup(BaseModel):
     keywords: list[str]
     recommended_match_types: list[str]
     recommended_bid: float | None = None
+    match_keywords: list[str] = []  # paste-ready [exact]/"phrase"/broad syntax
 
 
 # --------------------------- Step 9: generated assets --------------------- #

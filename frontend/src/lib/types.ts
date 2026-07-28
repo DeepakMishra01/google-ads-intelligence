@@ -338,6 +338,7 @@ export interface KeywordGroup {
   keywords: string[];
   recommended_match_types: string[];
   recommended_bid: number | null;
+  match_keywords: string[];
 }
 
 export interface GeneratedAsset {

@@ -73,6 +73,16 @@ def _titlecase(s: str) -> str:
     return " ".join(out)
 
 
+def _match_format(keyword: str, match_type: str) -> str:
+    """Google Ads match-type syntax: [exact], "phrase", broad."""
+    kw = keyword.strip()
+    if match_type == "EXACT":
+        return f"[{kw}]"
+    if match_type == "PHRASE":
+        return f'"{kw}"'
+    return kw  # BROAD
+
+
 class AdCopyService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -220,13 +230,18 @@ class AdCopyService:
         for intent, items in groups.items():
             cpcs = [i["historical_cpc"] for i in items if i.get("historical_cpc")]
             bid = round(sum(cpcs) / len(cpcs), 2) if cpcs else None
+            kws = [i["keyword"] for i in items][:12]
+            match_types = _MATCH_BY_INTENT.get(intent, ["PHRASE"])
+            # Paste-ready keywords in Google Ads match-type syntax.
+            match_keywords = [_match_format(k, mt) for k in kws for mt in match_types]
             out.append(
                 {
                     "name": f"{_titlecase(intent)} Intent",
                     "intent": intent,
-                    "keywords": [i["keyword"] for i in items][:12],
-                    "recommended_match_types": _MATCH_BY_INTENT.get(intent, ["PHRASE"]),
+                    "keywords": kws,
+                    "recommended_match_types": match_types,
                     "recommended_bid": bid,
+                    "match_keywords": match_keywords,
                 }
             )
         out.sort(key=lambda g: len(g["keywords"]), reverse=True)
@@ -537,7 +552,10 @@ class AdCopyService:
                         "avg_ctr": historical["avg_ctr"],
                         "avg_cpc": historical["avg_cpc"],
                     },
-                    "keyword_snapshot": {"keywords": keyword_insights[:25]},
+                    "keyword_snapshot": {
+                        "keywords": keyword_insights[:25],
+                        "groups": result.get("keyword_groups", []),
+                    },
                     "generated_assets": assets,
                     "scores": {"quality": quality},
                     "reasoning": {
