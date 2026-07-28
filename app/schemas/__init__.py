@@ -1,5 +1,13 @@
 """Pydantic request/response schemas."""
 
+from app.schemas.ad_copy import (
+    AdCopyGenerateRequest,
+    AdCopyGenerateResponse,
+    AdCopyHistoryResponse,
+    CampusSearchResponse,
+    FinalUrlResponse,
+    LandingPageSummary,
+)
 from app.schemas.common import Message, ORMModel, Page
 from app.schemas.dashboard import (
     BudgetUtilizationRow,
@@ -60,4 +68,10 @@ __all__ = [
     "BudgetUtilizationRow",
     "DailySpendPoint",
     "CampaignTrendPoint",
+    "AdCopyGenerateRequest",
+    "AdCopyGenerateResponse",
+    "AdCopyHistoryResponse",
+    "CampusSearchResponse",
+    "FinalUrlResponse",
+    "LandingPageSummary",
 ]

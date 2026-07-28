@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 // route the user lands on; the rest load on navigation.
 const OverviewPage = lazy(() => import("./pages/OverviewPage"));
 const CampaignExplorerPage = lazy(() => import("./pages/CampaignExplorerPage"));
+const AiAdCopyGeneratorPage = lazy(() => import("./pages/AiAdCopyGeneratorPage"));
 const PriorityQueuePage = lazy(() => import("./pages/PriorityQueuePage"));
 const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const CampaignHealthPage = lazy(() => import("./pages/CampaignHealthPage"));
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/budgets" element={<BudgetsPage />} />
             <Route path="/trends" element={<TrendsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/ai/ad-copy" element={<AiAdCopyGeneratorPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

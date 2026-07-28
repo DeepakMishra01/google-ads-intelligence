@@ -71,6 +71,17 @@ class Settings(BaseSettings):
     audit_enabled: bool = True  # write an audit row for mutating requests
     db_connect_timeout: int = 10  # seconds; bounds hangs to an unreachable DB
 
+    # --- AI Ad Copy Generator ---
+    # LLM phrasing is optional: when no key is set the generator falls back to the
+    # deterministic (data-driven) backend, so the module always works.
+    anthropic_api_key: str = ""
+    ad_copy_llm_model: str = "claude-sonnet-5"
+    ad_copy_llm_enabled: bool = True  # master switch for the hybrid LLM backend
+    ad_copy_llm_max_tokens: int = 2000
+    keyword_planner_enabled: bool = True  # falls back to historical if unavailable
+    landing_page_timeout_seconds: int = 12
+    landing_page_max_bytes: int = 2_000_000  # cap fetched HTML to bound memory
+
     # ------------------------------------------------------------------ #
     # Validators / derived values
     # ------------------------------------------------------------------ #

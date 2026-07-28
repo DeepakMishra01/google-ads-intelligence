@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     accounts,
+    ad_copy,
     ad_groups,
     ads,
     alerts,
@@ -62,3 +63,6 @@ api_router.include_router(priorities.router)
 api_router.include_router(alerts.router)
 api_router.include_router(reports.router)
 api_router.include_router(audit.router)
+
+# --- Phase 3 AI Tools ---
+api_router.include_router(ad_copy.router)

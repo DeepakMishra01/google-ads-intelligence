@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import type {
   Account,
+  AdCopyGenerateResponse,
   Alert,
   AlertEvaluateResult,
   AlertSummary,
@@ -9,7 +10,9 @@ import type {
   CampaignHealthRow,
   CampaignPerformanceRow,
   CampaignSearchResponse,
+  CampusSearchResponse,
   DayComparison,
+  FinalUrlResponse,
   GrowthPoint,
   KeywordHealthRow,
   Overview,
@@ -270,6 +273,54 @@ export function useSyncStatus() {
     queryFn: () => get<SyncLog[]>("/sync/logs", { limit: 20 }),
     refetchInterval: 30_000,
   });
+}
+
+// --------------------------- AI Ad Copy Generator ------------------------- //
+export function useCampusSearch(q?: string) {
+  return useQuery({
+    queryKey: ["campus-search", q],
+    queryFn: () => get<CampusSearchResponse>("/ai/ad-copy/campus/search", { q, limit: 10 }),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useFinalUrl(campus?: string, override?: string) {
+  return useQuery({
+    queryKey: ["final-url", campus, override],
+    queryFn: () =>
+      get<FinalUrlResponse>("/ai/ad-copy/campus/final-url", { campus, override }),
+    enabled: !!campus,
+  });
+}
+
+export function useGenerateAdCopy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { campus: string; account_id?: number; final_url?: string; tone?: string }) =>
+      api.post<AdCopyGenerateResponse>("/ai/ad-copy/generate", body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-history"] }),
+  });
+}
+
+/** Trigger a browser download of a generated ad copy in the chosen format. */
+export async function downloadAdCopy(
+  genId: number,
+  format: "excel" | "csv" | "json",
+  campus?: string
+): Promise<void> {
+  const res = await api.get(`/ai/ad-copy/${genId}/export`, {
+    params: { format },
+    responseType: "blob",
+  });
+  const ext = format === "excel" ? "xlsx" : format;
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `adcopy_${(campus ?? "campus").replace(/\s+/g, "_")}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Trigger a browser download of a report in the chosen format. */

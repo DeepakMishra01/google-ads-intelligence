@@ -10,34 +10,45 @@ import { Badge } from "./ui";
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const { data: alerts } = useAlertSummary(useFilters().accountId);
+  let lastGroup: string | undefined;
   return (
     <nav className="space-y-1">
-      {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === "/"}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            clsx(
-              "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition",
-              isActive
-                ? "bg-brand-600 text-white"
-                : "text-slate-300 hover:bg-slate-800 hover:text-white"
-            )
-          }
-        >
-          <span className="flex items-center gap-3">
-            <Icon size={18} />
-            {label}
-          </span>
-          {label === "Alerts" && alerts && alerts.open_total > 0 && (
-            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-              {alerts.open_total}
-            </span>
-          )}
-        </NavLink>
-      ))}
+      {NAV_ITEMS.map(({ to, label, icon: Icon, group }) => {
+        const showHeader = group && group !== lastGroup;
+        lastGroup = group;
+        return (
+          <div key={to}>
+            {showHeader && (
+              <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {group}
+              </div>
+            )}
+            <NavLink
+              to={to}
+              end={to === "/"}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                clsx(
+                  "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition",
+                  isActive
+                    ? "bg-brand-600 text-white"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                )
+              }
+            >
+              <span className="flex items-center gap-3">
+                <Icon size={18} />
+                {label}
+              </span>
+              {label === "Alerts" && alerts && alerts.open_total > 0 && (
+                <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {alerts.open_total}
+                </span>
+              )}
+            </NavLink>
+          </div>
+        );
+      })}
     </nav>
   );
 }

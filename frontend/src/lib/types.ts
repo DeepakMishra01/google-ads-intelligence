@@ -255,3 +255,149 @@ export interface CampaignSearchResponse {
   start: string | null;
   end: string | null;
 }
+
+// --- AI Ad Copy Generator (app/schemas/ad_copy.py) ------------------------- //
+export interface CampusSuggestion {
+  campus: string;
+  aliases: string[];
+  account_id: number | null;
+  account_name: string | null;
+  campaign_count: number;
+  total_spend: number;
+  has_history: boolean;
+}
+export interface CampusSearchResponse {
+  items: CampusSuggestion[];
+}
+
+export interface FinalUrlCandidate {
+  url: string;
+  source: string;
+  confidence: number;
+  spend: number;
+  clicks: number;
+  ctr: number | null;
+  reason: string;
+}
+export interface FinalUrlResponse {
+  campus: string;
+  selected: FinalUrlCandidate | null;
+  candidates: FinalUrlCandidate[];
+}
+
+export interface LandingPageSummary {
+  url: string;
+  fetched: boolean;
+  title: string | null;
+  meta_description: string | null;
+  h1: string[];
+  cta_buttons: string[];
+  courses: string[];
+  fees: string[];
+  eligibility: string[];
+  scholarships: string[];
+  placements: string[];
+  rankings: string[];
+  accreditations: string[];
+  admission_dates: string[];
+  deadlines: string[];
+  usps: string[];
+  notes: string | null;
+}
+
+export interface HistoricalInsights {
+  top_headlines: string[];
+  top_descriptions: string[];
+  best_keyword_themes: string[];
+  best_search_themes: string[];
+  cta_patterns: string[];
+  messaging_patterns: string[];
+  avg_ctr: number | null;
+  avg_cpc: number | null;
+  total_spend: number;
+  total_conversions: number;
+}
+
+export interface KeywordInsight {
+  keyword: string;
+  intent: string;
+  intent_confidence: number;
+  score: number;
+  source: string;
+  search_volume: number | null;
+  competition: string | null;
+  historical_clicks: number | null;
+  historical_ctr: number | null;
+  historical_cpc: number | null;
+  quality_score: number | null;
+  reason: string;
+}
+export interface KeywordGroup {
+  name: string;
+  intent: string;
+  keywords: string[];
+  recommended_match_types: string[];
+  recommended_bid: number | null;
+}
+
+export interface GeneratedAsset {
+  text: string;
+  length: number;
+  reason: string;
+  pinned_position: number | null;
+}
+export interface SitelinkAsset {
+  text: string;
+  description1: string | null;
+  description2: string | null;
+  final_url: string | null;
+}
+export interface CampaignRecommendation {
+  campaign_name: string;
+  ad_group_suggestions: string[];
+  device_strategy: string | null;
+  geo_strategy: string | null;
+  ad_schedule: string | null;
+  audience_observation: string | null;
+  structure_notes: string[];
+}
+export interface GeneratedAssets {
+  headlines: GeneratedAsset[];
+  descriptions: GeneratedAsset[];
+  display_paths: string[];
+  callouts: string[];
+  structured_snippets: Record<string, string[]>;
+  sitelinks: SitelinkAsset[];
+  negative_keywords: string[];
+}
+
+export interface ValidationFlag {
+  level: string;
+  field: string;
+  message: string;
+}
+export interface QualityPrediction {
+  expected_ad_strength: string;
+  headline_count: number;
+  description_count: number;
+  unique_headline_ratio: number;
+  keyword_coverage: number;
+  predicted_ctr_band: string;
+  quality_score_contribution: string;
+  flags: ValidationFlag[];
+}
+
+export interface AdCopyGenerateResponse {
+  id: number | null;
+  campus: string;
+  backend: string;
+  final_url: FinalUrlCandidate | null;
+  landing_page: LandingPageSummary | null;
+  historical: HistoricalInsights;
+  keywords: KeywordInsight[];
+  keyword_groups: KeywordGroup[];
+  campaign_recommendation: CampaignRecommendation;
+  assets: GeneratedAssets;
+  quality: QualityPrediction;
+  generated_at: string;
+}

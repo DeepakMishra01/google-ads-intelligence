@@ -24,6 +24,9 @@ from app.services.ops.search_explorer_service import SearchExplorerService
 from app.services.ops.trend_service import TrendService
 from app.services.query_service import QueryService
 
+# NOTE: AdCopyService is imported lazily inside its provider to avoid importing
+# optional AI deps (anthropic/httpx/bs4) at module import time.
+
 
 @dataclass
 class PageParams:
@@ -109,6 +112,13 @@ def get_search_explorer_service(db: Session = Depends(get_db)) -> SearchExplorer
 
 def get_campaign_search_service(db: Session = Depends(get_db)) -> CampaignSearchService:
     return CampaignSearchService(db)
+
+
+# --- Phase 3 AI Tools ------------------------------------------------------- #
+def get_ad_copy_service(db: Session = Depends(get_db)):  # type: ignore[no-untyped-def]
+    from app.services.ai.ad_copy_service import AdCopyService
+
+    return AdCopyService(db)
 
 
 # --- Role-based access (Module 13) ----------------------------------------- #

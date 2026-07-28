@@ -8,6 +8,7 @@ import {
   PiggyBank,
   Search,
   SearchCode,
+  Sparkles,
   Target,
   Type,
 } from "lucide-react";
@@ -17,6 +18,7 @@ export interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  group?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -30,6 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/budgets", label: "Budgets", icon: PiggyBank },
   { to: "/trends", label: "Trends", icon: BarChart3 },
   { to: "/reports", label: "Reports", icon: FileText },
+  { to: "/ai/ad-copy", label: "AI Ad Copy Generator", icon: Sparkles, group: "AI Tools" },
 ];
 
 export const APP_ICON = Target;
