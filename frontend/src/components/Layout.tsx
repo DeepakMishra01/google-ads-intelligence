@@ -1,11 +1,11 @@
 import clsx from "clsx";
-import { LogOut, Menu, RefreshCw, X } from "lucide-react";
-import { useState } from "react";
+import { Check, LogOut, Menu, RefreshCw, RotateCw, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { APP_ICON, NAV_ITEMS } from "@/lib/constants";
-import { useAccounts, useAlertSummary } from "@/lib/queries";
-import { DAY_OPTIONS, useFilters } from "@/state/FiltersContext";
+import { useAccounts, useAlertSummary, useSyncNow } from "@/lib/queries";
+import { DATE_PRESETS, useFilters } from "@/state/FiltersContext";
 import { Badge } from "./ui";
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -59,17 +59,33 @@ function SidebarBrand() {
 
 function Topbar({ onMenu }: { onMenu: () => void }) {
   const { session, logout } = useAuth();
-  const { accountId, setAccountId, days, setDays } = useFilters();
+  const { accountId, setAccountId, days, start, end, isCustom, setDays, setCustomRange, clearCustom } =
+    useFilters();
   const { data: accounts } = useAccounts();
+  const sync = useSyncNow();
+  const canSync = session?.role === "manager" || session?.role === "admin";
+
+  // Local drafts for the custom date pickers; a complete pair activates the range.
+  const [from, setFrom] = useState(start ?? "");
+  const [to, setTo] = useState(end ?? "");
+  useEffect(() => {
+    if (from && to) setCustomRange(from, to);
+  }, [from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resetDates = () => {
+    setFrom("");
+    setTo("");
+    clearCustom();
+  };
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur">
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-slate-200 bg-white/90 px-4 backdrop-blur">
       <button className="btn-ghost h-9 px-2 lg:hidden" onClick={onMenu} aria-label="Menu">
         <Menu size={18} />
       </button>
 
       <select
-        className="input max-w-[200px]"
+        className="input max-w-[170px]"
         value={accountId ?? ""}
         onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : undefined)}
       >
@@ -81,15 +97,66 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         ))}
       </select>
 
-      <select className="input" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-        {DAY_OPTIONS.map((d) => (
-          <option key={d} value={d}>
-            Last {d} days
+      {/* Preset range (used unless a custom range is set) */}
+      <select
+        className="input"
+        value={isCustom ? "custom" : days}
+        onChange={(e) => {
+          resetDates();
+          setDays(Number(e.target.value));
+        }}
+        title="Date range"
+      >
+        {isCustom && <option value="custom">Custom range</option>}
+        {DATE_PRESETS.map((p) => (
+          <option key={p.days} value={p.days}>
+            Last {p.label}
           </option>
         ))}
       </select>
 
+      {/* Custom date picker */}
+      <div className="hidden items-center gap-1 lg:flex">
+        <input
+          type="date"
+          className="input w-[135px]"
+          value={from}
+          max={to || undefined}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <span className="text-slate-400">–</span>
+        <input
+          type="date"
+          className="input w-[135px]"
+          value={to}
+          min={from || undefined}
+          onChange={(e) => setTo(e.target.value)}
+        />
+        {isCustom && (
+          <button className="btn-ghost h-9 px-2" title="Clear custom range" onClick={resetDates}>
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
       <div className="ml-auto flex items-center gap-3">
+        {canSync && (
+          <button
+            className="btn-ghost h-9 px-2"
+            onClick={() => sync.mutate(accountId)}
+            disabled={sync.isPending}
+            title="Trigger a manual sync now"
+          >
+            {sync.isSuccess ? (
+              <Check size={16} className="text-green-600" />
+            ) : (
+              <RotateCw size={16} className={sync.isPending ? "animate-spin" : ""} />
+            )}
+            <span className="hidden sm:inline">
+              {sync.isPending ? "Syncing…" : sync.isSuccess ? "Queued" : "Sync"}
+            </span>
+          </button>
+        )}
         <div className="hidden text-right sm:block">
           <div className="text-sm font-medium text-slate-800">{session?.actor}</div>
           <Badge className="bg-brand-50 text-brand-700">{session?.role}</Badge>

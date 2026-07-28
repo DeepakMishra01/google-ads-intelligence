@@ -55,8 +55,7 @@ def fetch_ad_group_metrics(
       segments.date,
       metrics.impressions, metrics.clicks, metrics.interactions, metrics.cost_micros,
       metrics.ctr, metrics.average_cpc, metrics.average_cpm,
-      metrics.conversions, metrics.conversions_value, metrics.all_conversions,
-      metrics.video_views
+      metrics.conversions, metrics.conversions_value, metrics.all_conversions
     FROM ad_group
     WHERE {gaql_date_between(start, end)} AND ad_group.status != 'REMOVED'
     """.strip()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 
 from fastapi import Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from app.database.session import get_db
 from app.services.dashboard_service import DashboardService
 from app.services.ops.alerts_service import AlertsService
 from app.services.ops.budget_service import BudgetService
+from app.services.ops.campaign_search_service import CampaignSearchService
 from app.services.ops.health_service import CampaignHealthService
 from app.services.ops.keyword_service import KeywordHealthService
 from app.services.ops.overview_service import OverviewService
@@ -38,17 +40,26 @@ def get_page_params(
 
 @dataclass
 class OpsFilters:
-    """Common Command Center filter/window params (Module 11)."""
+    """Common Command Center filter/window params (Module 11).
+
+    Either a rolling ``days`` window (presets, incl. 1y/All) or an explicit
+    ``start``/``end`` custom range (date picker). When both are present, the
+    explicit range wins.
+    """
 
     account_id: int | None
     days: int
+    start: date | None = None
+    end: date | None = None
 
 
 def get_ops_filters(
     account_id: int | None = Query(None, description="Filter by internal account id."),
-    days: int = Query(30, ge=1, le=365, description="Lookback window in days."),
+    days: int = Query(30, ge=1, le=1825, description="Lookback window in days (up to 5y / 'All')."),
+    start: date | None = Query(None, description="Custom range start (overrides days)."),
+    end: date | None = Query(None, description="Custom range end (overrides days)."),
 ) -> OpsFilters:
-    return OpsFilters(account_id=account_id, days=days)
+    return OpsFilters(account_id=account_id, days=days, start=start, end=end)
 
 
 def get_query_service(db: Session = Depends(get_db)) -> QueryService:
@@ -94,6 +105,10 @@ def get_reporting_service(db: Session = Depends(get_db)) -> ReportingService:
 
 def get_search_explorer_service(db: Session = Depends(get_db)) -> SearchExplorerService:
     return SearchExplorerService(db)
+
+
+def get_campaign_search_service(db: Session = Depends(get_db)) -> CampaignSearchService:
+    return CampaignSearchService(db)
 
 
 # --- Role-based access (Module 13) ----------------------------------------- #

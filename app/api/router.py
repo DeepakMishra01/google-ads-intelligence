@@ -12,6 +12,7 @@ from app.api.v1 import (
     audit,
     budget_monitor,
     budgets,
+    campaign_explorer,
     campaign_health,
     campaigns,
     dashboard,
@@ -39,6 +40,7 @@ api_router.include_router(accounts.router)
 # dynamic segment on the same prefix (e.g. /campaigns/health before
 # /campaigns/{campaign_id}).
 api_router.include_router(campaign_health.router)
+api_router.include_router(campaign_explorer.router)
 api_router.include_router(campaigns.router)
 api_router.include_router(ad_groups.router)
 api_router.include_router(keyword_health.router)

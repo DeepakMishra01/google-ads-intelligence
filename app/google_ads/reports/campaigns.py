@@ -26,8 +26,6 @@ SELECT
   campaign.network_settings.target_search_network,
   campaign.network_settings.target_content_network,
   campaign.network_settings.target_partner_search_network,
-  campaign.start_date,
-  campaign.end_date,
   campaign.optimization_score,
   campaign_budget.id
 FROM campaign
@@ -63,8 +61,10 @@ def fetch_campaigns(factory: GoogleAdsClientFactory, customer_id: str) -> list[d
                 "advertising_channel_sub_type": enum_name(c.advertising_channel_sub_type),
                 "bidding_strategy_type": enum_name(c.bidding_strategy_type),
                 "networks": _networks(r),
-                "start_date": parse_ads_date(c.start_date),
-                "end_date": parse_ads_date(c.end_date),
+                # start_date/end_date removed from the query for Google Ads API v24
+                # compatibility (fields not recognized there); not needed downstream.
+                "start_date": None,
+                "end_date": None,
                 "optimization_score": float(c.optimization_score) if c.optimization_score else None,
                 "budget_id": int(r.campaign_budget.id) if r.campaign_budget.id else None,
             }
@@ -86,8 +86,7 @@ def fetch_campaign_metrics(
       segments.date,
       metrics.impressions, metrics.clicks, metrics.interactions, metrics.cost_micros,
       metrics.ctr, metrics.average_cpc, metrics.average_cpm,
-      metrics.conversions, metrics.conversions_value, metrics.all_conversions,
-      metrics.video_views
+      metrics.conversions, metrics.conversions_value, metrics.all_conversions
     FROM campaign
     WHERE {gaql_date_between(start, end)} AND campaign.status != 'REMOVED'
     """.strip()
@@ -120,8 +119,7 @@ def fetch_campaign_device_metrics(
       campaign.id, segments.date, segments.device,
       metrics.impressions, metrics.clicks, metrics.interactions, metrics.cost_micros,
       metrics.ctr, metrics.average_cpc, metrics.average_cpm,
-      metrics.conversions, metrics.conversions_value, metrics.all_conversions,
-      metrics.video_views
+      metrics.conversions, metrics.conversions_value, metrics.all_conversions
     FROM campaign
     WHERE {gaql_date_between(start, end)} AND campaign.status != 'REMOVED'
     """.strip()
@@ -148,8 +146,7 @@ def fetch_campaign_geo_metrics(
       geographic_view.country_criterion_id,
       metrics.impressions, metrics.clicks, metrics.interactions, metrics.cost_micros,
       metrics.ctr, metrics.average_cpc, metrics.average_cpm,
-      metrics.conversions, metrics.conversions_value, metrics.all_conversions,
-      metrics.video_views
+      metrics.conversions, metrics.conversions_value, metrics.all_conversions
     FROM geographic_view
     WHERE {gaql_date_between(start, end)}
     """.strip()

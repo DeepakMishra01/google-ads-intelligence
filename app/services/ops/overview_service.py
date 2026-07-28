@@ -70,6 +70,10 @@ class OverviewService:
             "new_search_terms_since_yesterday": self.ops.new_search_terms_count(
                 refs.latest, account_id
             ),
-            "sync_status": latest_sync.status if latest_sync else "never",
+            # Headline the last *successful* sync — a few permanently-inaccessible
+            # accounts (cancelled/suspended) shouldn't read as a global failure.
+            "sync_status": (
+                last_ok.status if last_ok else (latest_sync.status if latest_sync else "never")
+            ),
             "last_successful_sync": last_ok.finished_at if last_ok else None,
         }

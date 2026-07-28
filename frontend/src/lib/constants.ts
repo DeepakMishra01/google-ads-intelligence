@@ -7,6 +7,7 @@ import {
   ListChecks,
   PiggyBank,
   Search,
+  SearchCode,
   Target,
   Type,
 } from "lucide-react";
@@ -20,6 +21,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
+  { to: "/explorer", label: "Campaign Explorer", icon: SearchCode },
   { to: "/priorities", label: "Priority Queue", icon: ListChecks },
   { to: "/alerts", label: "Alerts", icon: AlertTriangle },
   { to: "/campaigns", label: "Campaign Health", icon: Gauge },

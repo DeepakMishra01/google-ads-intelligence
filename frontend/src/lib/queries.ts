@@ -8,6 +8,7 @@ import type {
   BudgetMonitorRow,
   CampaignHealthRow,
   CampaignPerformanceRow,
+  CampaignSearchResponse,
   DayComparison,
   GrowthPoint,
   KeywordHealthRow,
@@ -177,17 +178,70 @@ export function useUpdateAlertStatus() {
   });
 }
 
-export function useTrendMetrics(p: { accountId?: number; days: number }) {
+export function useTrendMetrics(p: {
+  accountId?: number;
+  days: number;
+  start?: string;
+  end?: string;
+}) {
   return useQuery({
     queryKey: ["trend-metrics", p],
-    queryFn: () => get<TrendPoint[]>("/trends/metrics", { account_id: p.accountId, days: p.days }),
+    queryFn: () =>
+      get<TrendPoint[]>("/trends/metrics", {
+        account_id: p.accountId,
+        days: p.days,
+        start: p.start,
+        end: p.end,
+      }),
   });
 }
 
-export function useGrowth(p: { accountId?: number; days: number }) {
+export function useGrowth(p: { accountId?: number; days: number; start?: string; end?: string }) {
   return useQuery({
     queryKey: ["growth", p],
-    queryFn: () => get<GrowthPoint[]>("/trends/growth", { account_id: p.accountId, days: p.days }),
+    queryFn: () =>
+      get<GrowthPoint[]>("/trends/growth", {
+        account_id: p.accountId,
+        days: p.days,
+        start: p.start,
+        end: p.end,
+      }),
+  });
+}
+
+export function useCampaignSearch(p: {
+  q?: string;
+  accountId?: number;
+  days: number;
+  start?: string;
+  end?: string;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ["campaign-search", p],
+    queryFn: () =>
+      get<CampaignSearchResponse>("/campaigns/search", {
+        q: p.q,
+        account_id: p.accountId,
+        days: p.days,
+        start: p.start,
+        end: p.end,
+        limit: p.limit ?? 500,
+      }),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useSyncNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (accountId?: number) =>
+      api
+        .post("/sync", { customer_ids: null, entity: "all", sync_type: "manual" }, {
+          params: { run_in_background: true, ...(accountId ? { account_id: accountId } : {}) },
+        })
+        .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sync-logs"] }),
   });
 }
 

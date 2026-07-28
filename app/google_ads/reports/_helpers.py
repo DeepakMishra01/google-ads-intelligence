@@ -45,7 +45,7 @@ def metrics_dict(row: Any) -> dict[str, Any]:
         "conversions": float(m.conversions or 0.0),
         "conversions_value": float(m.conversions_value or 0.0),
         "all_conversions": float(m.all_conversions or 0.0),
-        "video_views": int(m.video_views or 0),
+        "video_views": 0,  # metrics.video_views removed in Google Ads API v24
     }
 
 

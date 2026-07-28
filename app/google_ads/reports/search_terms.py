@@ -31,8 +31,7 @@ def fetch_search_terms(
       ad_group.id, campaign.id,
       metrics.impressions, metrics.clicks, metrics.interactions, metrics.cost_micros,
       metrics.ctr, metrics.average_cpc, metrics.average_cpm,
-      metrics.conversions, metrics.conversions_value, metrics.all_conversions,
-      metrics.video_views
+      metrics.conversions, metrics.conversions_value, metrics.all_conversions
     FROM search_term_view
     WHERE {gaql_date_between(start, end)}
     """.strip()

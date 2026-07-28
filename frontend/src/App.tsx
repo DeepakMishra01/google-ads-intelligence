@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 // Pages are code-split so the initial bundle only carries the shell + the first
 // route the user lands on; the rest load on navigation.
 const OverviewPage = lazy(() => import("./pages/OverviewPage"));
+const CampaignExplorerPage = lazy(() => import("./pages/CampaignExplorerPage"));
 const PriorityQueuePage = lazy(() => import("./pages/PriorityQueuePage"));
 const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const CampaignHealthPage = lazy(() => import("./pages/CampaignHealthPage"));
@@ -39,6 +40,7 @@ export default function App() {
             }
           >
             <Route path="/" element={<OverviewPage />} />
+            <Route path="/explorer" element={<CampaignExplorerPage />} />
             <Route path="/priorities" element={<PriorityQueuePage />} />
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/campaigns" element={<CampaignHealthPage />} />

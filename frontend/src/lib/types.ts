@@ -219,3 +219,39 @@ export interface SyncLog {
   attempt: number;
   error_message: string | null;
 }
+
+export interface CampaignSearchRow {
+  campaign_pk: number;
+  campaign_id: number;
+  campaign_name: string | null;
+  account_name: string | null;
+  account_id: number;
+  status: string | null;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  ctr: number | null;
+  avg_cpc: number | null;
+  cost_per_conversion: number | null;
+  first_day: string | null;
+  last_day: string | null;
+}
+
+export interface CampaignSearchTotals {
+  campaigns: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  ctr: number | null;
+  avg_cpc: number | null;
+  cost_per_conversion: number | null;
+}
+
+export interface CampaignSearchResponse {
+  items: CampaignSearchRow[];
+  totals: CampaignSearchTotals;
+  start: string | null;
+  end: string | null;
+}

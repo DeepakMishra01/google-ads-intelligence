@@ -213,6 +213,45 @@ class ReportResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Campaign Explorer (search by name over any date range)
+# --------------------------------------------------------------------------- #
+class CampaignSearchRow(BaseModel):
+    campaign_pk: int
+    campaign_id: int
+    campaign_name: str | None
+    account_name: str | None
+    account_id: int
+    status: str | None
+    impressions: int
+    clicks: int
+    cost: float
+    conversions: float
+    ctr: float | None
+    avg_cpc: float | None
+    cost_per_conversion: float | None
+    first_day: date | None
+    last_day: date | None
+
+
+class CampaignSearchTotals(BaseModel):
+    campaigns: int
+    spend: float
+    impressions: int
+    clicks: int
+    conversions: float
+    ctr: float | None
+    avg_cpc: float | None
+    cost_per_conversion: float | None
+
+
+class CampaignSearchResponse(BaseModel):
+    items: list[CampaignSearchRow]
+    totals: CampaignSearchTotals
+    start: date | None
+    end: date | None
+
+
+# --------------------------------------------------------------------------- #
 # Module 13 - Audit
 # --------------------------------------------------------------------------- #
 class AuditLogRead(ORMModel):

@@ -44,9 +44,9 @@ function DeltaCard({
 }
 
 export default function TrendsPage() {
-  const { accountId, days } = useFilters();
-  const metrics = useTrendMetrics({ accountId, days });
-  const growth = useGrowth({ accountId, days });
+  const { accountId, days, start, end } = useFilters();
+  const metrics = useTrendMetrics({ accountId, days, start, end });
+  const growth = useGrowth({ accountId, days, start, end });
   const compare = useCompare(accountId);
   const c = compare.data;
 
