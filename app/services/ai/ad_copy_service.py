@@ -28,6 +28,7 @@ from app.services.ai.keyword_history_service import build_keyword_history
 from app.services.ai.keyword_research_service import KeywordResearchService
 from app.services.ai.keyword_scorer import recommend_bid, recommend_match_type, score_keyword
 from app.services.ai.landing_page_service import LandingPageService
+from app.services.ai.landing_quality import score_landing_page
 from app.services.ai.negative_keywords_service import build_negative_keywords
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
 from app.services.ai.seasonality_service import build_seasonality
@@ -266,6 +267,10 @@ class AdCopyService:
                     target_cpl_high=target_cpl_high,
                 )
 
+        # Landing-page quality score + specific fixes (biggest CVR lever).
+        mob = self._mobile_share(brief)
+        landing_quality = score_landing_page(landing, mobile_heavy=(mob or 0) >= 0.6)
+
         # Campaign setup guide — a from-scratch checklist for a Google Ads newcomer.
         setup_guide = build_setup_guide(
             campaign_name=recommendation.get("campaign_name", brief.brand),
@@ -293,6 +298,7 @@ class AdCopyService:
             "keyword_history": keyword_history,
             "setup_guide": setup_guide,
             "negative_keywords_detail": negatives,
+            "landing_quality": landing_quality,
             "generated_at": datetime.now(UTC),
             "providers_used": providers_used,
         }
@@ -830,6 +836,7 @@ class AdCopyService:
                         "keyword_history": result.get("keyword_history"),
                         "setup_guide": result.get("setup_guide"),
                         "negative_keywords_detail": result.get("negative_keywords_detail"),
+                        "landing_quality": result.get("landing_quality"),
                     },
                     "reasoning": {
                         "headlines": [{"text": a["text"], "reason": a["reason"]}

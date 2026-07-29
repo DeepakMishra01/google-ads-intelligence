@@ -25,6 +25,7 @@ import type {
   CplPlan,
   GeneratedAsset,
   KeywordHistoryView as KeywordHistoryData,
+  LandingQuality,
   NegativeKeywordsDetail,
   SeasonalityView,
   SetupGuide,
@@ -364,8 +365,9 @@ function CampaignPlanView({
             </table>
           </div>
           <div className="mt-2 text-[11px] text-slate-400">
-            Spend follows real Google search demand — more in peak admission months, less when it's
-            quiet. Adds up to your full budget.
+            Concentrated on the admission season — <b>May 20% · June 30% · July 20%</b> (70% in the
+            intake peak); the rest spread across other months by real search demand. Sums to your
+            full budget.
           </div>
         </Section>
       )}
@@ -706,6 +708,60 @@ function NegativesView({ neg }: { neg: NegativeKeywordsDetail }) {
   );
 }
 
+function LandingQualityView({ lq }: { lq: LandingQuality }) {
+  const gradeColor =
+    lq.grade === "A" ? "text-green-600" : lq.grade === "B" ? "text-emerald-600"
+    : lq.grade === "C" ? "text-amber-600" : "text-red-600";
+  return (
+    <Section
+      title="Landing page quality — the biggest conversion lever"
+      hint={`${lq.passed}/${lq.max} points`}
+    >
+      <div className="mb-3 flex items-center gap-4">
+        <div className="text-center">
+          <div className={`text-3xl font-bold ${gradeColor}`}>{lq.score}</div>
+          <div className="text-[11px] text-slate-400">score / 100</div>
+        </div>
+        <div className={`text-2xl font-bold ${gradeColor}`}>Grade {lq.grade}</div>
+        <div className="flex-1">
+          <div className="h-2 rounded bg-slate-100">
+            <div
+              className={`h-2 rounded ${lq.score >= 70 ? "bg-green-500" : lq.score >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+              style={{ width: `${lq.score}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
+        {lq.checks.map((c) => (
+          <div key={c.item} className="flex items-center gap-2 text-sm">
+            {c.ok ? (
+              <Check size={14} className="shrink-0 text-green-600" />
+            ) : (
+              <span className="shrink-0 text-red-500">✕</span>
+            )}
+            <span className={c.ok ? "text-slate-600" : "text-slate-800"}>{c.item}</span>
+          </div>
+        ))}
+      </div>
+
+      {lq.suggestions.length > 0 && (
+        <div className="rounded-md bg-amber-50 p-2.5">
+          <div className="mb-1 text-xs font-medium text-amber-800">
+            Specific fixes to raise conversion (ranked by impact):
+          </div>
+          <ul className="list-disc space-y-1 pl-4 text-xs text-amber-800">
+            {lq.suggestions.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function AssetList({ assets, limit }: { assets: GeneratedAsset[]; limit: number }) {
   const [copied, setCopied] = useState<number | null>(null);
   const copy = (text: string, i: number) => {
@@ -1000,6 +1056,10 @@ export default function AiAdCopyGeneratorPage() {
 
             {result.campaign_plan?.available && (
               <CampaignPlanView plan={result.campaign_plan} seasonality={result.seasonality} />
+            )}
+
+            {result.landing_quality?.available && (
+              <LandingQualityView lq={result.landing_quality} />
             )}
 
             {result.setup_guide && result.setup_guide.steps.length > 0 && (

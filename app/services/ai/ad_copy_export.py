@@ -299,6 +299,20 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         for w in neg.get("preventive", []):
             ns.append([w])
 
+    # ---- Landing Page Quality sheet (score + specific fixes) ----
+    lq = (gen.scores or {}).get("landing_quality") or {}
+    if lq.get("available"):
+        ls = wb.create_sheet("Landing Quality")
+        ls.append([f"Landing page score: {lq.get('score')}/100 (Grade {lq.get('grade')})"])
+        ls.append([])
+        _header(ls, ["Check", "On the page?"])
+        for c in lq.get("checks", []):
+            ls.append([c.get("item"), "Yes" if c.get("ok") else "NO — fix"])
+        ls.append([])
+        ls.append(["Specific fixes to raise conversion (ranked by impact):"])
+        for s in lq.get("suggestions", []):
+            ls.append([s])
+
     # ---- Campaign Setup Guide sheet (build-from-scratch checklist) ----
     sg = (gen.scores or {}).get("setup_guide") or {}
     if sg.get("steps"):

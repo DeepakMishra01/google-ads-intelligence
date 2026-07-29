@@ -25,6 +25,34 @@ from app.services.ai.seasonality_service import MONTH_NAMES
 # budget, quality all cap it well below 100%).
 _MAX_IMPRESSION_SHARE = 0.75
 
+# The team's admission-season budget rule (month -> share). These months are
+# pinned; the rest of the budget is spread across the other months.
+_ADMISSION_SEASON = {5: 0.20, 6: 0.30, 7: 0.20}
+_SEASON_LEVEL = {5: "high", 6: "peak", 7: "high"}
+
+
+def _season_weights(data_weights: dict[int, float]) -> dict[int, float]:
+    """Pin the admission-season months; spread the remainder by real demand.
+
+    The remaining budget (1 - sum of pinned months) is distributed across the
+    other months in proportion to the Keyword Planner demand curve when present,
+    else evenly. Always sums to 1.0.
+    """
+    pinned = _ADMISSION_SEASON
+    remaining = max(0.0, 1.0 - sum(pinned.values()))
+    others = [m for m in range(1, 13) if m not in pinned]
+    other_data = {m: float(data_weights.get(m, 0.0) or 0.0) for m in others}
+    denom = sum(other_data.values())
+    weights: dict[int, float] = {}
+    for m in range(1, 13):
+        if m in pinned:
+            weights[m] = pinned[m]
+        elif denom > 0:
+            weights[m] = remaining * other_data[m] / denom
+        else:
+            weights[m] = remaining / len(others)
+    return weights
+
 
 def build_realism(
     *,
@@ -204,15 +232,21 @@ def build_plan(
         "assumed_cvr": assumed_cvr,
     }
 
-    # ---- month-wise pacing (follows real seasonality; even split otherwise) ----
-    weights = seasonality.get("monthly_weights") or dict.fromkeys(range(1, 13), 1 / 12)
+    # ---- month-wise pacing ----
+    # The team's admission-season rule takes priority: concentrate spend in the
+    # intake peak (May 20% · June 30% · July 20% = 70%); spread the remaining 30%
+    # across the other months in proportion to real search demand (even if no data).
     levels = {mo["month"]: mo["level"] for mo in seasonality.get("months", [])}
+    weights = _season_weights(seasonality.get("monthly_weights") or {})
+    raw = {m: round(budget * weights[m]) for m in range(1, 13)}
+    drift = round(budget) - sum(raw.values())
+    raw[6] += drift  # correct rounding on the peak month so the year sums to budget
     pacing = [
         {
             "month": m,
             "name": MONTH_NAMES[m],
-            "budget": round(budget * weights.get(m, 1 / 12)),
-            "level": levels.get(m, "moderate"),
+            "budget": raw[m],
+            "level": levels.get(m, _SEASON_LEVEL.get(m, "moderate")),
         }
         for m in range(1, 13)
     ]

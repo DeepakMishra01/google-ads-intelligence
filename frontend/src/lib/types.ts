@@ -412,6 +412,7 @@ export interface AdCopyGenerateResponse {
   keyword_history: KeywordHistoryView | null;
   setup_guide: SetupGuide | null;
   negative_keywords_detail: NegativeKeywordsDetail | null;
+  landing_quality: LandingQuality | null;
   generated_at: string;
 }
 
@@ -425,6 +426,20 @@ export interface SetupGuide {
   steps: SetupStep[];
   ready_count: number;
   action_count: number;
+}
+export interface LandingCheck {
+  item: string;
+  ok: boolean;
+  weight: number;
+}
+export interface LandingQuality {
+  available: boolean;
+  score: number;
+  grade: string | null;
+  checks: LandingCheck[];
+  suggestions: string[];
+  passed: number;
+  max: number;
 }
 export interface WastefulSearchTerm {
   term: string;

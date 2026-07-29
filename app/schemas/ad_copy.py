@@ -383,6 +383,23 @@ class SetupGuide(BaseModel):
     action_count: int = 0
 
 
+# --------------------------- landing-page quality ------------------------- #
+class LandingCheck(BaseModel):
+    item: str
+    ok: bool
+    weight: int
+
+
+class LandingQuality(BaseModel):
+    available: bool
+    score: int = 0
+    grade: str | None = None
+    checks: list[LandingCheck] = []
+    suggestions: list[str] = []
+    passed: int = 0
+    max: int = 0
+
+
 # --------------------------- negative keywords ---------------------------- #
 class WastefulSearchTerm(BaseModel):
     term: str
@@ -435,6 +452,7 @@ class AdCopyGenerateResponse(BaseModel):
     keyword_history: KeywordHistoryView | None = None
     setup_guide: SetupGuide | None = None
     negative_keywords_detail: NegativeKeywordsDetail | None = None
+    landing_quality: LandingQuality | None = None
     generated_at: datetime
 
 
