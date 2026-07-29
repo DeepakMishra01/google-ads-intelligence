@@ -96,6 +96,12 @@ class KeywordInsight(BaseModel):
     historical_cpc: float | None = None
     quality_score: float | None = None
     reason: str
+    # Per-keyword max-CPC bid recommendation (from real paid CPC or Google top-of-page).
+    recommended_bid: float | None = None
+    bid_low: float | None = None
+    bid_high: float | None = None
+    bid_basis: str | None = None  # history | planner | none
+    bid_reason: str | None = None
 
 
 class KeywordGroup(BaseModel):

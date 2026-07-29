@@ -331,6 +331,11 @@ export interface KeywordInsight {
   historical_cpc: number | null;
   quality_score: number | null;
   reason: string;
+  recommended_bid: number | null;
+  bid_low: number | null;
+  bid_high: number | null;
+  bid_basis: string | null;
+  bid_reason: string | null;
 }
 export interface KeywordGroup {
   name: string;

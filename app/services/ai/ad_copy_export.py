@@ -121,12 +121,14 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
 
     # Keywords (scored intelligence)
     ks = wb.create_sheet("Keywords")
-    _header(ks, ["Keyword", "Intent", "Score", "Source", "Clicks", "CTR", "CPC", "QS"])
+    _header(ks, ["Keyword", "Intent", "Score", "Source", "Clicks", "CTR", "CPC", "QS",
+                 "Suggested Bid (max CPC)", "Bid Basis", "Why this bid"])
     for kw in (gen.keyword_snapshot or {}).get("keywords", []):
         ks.append([
             kw.get("keyword"), kw.get("intent"), kw.get("score"), kw.get("source"),
             kw.get("historical_clicks"), kw.get("historical_ctr"),
             kw.get("historical_cpc"), kw.get("quality_score"),
+            kw.get("recommended_bid"), kw.get("bid_basis"), kw.get("bid_reason"),
         ])
 
     # Campaign Keywords (paste-ready, grouped by ad group + match type)

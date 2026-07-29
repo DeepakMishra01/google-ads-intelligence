@@ -25,7 +25,7 @@ from app.services.ai.campus_service import CampusService, campus_campaign_filter
 from app.services.ai.historical_intelligence_service import HistoricalIntelligenceService
 from app.services.ai.keyword_history_service import build_keyword_history
 from app.services.ai.keyword_research_service import KeywordResearchService
-from app.services.ai.keyword_scorer import score_keyword
+from app.services.ai.keyword_scorer import recommend_bid, score_keyword
 from app.services.ai.landing_page_service import LandingPageService
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
 from app.services.ai.seasonality_service import build_seasonality
@@ -346,10 +346,52 @@ class AdCopyService:
                     "historical_cpc": kw.get("historical_cpc"),
                     "quality_score": kw.get("quality_score"),
                     "reason": f"{sc['reason']}. {cls['reason']}",
+                    **recommend_bid(
+                        {
+                            "source": kw.get("source", "historical"),
+                            "historical_cpc": kw.get("historical_cpc"),
+                            "top_of_page_bid_low": kw.get("top_of_page_bid_low"),
+                            "top_of_page_bid_high": kw.get("top_of_page_bid_high"),
+                        }
+                    ),
                 }
             )
         insights.sort(key=lambda k: k["score"], reverse=True)
-        return insights[:25]
+        insights = insights[:25]
+        self._fill_bid_gaps(insights)
+        return insights
+
+    def _fill_bid_gaps(self, insights: list[dict[str, Any]]) -> None:
+        """Give never-run keywords a starting bid from a per-intent benchmark.
+
+        A keyword with no history or planner estimate would otherwise have no
+        number. We fall back to the median recommended bid of its own intent
+        group (else the overall median), so every keyword shows a concrete bid.
+        """
+        from statistics import median
+
+        priced = [k["recommended_bid"] for k in insights if k.get("recommended_bid")]
+        overall = round(median(priced)) if priced else None
+        by_intent: dict[str, float] = {}
+        for intent in {k["intent"] for k in insights}:
+            vals = [
+                k["recommended_bid"]
+                for k in insights
+                if k["intent"] == intent and k.get("recommended_bid")
+            ]
+            if vals:
+                by_intent[intent] = round(median(vals))
+        for k in insights:
+            if k.get("recommended_bid"):
+                continue
+            bench = by_intent.get(k["intent"], overall)
+            if bench:
+                k["recommended_bid"] = float(bench)
+                k["bid_basis"] = "benchmark"
+                k["bid_reason"] = (
+                    f"Never run before — start at ₹{bench} "
+                    f"(median of your other {k['intent']} keywords)."
+                )
 
     def _group_keywords(self, insights: list[dict[str, Any]]) -> list[dict[str, Any]]:
         groups: dict[str, list[dict[str, Any]]] = {}
@@ -357,8 +399,10 @@ class AdCopyService:
             groups.setdefault(k["intent"], []).append(k)
         out: list[dict[str, Any]] = []
         for intent, items in groups.items():
-            cpcs = [i["historical_cpc"] for i in items if i.get("historical_cpc")]
-            bid = round(sum(cpcs) / len(cpcs), 2) if cpcs else None
+            # Group default bid = median of the per-keyword recommended bids.
+            from statistics import median
+            bids = [i["recommended_bid"] for i in items if i.get("recommended_bid")]
+            bid = round(median(bids)) if bids else None
             kws = [i["keyword"] for i in items][:12]
             match_types = _MATCH_BY_INTENT.get(intent, ["PHRASE"])
             # Paste-ready keywords in Google Ads match-type syntax.

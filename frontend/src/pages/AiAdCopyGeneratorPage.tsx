@@ -199,6 +199,56 @@ function CampaignPlanView({
         </Section>
       )}
 
+      {plan.monthly_pacing.length > 0 && (
+        <Section
+          title="Monthly ad spend — how much to spend each month"
+          hint={`Total ${money(f?.budget)} over the year`}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                  <th className="py-2">Month</th>
+                  <th className="text-right">Suggested spend</th>
+                  <th className="text-right">Share</th>
+                  <th>Demand</th>
+                  <th className="w-1/3">Weighting</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.monthly_pacing.map((m) => {
+                  const share = f?.budget ? m.budget / f.budget : 0;
+                  return (
+                    <tr key={m.month} className="border-b border-slate-50">
+                      <td className="py-1.5 font-medium text-slate-800">{m.name}</td>
+                      <td className="text-right font-medium">{money(m.budget)}</td>
+                      <td className="text-right text-slate-500">{pct(share)}</td>
+                      <td>
+                        <Badge className={`${LEVEL_COLOR[m.level] ?? "bg-slate-300"} bg-opacity-20 text-slate-600`}>
+                          {m.level}
+                        </Badge>
+                      </td>
+                      <td>
+                        <div className="h-3 rounded bg-slate-100">
+                          <div
+                            className={`h-3 rounded ${LEVEL_COLOR[m.level] ?? "bg-slate-300"}`}
+                            style={{ width: `${Math.max(3, share * 100 * 3)}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400">
+            Spend follows real Google search demand — more in peak admission months, less when it's
+            quiet. Adds up to your full budget.
+          </div>
+        </Section>
+      )}
+
       <Section title="Bidding &amp; launch strategy">
         <div className="space-y-2 text-sm">
           {plan.bidding && (
@@ -806,6 +856,7 @@ export default function AiAdCopyGeneratorPage() {
                       <th className="text-right">Clicks</th>
                       <th className="text-right">CTR</th>
                       <th className="text-right">CPC</th>
+                      <th className="text-right">Suggested bid</th>
                       <th className="text-right">Vol.</th>
                     </tr>
                   </thead>
@@ -820,6 +871,9 @@ export default function AiAdCopyGeneratorPage() {
                         <td className="text-right">{num(k.historical_clicks)}</td>
                         <td className="text-right">{pct(k.historical_ctr)}</td>
                         <td className="text-right">{money(k.historical_cpc)}</td>
+                        <td className="text-right font-medium text-slate-800" title={k.bid_reason ?? ""}>
+                          {k.recommended_bid != null ? money(k.recommended_bid) : "—"}
+                        </td>
                         <td className="text-right">{num(k.search_volume)}</td>
                       </tr>
                     ))}

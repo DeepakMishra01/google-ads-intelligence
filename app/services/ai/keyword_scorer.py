@@ -84,3 +84,72 @@ def score_keyword(kw: dict[str, Any]) -> dict[str, Any]:
         "No signals available — neutral score."
     )
     return {"score": round(score, 1), "factors": factors, "reason": reason}
+
+
+# Headroom over the average paid CPC so the bid can still win the auction.
+_BID_HEADROOM = 1.15
+
+
+def recommend_bid(kw: dict[str, Any]) -> dict[str, Any]:
+    """Recommend a max-CPC bid for one keyword from the strongest real signal.
+
+    Priority: (1) what this account actually paid for the keyword (history),
+    (2) Google Keyword Planner's top-of-page bid range, else no recommendation
+    (fall back to the ad-group default). Always returns a plain-English reason.
+    """
+    source = kw.get("source")
+    cpc = kw.get("historical_cpc")
+    low = kw.get("top_of_page_bid_low")
+    high = kw.get("top_of_page_bid_high")
+
+    # 1) Real paid CPC from this account is the most trustworthy anchor.
+    if source == "historical" and cpc and cpc > 0:
+        rec = round(cpc * _BID_HEADROOM)
+        return {
+            "recommended_bid": float(rec),
+            "bid_low": round(cpc),
+            "bid_high": round(cpc * 1.3),
+            "bid_basis": "history",
+            "bid_reason": (
+                f"You paid ~₹{cpc:.0f}/click here before — bid ₹{rec} "
+                "(15% headroom) to stay competitive."
+            ),
+        }
+    # 2) Google Keyword Planner top-of-page estimate.
+    if low and high and high > 0:
+        mid = round((low + high) / 2)
+        return {
+            "recommended_bid": float(mid),
+            "bid_low": round(low),
+            "bid_high": round(high),
+            "bid_basis": "planner",
+            "bid_reason": (
+                f"Google says ₹{low:.0f}–₹{high:.0f} to show at the top — "
+                f"bid ₹{mid} to start."
+            ),
+        }
+    if high and high > 0:  # planner high only (also where historical_cpc is a proxy)
+        rec = round(high)
+        return {
+            "recommended_bid": float(rec),
+            "bid_low": None,
+            "bid_high": round(high),
+            "bid_basis": "planner",
+            "bid_reason": f"Google top-of-page estimate ~₹{rec} — bid around this to start.",
+        }
+    if cpc and cpc > 0:  # planner-sourced proxy CPC when no explicit range survived
+        rec = round(cpc)
+        return {
+            "recommended_bid": float(rec),
+            "bid_low": None,
+            "bid_high": None,
+            "bid_basis": "planner",
+            "bid_reason": f"Estimated ~₹{rec}/click from Google — bid around this to start.",
+        }
+    return {
+        "recommended_bid": None,
+        "bid_low": None,
+        "bid_high": None,
+        "bid_basis": "none",
+        "bid_reason": "No bid data yet — use the ad-group default and let bidding learn.",
+    }
