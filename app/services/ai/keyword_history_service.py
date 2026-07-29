@@ -113,21 +113,43 @@ def build_keyword_history(
     suggested = {k.strip().lower() for k in (suggested_keywords or []) if k and k.strip()}
 
     # One pass: per keyword text × month, aggregate the metrics.
+    # The sync appends a fresh snapshot row per run, so the same (keyword, day) can
+    # appear many times. Summing raw rows would multiply clicks/cost by the number of
+    # syncs. Collapse to ONE row per (keyword_id, snapshot_date) — the latest sync —
+    # before aggregating, so every total is the true per-day value summed once.
+    rn = func.row_number().over(
+        partition_by=(KeywordSnapshot.keyword_id, KeywordSnapshot.snapshot_date),
+        order_by=KeywordSnapshot.sync_time.desc(),
+    ).label("rn")
+    dedup = (
+        select(
+            KeywordSnapshot.keyword_id.label("keyword_id"),
+            KeywordSnapshot.snapshot_date.label("snapshot_date"),
+            KeywordSnapshot.clicks.label("clicks"),
+            KeywordSnapshot.impressions.label("impressions"),
+            KeywordSnapshot.cost_micros.label("cost_micros"),
+            KeywordSnapshot.conversions.label("conversions"),
+            KeywordSnapshot.quality_score.label("quality_score"),
+            rn,
+        )
+        .join(Campaign, KeywordSnapshot.campaign_id == Campaign.id)
+        .where(pred)
+        .subquery()
+    )
     stmt = (
         select(
             Keyword.text,
-            func.extract("year", KeywordSnapshot.snapshot_date).label("yr"),
-            func.extract("month", KeywordSnapshot.snapshot_date).label("mo"),
-            func.coalesce(func.sum(KeywordSnapshot.clicks), 0),
-            func.coalesce(func.sum(KeywordSnapshot.impressions), 0),
-            func.coalesce(func.sum(KeywordSnapshot.cost_micros), 0),
-            func.coalesce(func.sum(KeywordSnapshot.conversions), 0),
-            func.avg(KeywordSnapshot.quality_score),
+            func.extract("year", dedup.c.snapshot_date).label("yr"),
+            func.extract("month", dedup.c.snapshot_date).label("mo"),
+            func.coalesce(func.sum(dedup.c.clicks), 0),
+            func.coalesce(func.sum(dedup.c.impressions), 0),
+            func.coalesce(func.sum(dedup.c.cost_micros), 0),
+            func.coalesce(func.sum(dedup.c.conversions), 0),
+            func.avg(dedup.c.quality_score),
         )
         .select_from(Keyword)
-        .join(KeywordSnapshot, KeywordSnapshot.keyword_id == Keyword.id)
-        .join(Campaign, KeywordSnapshot.campaign_id == Campaign.id)
-        .where(pred)
+        .join(dedup, dedup.c.keyword_id == Keyword.id)
+        .where(dedup.c.rn == 1)
         .group_by(Keyword.text, "yr", "mo")
     )
 
