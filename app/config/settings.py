@@ -79,7 +79,9 @@ class Settings(BaseSettings):
     # Gemini is supported for testing; auto = use Anthropic if its key is set,
     # else Gemini, else the deterministic engine. Force with "anthropic"/"gemini".
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    # Use a non-"thinking" model (flash-lite) — thinking models (2.5-flash, 3.x)
+    # spend the output budget on reasoning and truncate the JSON. Override freely.
+    gemini_model: str = "gemini-flash-lite-latest"
     ad_copy_llm_provider: str = "auto"  # auto | anthropic | gemini
     ad_copy_llm_enabled: bool = True  # master switch for the hybrid LLM backend
     ad_copy_llm_max_tokens: int = 2000
