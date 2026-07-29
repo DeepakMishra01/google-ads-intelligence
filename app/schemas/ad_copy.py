@@ -269,6 +269,39 @@ class ForecastRealism(BaseModel):
     note: str
 
 
+class CplScenario(BaseModel):
+    name: str
+    cpc: float
+    cvr_pct: float
+    cpl: int | None = None
+    leads: int
+    note: str
+
+
+class CplLever(BaseModel):
+    dial: str  # measure | CPC | CVR
+    lever: str
+    detail: str
+
+
+class CplPlan(BaseModel):
+    target_cpl_low: int
+    target_cpl_high: int
+    blended_cpc: float
+    optimized_cpc: float
+    required_cvr_pct: float
+    required_cvr_pct_at_blended: float
+    required_cvr_band_pct: list[float] = []
+    current_cvr_avg_pct: float
+    current_cvr_best_pct: float
+    gap_vs_avg: float | None = None
+    gap_vs_best: float | None = None
+    reachable_at_best: bool
+    scenarios: list[CplScenario] = []
+    levers: list[CplLever] = []
+    verdict: str
+
+
 class CampaignPlan(BaseModel):
     available: bool
     allocation: list[BudgetAllocationRow] = []
@@ -278,6 +311,7 @@ class CampaignPlan(BaseModel):
     bidding: BiddingRecommendation | None = None
     device: DeviceStrategy | None = None
     realism: ForecastRealism | None = None
+    cpl_plan: CplPlan | None = None
 
 
 # --------------------------- keyword history ------------------------------ #
@@ -378,7 +412,10 @@ class AdCopyGenerateRequest(BaseModel):
     budget: float | None = None
     goal: str = "traffic"  # traffic | leads | both
     timeframe_months: int = 12
-    assumed_cvr: float = 0.03  # for lead/CPL estimates when conversions aren't tracked
+    # Real measured clicks→lead rate (0.13%), not an optimistic guess.
+    assumed_cvr: float = 0.0013
+    target_cpl_low: float = 750.0
+    target_cpl_high: float = 850.0
 
 
 class AdCopyGenerateResponse(BaseModel):

@@ -65,6 +65,8 @@ def generate(
         goal=body.goal,
         timeframe_months=body.timeframe_months,
         assumed_cvr=body.assumed_cvr,
+        target_cpl_low=body.target_cpl_low,
+        target_cpl_high=body.target_cpl_high,
     )
     return AdCopyGenerateResponse(**result)
 

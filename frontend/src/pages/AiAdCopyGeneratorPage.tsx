@@ -22,6 +22,7 @@ import { useFilters } from "@/state/FiltersContext";
 import type {
   AdCopyGenerateResponse,
   CampaignPlan,
+  CplPlan,
   GeneratedAsset,
   KeywordHistoryView as KeywordHistoryData,
   NegativeKeywordsDetail,
@@ -112,6 +113,89 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
+const DIAL_STYLE: Record<string, string> = {
+  measure: "bg-purple-100 text-purple-700",
+  CVR: "bg-green-100 text-green-700",
+  CPC: "bg-blue-100 text-blue-700",
+};
+
+function CplPlanView({ cpl }: { cpl: CplPlan }) {
+  return (
+    <Section
+      title={`CPL optimizer — target ₹${cpl.target_cpl_low}–${cpl.target_cpl_high}`}
+      hint={cpl.reachable_at_best ? "reachable at your best funnel" : "needs funnel improvement"}
+    >
+      <div
+        className={`mb-3 rounded-md p-3 text-sm ${
+          cpl.reachable_at_best ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+        }`}
+      >
+        <div className="font-semibold">
+          You need a {cpl.required_cvr_pct}% click→lead rate to hit ₹
+          {Math.round((cpl.target_cpl_low + cpl.target_cpl_high) / 2)} CPL
+          {" "}(at an optimized ₹{cpl.optimized_cpc} CPC).
+        </div>
+        <p className="mt-1 text-xs">{cpl.verdict}</p>
+      </div>
+
+      <div className="mb-3 grid grid-cols-3 gap-3 text-center">
+        <div className="rounded-lg bg-slate-50 p-2">
+          <div className="text-[11px] text-slate-500">Your average today</div>
+          <div className="text-lg font-semibold text-red-600">{cpl.current_cvr_avg_pct}%</div>
+        </div>
+        <div className="rounded-lg bg-slate-50 p-2">
+          <div className="text-[11px] text-slate-500">Your best</div>
+          <div className="text-lg font-semibold text-amber-600">{cpl.current_cvr_best_pct}%</div>
+        </div>
+        <div className="rounded-lg bg-slate-50 p-2">
+          <div className="text-[11px] text-slate-500">Needed for target</div>
+          <div className="text-lg font-semibold text-green-700">{cpl.required_cvr_pct}%</div>
+        </div>
+      </div>
+
+      <div className="mb-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className="py-1.5">Scenario</th>
+              <th className="text-right">CPC</th>
+              <th className="text-right">Conv. rate</th>
+              <th className="text-right">CPL</th>
+              <th className="text-right">Leads (budget)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cpl.scenarios.map((s) => (
+              <tr key={s.name} className="border-b border-slate-50">
+                <td className="py-1.5 font-medium text-slate-800">{s.name}</td>
+                <td className="text-right">{money(s.cpc)}</td>
+                <td className="text-right">{s.cvr_pct}%</td>
+                <td className="text-right font-medium">{s.cpl != null ? money(s.cpl) : "—"}</td>
+                <td className="text-right">{num(s.leads)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="text-xs font-medium text-slate-600">How to close the gap (ranked by impact):</div>
+      <ul className="mt-1 space-y-1.5">
+        {cpl.levers.map((l, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <Badge className={DIAL_STYLE[l.dial] ?? "bg-slate-100 text-slate-600"}>
+              {l.dial === "measure" ? "track" : l.dial}
+            </Badge>
+            <div className="min-w-0 flex-1">
+              <span className="text-sm font-medium text-slate-800">{l.lever}</span>
+              <span className="text-xs text-slate-500"> — {l.detail}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
 function CampaignPlanView({
   plan,
   seasonality,
@@ -162,11 +246,13 @@ function CampaignPlanView({
         )}
         {f?.cpl_is_estimated && (
           <div className="mt-2 text-xs text-amber-600">
-            * Leads &amp; CPL are <b>estimates</b> at a {cvrPct}% conversion rate — this account has
-            no conversion tracking yet. CPC, impressions and seasonality are real data.
+            * Leads &amp; CPL use your <b>real {cvrPct}%</b> conversion rate. Conversion tracking
+            isn't live, so treat lead counts as directional. CPC &amp; seasonality are real data.
           </div>
         )}
       </Section>
+
+      {plan.cpl_plan && <CplPlanView cpl={plan.cpl_plan} />}
 
       <Section title="Budget allocation by ad group">
         <div className="overflow-x-auto">

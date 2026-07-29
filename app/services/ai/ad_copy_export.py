@@ -216,6 +216,26 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         if not seasonality.get("available"):
             se.append(["(Keyword Planner seasonality unavailable — budget paced evenly.)"])
 
+    # ---- CPL Optimizer sheet (target CPL → required conversion rate + playbook) ----
+    cplp = (plan or {}).get("cpl_plan") or {}
+    if cplp:
+        cs = wb.create_sheet("CPL Optimizer")
+        cs.append([f"Target CPL: ₹{cplp.get('target_cpl_low')}–{cplp.get('target_cpl_high')}"])
+        cs.append([f"Required conversion rate: {cplp.get('required_cvr_pct')}% "
+                   f"(at optimized ₹{cplp.get('optimized_cpc')} CPC)"])
+        cs.append([f"Your rates — avg {cplp.get('current_cvr_avg_pct')}%, "
+                   f"best {cplp.get('current_cvr_best_pct')}%"])
+        cs.append(["Verdict:", cplp.get("verdict")])
+        cs.append([])
+        _header(cs, ["Scenario", "CPC", "Conv. rate %", "CPL", "Leads (budget)", "Note"])
+        for s in cplp.get("scenarios", []):
+            cs.append([s.get("name"), s.get("cpc"), s.get("cvr_pct"), s.get("cpl"),
+                       s.get("leads"), s.get("note")])
+        cs.append([])
+        _header(cs, ["Dial", "Lever", "How"])
+        for lv in cplp.get("levers", []):
+            cs.append([lv.get("dial"), lv.get("lever"), lv.get("detail")])
+
     # ---- Keyword History sheet ("keep or drop last time's keywords?") ----
     kh = (gen.scores or {}).get("keyword_history") or {}
     if kh.get("available"):

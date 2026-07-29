@@ -22,6 +22,7 @@ from app.services.ai import intent_classifier
 from app.services.ai.budget_planner import build_plan
 from app.services.ai.campus_config import find_brief, generic_brief
 from app.services.ai.campus_service import CampusService, campus_campaign_filter
+from app.services.ai.cpl_optimizer import build_cpl_plan
 from app.services.ai.historical_intelligence_service import HistoricalIntelligenceService
 from app.services.ai.keyword_history_service import build_keyword_history
 from app.services.ai.keyword_research_service import KeywordResearchService
@@ -171,7 +172,9 @@ class AdCopyService:
         budget: float | None = None,
         goal: str = "traffic",
         timeframe_months: int = 12,
-        assumed_cvr: float = 0.03,
+        assumed_cvr: float = 0.0013,  # real avg clicks→lead (0.13%), not an optimistic guess
+        target_cpl_low: float = 750.0,
+        target_cpl_high: float = 850.0,
     ) -> dict[str, Any]:
         brief = find_brief(campus) or generic_brief(campus)
 
@@ -246,6 +249,22 @@ class AdCopyService:
                 hist_stats=self._history_stats(brief),
                 annual_search_demand=self._annual_demand(campus_kw),
             )
+            # CPL target optimizer — required conversion rate + gap + playbook.
+            if campaign_plan and campaign_plan.get("available"):
+                alloc = campaign_plan.get("allocation", [])
+                p1 = [r for r in alloc if r.get("phase") == 1 and r.get("avg_cpc")]
+                tot_b = sum(r["budget"] for r in p1) or 1
+                opt_cpc = (
+                    sum(r["avg_cpc"] * r["budget"] for r in p1) / tot_b if p1 else None
+                )
+                blended = (campaign_plan.get("forecast") or {}).get("blended_cpc") or opt_cpc
+                campaign_plan["cpl_plan"] = build_cpl_plan(
+                    budget=float(budget),
+                    blended_cpc=blended,
+                    optimized_cpc=opt_cpc,
+                    target_cpl_low=target_cpl_low,
+                    target_cpl_high=target_cpl_high,
+                )
 
         # Campaign setup guide — a from-scratch checklist for a Google Ads newcomer.
         setup_guide = build_setup_guide(

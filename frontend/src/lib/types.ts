@@ -532,6 +532,36 @@ export interface ForecastRealism {
   arithmetic_clicks: number;
   note: string;
 }
+export interface CplScenario {
+  name: string;
+  cpc: number;
+  cvr_pct: number;
+  cpl: number | null;
+  leads: number;
+  note: string;
+}
+export interface CplLever {
+  dial: string; // measure | CPC | CVR
+  lever: string;
+  detail: string;
+}
+export interface CplPlan {
+  target_cpl_low: number;
+  target_cpl_high: number;
+  blended_cpc: number;
+  optimized_cpc: number;
+  required_cvr_pct: number;
+  required_cvr_pct_at_blended: number;
+  required_cvr_band_pct: number[];
+  current_cvr_avg_pct: number;
+  current_cvr_best_pct: number;
+  gap_vs_avg: number | null;
+  gap_vs_best: number | null;
+  reachable_at_best: boolean;
+  scenarios: CplScenario[];
+  levers: CplLever[];
+  verdict: string;
+}
 export interface CampaignPlan {
   available: boolean;
   allocation: BudgetAllocationRow[];
@@ -541,6 +571,7 @@ export interface CampaignPlan {
   bidding: BiddingRecommendation | null;
   device: DeviceStrategy | null;
   realism: ForecastRealism | null;
+  cpl_plan: CplPlan | null;
 }
 
 // --- Keyword performance history ("keep or drop last time's keywords?") --- //
