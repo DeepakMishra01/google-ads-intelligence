@@ -152,12 +152,81 @@ def build_plan(
         ),
     }
 
-    # ---- bidding recommendation + upgrade path ----
+    # ---- bidding recommendation + alternatives + anti-overspend guardrails ----
+    days = max(1, timeframe_months) * 30.44
+    daily_budget = round(budget / days)
+    max_group_cpc = max((r["avg_cpc"] for r in rows), default=_DEFAULT_CPC)
+    cpc_cap = round(max_group_cpc * 1.4)  # ceiling so automated bidding can't run away
+
+    if has_conversions and goal in ("leads", "both"):
+        recommended = "Maximize Conversions"
+        why = (
+            "You have conversion tracking and want leads — let Google optimise to "
+            "conversions, then tighten to Target CPA as data grows."
+        )
+    else:
+        recommended = f"Maximize Clicks with a max-CPC cap of ₹{cpc_cap}"
+        why = (
+            "No conversion tracking on this account yet, so lead-based bidding can't run. "
+            "Maximize Clicks (with a CPC cap) buys the most visitors for the budget without "
+            "letting bids run away. This is exactly the Maximize-Clicks / Manual-CPC approach "
+            "your team already uses — the platform confirms it's the right call here."
+        )
+
+    options = [
+        {
+            "name": "Manual CPC",
+            "when": "Maximum control — ideal for the Brand group and while you learn.",
+            "needs_tracking": False,
+            "note": "Use the per-keyword bids in the Keywords tab as your starting bids.",
+        },
+        {
+            "name": "Maximize Clicks (with CPC cap)",
+            "when": "Most traffic on a fixed budget when conversions aren't tracked.",
+            "needs_tracking": False,
+            "note": f"Always set the max-CPC cap (₹{cpc_cap}) or it can bid up and overspend.",
+        },
+        {
+            "name": "Target Impression Share",
+            "when": "Own your brand SERP — keep brand ads at the top.",
+            "needs_tracking": False,
+            "note": "Best for the Brand ad group; still cap the max CPC.",
+        },
+        {
+            "name": "Maximize Conversions",
+            "when": "Once conversion tracking fires and you want leads, not just clicks.",
+            "needs_tracking": True,
+            "note": "Needs ~15–30 conversions to learn before it performs.",
+        },
+        {
+            "name": "Target CPA",
+            "when": f"Mature stage — hold a fixed cost per lead (~₹{forecast['est_cpl']}).",
+            "needs_tracking": True,
+            "note": "Needs ~30 conversions/month to stay stable.",
+        },
+    ]
+
+    guardrails = [
+        f"Set the campaign daily budget to about ₹{daily_budget}/day "
+        "(Google may spend up to 2× on a busy day but averages to your monthly total).",
+        f"Attach a max-CPC cap of ~₹{cpc_cap} to any automated strategy so it can't "
+        "bid up and burn budget.",
+        "Keep keywords on Exact/Phrase — avoid Broad match until conversion tracking is "
+        "live; Broad without it is the #1 cause of wasted spend.",
+        "Load the negative-keyword list so you don't pay for irrelevant searches.",
+        "Start Phase 1 only, review after ~2 weeks, then scale what works.",
+    ]
+
     bidding = {
-        "primary": (
-            "Maximize Clicks with a max-CPC cap" if goal in ("traffic", "both")
-            else "Maximize Conversions"
-        ),
+        # richer, data-aware recommendation
+        "recommended": recommended,
+        "why": why,
+        "options": options,
+        "guardrails": guardrails,
+        "daily_budget": daily_budget,
+        "max_cpc_cap": cpc_cap,
+        # kept for backward compatibility with existing views/export
+        "primary": recommended,
         "brand": "Manual CPC (or Target Impression Share) to hold brand cheaply",
         "upgrade_path": (
             "You have no conversion tracking yet, so lead-based bidding can't run. "

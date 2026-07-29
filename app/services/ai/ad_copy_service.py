@@ -25,30 +25,14 @@ from app.services.ai.campus_service import CampusService, campus_campaign_filter
 from app.services.ai.historical_intelligence_service import HistoricalIntelligenceService
 from app.services.ai.keyword_history_service import build_keyword_history
 from app.services.ai.keyword_research_service import KeywordResearchService
-from app.services.ai.keyword_scorer import recommend_bid, score_keyword
+from app.services.ai.keyword_scorer import recommend_bid, recommend_match_type, score_keyword
 from app.services.ai.landing_page_service import LandingPageService
+from app.services.ai.negative_keywords_service import build_negative_keywords
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
 from app.services.ai.seasonality_service import build_seasonality
+from app.services.ai.setup_guide import build_setup_guide
 
 log = get_logger(__name__)
-
-_NEGATIVES = [
-    "free", "jobs", "job", "salary", "result", "sample paper", "wikipedia", "pdf download",
-]
-_MATCH_BY_INTENT = {
-    "brand": ["EXACT", "PHRASE"],
-    "deadline": ["PHRASE", "EXACT"],
-    "application": ["PHRASE", "EXACT"],
-    "registration": ["PHRASE", "EXACT"],
-    "admission": ["PHRASE", "EXACT"],
-    "fees": ["PHRASE"],
-    "eligibility": ["PHRASE"],
-    "course": ["PHRASE", "BROAD"],
-    "placement": ["PHRASE"],
-    "location": ["PHRASE"],
-    "informational": ["BROAD"],
-}
-
 
 def _fit(text: str, limit: int) -> str | None:
     t = re.sub(r"\s+", " ", (text or "")).strip(" -|")
@@ -156,7 +140,8 @@ class AdCopyService:
 
         # Steps 5-7: keyword research → intent → scoring.
         raw_kw, providers_used = self.keywords.collect(brief)
-        keyword_insights = self._score_keywords(brief, raw_kw)
+        has_conversions = (historical.get("total_conversions") or 0) > 0
+        keyword_insights = self._score_keywords(brief, raw_kw, has_conversions=has_conversions)
         keyword_groups = self._group_keywords(keyword_insights)
 
         # Step 9: generation (hybrid LLM → deterministic fallback).
@@ -168,7 +153,8 @@ class AdCopyService:
         assets["callouts"] = assets.get("callouts") or self._callouts(brief, landing)
         assets["structured_snippets"] = self._snippets(brief, landing)
         assets["sitelinks"] = self._sitelinks(brief, selected)
-        assets["negative_keywords"] = self._negatives(historical)
+        negatives = build_negative_keywords(self.db, brief)
+        assets["negative_keywords"] = negatives["keywords"]
 
         # Step 10: validation + quality prediction.
         quality = validate_assets(
@@ -209,8 +195,19 @@ class AdCopyService:
                 keyword_insights=keyword_insights,
                 seasonality=seasonality,
                 mobile_share=self._mobile_share(brief),
-                has_conversions=(historical.get("total_conversions") or 0) > 0,
+                has_conversions=has_conversions,
             )
+
+        # Campaign setup guide — a from-scratch checklist for a Google Ads newcomer.
+        setup_guide = build_setup_guide(
+            campaign_name=recommendation.get("campaign_name", brief.brand),
+            plan=campaign_plan,
+            keyword_groups=keyword_groups,
+            negatives=assets.get("negative_keywords", []),
+            geo=brief.location,
+            has_conversions=has_conversions,
+            total_keywords=len(keyword_insights),
+        )
 
         result: dict[str, Any] = {
             "campus": brief.brand,
@@ -226,6 +223,8 @@ class AdCopyService:
             "seasonality": seasonality,
             "campaign_plan": campaign_plan,
             "keyword_history": keyword_history,
+            "setup_guide": setup_guide,
+            "negative_keywords_detail": negatives,
             "generated_at": datetime.now(UTC),
             "providers_used": providers_used,
         }
@@ -310,7 +309,9 @@ class AdCopyService:
                       f"{ex} application form", f"{ex} last date"]
         return [{"keyword": t, **empty} for t in dict.fromkeys(terms)]
 
-    def _score_keywords(self, brief, raw_kw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _score_keywords(
+        self, brief, raw_kw: list[dict[str, Any]], *, has_conversions: bool = False
+    ) -> list[dict[str, Any]]:
         patterns = brief.patterns()
 
         def is_relevant(kw: str) -> bool:
@@ -363,6 +364,14 @@ class AdCopyService:
                             "top_of_page_bid_high": kw.get("top_of_page_bid_high"),
                         }
                     ),
+                    **recommend_match_type(
+                        {
+                            "intent": intent,
+                            "historical_clicks": kw.get("historical_clicks"),
+                            "historical_ctr": kw.get("historical_ctr"),
+                        },
+                        has_conversions=has_conversions,
+                    ),
                 }
             )
         insights.sort(key=lambda k: k["score"], reverse=True)
@@ -412,10 +421,17 @@ class AdCopyService:
             from statistics import median
             bids = [i["recommended_bid"] for i in items if i.get("recommended_bid")]
             bid = round(median(bids)) if bids else None
-            kws = [i["keyword"] for i in items][:12]
-            match_types = _MATCH_BY_INTENT.get(intent, ["PHRASE"])
-            # Paste-ready keywords in Google Ads match-type syntax.
-            match_keywords = [_match_format(k, mt) for k in kws for mt in match_types]
+            items = items[:12]
+            kws = [i["keyword"] for i in items]
+            # Paste-ready keywords, each in ITS OWN recommended match type.
+            match_keywords = [
+                _match_format(i["keyword"], i.get("recommended_match_type", "PHRASE"))
+                for i in items
+            ]
+            # Distinct match types actually used in this group (for the header label).
+            match_types = list(
+                dict.fromkeys(i.get("recommended_match_type", "PHRASE") for i in items)
+            )
             out.append(
                 {
                     "name": f"{_titlecase(intent)} Intent",
@@ -693,9 +709,6 @@ class AdCopyService:
             for t in titles
         ]
 
-    def _negatives(self, historical) -> list[str]:
-        return list(dict.fromkeys(_NEGATIVES))
-
     def _campaign_recommendation(self, brief, keyword_groups) -> dict[str, Any]:
         ag = [g["name"] for g in keyword_groups[:6]] or ["Brand", "Admissions", "Application"]
         return {
@@ -747,6 +760,8 @@ class AdCopyService:
                         "campaign_plan": result.get("campaign_plan"),
                         "seasonality": result.get("seasonality"),
                         "keyword_history": result.get("keyword_history"),
+                        "setup_guide": result.get("setup_guide"),
+                        "negative_keywords_detail": result.get("negative_keywords_detail"),
                     },
                     "reasoning": {
                         "headlines": [{"text": a["text"], "reason": a["reason"]}

@@ -336,6 +336,8 @@ export interface KeywordInsight {
   bid_high: number | null;
   bid_basis: string | null;
   bid_reason: string | null;
+  recommended_match_type: string | null;
+  match_reason: string | null;
 }
 export interface KeywordGroup {
   name: string;
@@ -408,7 +410,36 @@ export interface AdCopyGenerateResponse {
   seasonality: SeasonalityView | null;
   campaign_plan: CampaignPlan | null;
   keyword_history: KeywordHistoryView | null;
+  setup_guide: SetupGuide | null;
+  negative_keywords_detail: NegativeKeywordsDetail | null;
   generated_at: string;
+}
+
+export interface SetupStep {
+  step: string;
+  detail: string;
+  status: string; // ready | review | action
+}
+export interface SetupGuide {
+  campaign_name: string;
+  steps: SetupStep[];
+  ready_count: number;
+  action_count: number;
+}
+export interface WastefulSearchTerm {
+  term: string;
+  clicks: number;
+  impressions: number;
+  cost: number;
+  reason: string;
+}
+export interface NegativeKeywordsDetail {
+  keywords: string[];
+  from_search_terms: WastefulSearchTerm[];
+  preventive: string[];
+  wasted_spend: number;
+  themes_found: string[];
+  note: string;
 }
 
 // --- Campaign Planner (budget-driven) ------------------------------------- //
@@ -466,10 +497,22 @@ export interface Phasing {
   phase2_budget: number;
   note: string;
 }
+export interface BidOption {
+  name: string;
+  when: string;
+  needs_tracking: boolean;
+  note: string;
+}
 export interface BiddingRecommendation {
   primary: string;
   brand: string;
   upgrade_path: string;
+  recommended: string | null;
+  why: string | null;
+  options: BidOption[];
+  guardrails: string[];
+  daily_budget: number | null;
+  max_cpc_cap: number | null;
 }
 export interface DeviceStrategy {
   mobile_share_pct: number;

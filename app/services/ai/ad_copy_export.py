@@ -116,18 +116,18 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         es.append([f"Snippet: {label}", ", ".join(vals)])
     for s in a.get("sitelinks", []):
         es.append(["Sitelink", s.get("text")])
-    for n in a.get("negative_keywords", []):
-        es.append(["Negative Keyword", n])
 
     # Keywords (scored intelligence)
     ks = wb.create_sheet("Keywords")
     _header(ks, ["Keyword", "Intent", "Score", "Source", "Clicks", "CTR", "CPC", "QS",
+                 "Match Type", "Why match type",
                  "Suggested Bid (max CPC)", "Bid Basis", "Why this bid"])
     for kw in (gen.keyword_snapshot or {}).get("keywords", []):
         ks.append([
             kw.get("keyword"), kw.get("intent"), kw.get("score"), kw.get("source"),
             kw.get("historical_clicks"), kw.get("historical_ctr"),
             kw.get("historical_cpc"), kw.get("quality_score"),
+            kw.get("recommended_match_type"), kw.get("match_reason"),
             kw.get("recommended_bid"), kw.get("bid_basis"), kw.get("bid_reason"),
         ])
 
@@ -161,9 +161,25 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         bp.append([f"Leads/CPL assume a {round((f.get('assumed_cvr') or 0) * 100, 1)}% "
                    "conversion rate (no conversion tracking on this account yet)."])
         bid = plan.get("bidding") or {}
-        bp.append(["Bidding:", bid.get("primary")])
-        bp.append(["Brand:", bid.get("brand")])
-        bp.append(["Upgrade path:", bid.get("upgrade_path")])
+        bp.append([])
+        bp.append(["Recommended bidding:", bid.get("recommended") or bid.get("primary")])
+        if bid.get("why"):
+            bp.append(["Why:", bid.get("why")])
+        if bid.get("daily_budget"):
+            bp.append(["Daily budget:", f"₹{bid.get('daily_budget')}/day"])
+        if bid.get("max_cpc_cap"):
+            bp.append(["Max-CPC cap:", f"₹{bid.get('max_cpc_cap')}"])
+        if bid.get("options"):
+            bp.append([])
+            bp.append(["Bidding options", "When to use", "Needs conversion tracking?", "Note"])
+            for o in bid["options"]:
+                bp.append([o.get("name"), o.get("when"),
+                           "Yes" if o.get("needs_tracking") else "No", o.get("note")])
+        if bid.get("guardrails"):
+            bp.append([])
+            bp.append(["Guardrails (avoid overspend)"])
+            for g in bid["guardrails"]:
+                bp.append(["•", g])
         dev = plan.get("device") or {}
         if dev:
             bp.append(["Device:", dev.get("recommendation")])
@@ -223,6 +239,37 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
             khs.append(["New keywords in this plan (no prior history — no apples-to-apples):"])
             for k in new_kw:
                 khs.append([k])
+
+    # ---- Negative Keywords sheet (campus-specific, data-backed) ----
+    neg = (gen.scores or {}).get("negative_keywords_detail") or {}
+    if neg:
+        ns = wb.create_sheet("Negative Keywords")
+        ns.append([neg.get("note", "")])
+        ns.append([])
+        dd = neg.get("from_search_terms", [])
+        if dd:
+            _header(ns, ["Wasteful search term (from YOUR data)", "Clicks", "Impressions",
+                         "Wasted ₹", "Why block it"])
+            for d in dd:
+                ns.append([d.get("term"), d.get("clicks"), d.get("impressions"),
+                           d.get("cost"), d.get("reason")])
+            ns.append([f"Total wasted: ₹{neg.get('wasted_spend', 0):,.0f}"])
+            ns.append([])
+        ns.append(["Preventive negatives (add as broad negatives — block these classes):"])
+        for w in neg.get("preventive", []):
+            ns.append([w])
+
+    # ---- Campaign Setup Guide sheet (build-from-scratch checklist) ----
+    sg = (gen.scores or {}).get("setup_guide") or {}
+    if sg.get("steps"):
+        gs = wb.create_sheet("Setup Guide")
+        gs.append([f"How to build: {sg.get('campaign_name', '')}"])
+        gs.append([f"{sg.get('ready_count', 0)} steps ready · "
+                   f"{sg.get('action_count', 0)} need your action"])
+        gs.append([])
+        _header(gs, ["#", "Step", "Status", "What to do"])
+        for i, s in enumerate(sg["steps"], 1):
+            gs.append([i, s.get("step"), (s.get("status") or "").upper(), s.get("detail")])
 
     # widen text columns a little
     for sheet in wb.worksheets:

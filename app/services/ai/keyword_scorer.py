@@ -153,3 +153,57 @@ def recommend_bid(kw: dict[str, Any]) -> dict[str, Any]:
         "bid_basis": "none",
         "bid_reason": "No bid data yet — use the ad-group default and let bidding learn.",
     }
+
+
+# Intents that carry strong buying/apply intent (tighter match keeps waste low).
+_HIGH_INTENT = {"brand", "application", "admission", "registration", "deadline"}
+
+
+def recommend_match_type(kw: dict[str, Any], *, has_conversions: bool = False) -> dict[str, Any]:
+    """Recommend a match type per keyword, tuned to avoid overspend.
+
+    Rules (data-backed, conversion-tracking aware):
+      * Brand → EXACT: cheap, you already rank #1, blocks competitors, zero waste.
+      * Proven performer (real clicks + healthy CTR) → EXACT: lock in what works.
+      * High-intent terms → PHRASE: catch close variants without Broad's spray.
+      * Everything else → PHRASE (controlled).
+      * BROAD is only advised when conversion tracking + smart bidding exist; without
+        them it sprays budget on loose matches — so here it's suppressed and explained.
+    """
+    intent = kw.get("intent")
+    clicks = kw.get("historical_clicks") or 0
+    ctr = kw.get("historical_ctr")
+
+    if intent == "brand":
+        return {
+            "recommended_match_type": "EXACT",
+            "match_reason": "Brand term — Exact keeps it cheap, blocks competitors, no waste.",
+        }
+    if clicks >= 20 and ctr is not None and ctr >= 0.10:
+        return {
+            "recommended_match_type": "EXACT",
+            "match_reason": (
+                f"Proven winner ({int(clicks)} clicks, {ctr * 100:.0f}% CTR) — "
+                "lock it in with Exact."
+            ),
+        }
+    if has_conversions and clicks >= 50:
+        return {
+            "recommended_match_type": "BROAD",
+            "match_reason": (
+                "Has conversions + volume — Broad match with smart bidding can safely "
+                "expand reach."
+            ),
+        }
+    if intent in _HIGH_INTENT:
+        return {
+            "recommended_match_type": "PHRASE",
+            "match_reason": "High intent — Phrase catches close variants without Broad's waste.",
+        }
+    return {
+        "recommended_match_type": "PHRASE",
+        "match_reason": (
+            "Phrase for controlled reach. Avoid Broad until conversion tracking is live "
+            "(Broad without it overspends)."
+        ),
+    }

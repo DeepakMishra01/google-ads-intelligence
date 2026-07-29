@@ -24,7 +24,9 @@ import type {
   CampaignPlan,
   GeneratedAsset,
   KeywordHistoryView as KeywordHistoryData,
+  NegativeKeywordsDetail,
   SeasonalityView,
+  SetupGuide,
 } from "@/lib/types";
 
 const STRENGTH_CLASS: Record<string, string> = {
@@ -86,6 +88,18 @@ const LEVEL_COLOR: Record<string, string> = {
   high: "bg-brand-400",
   moderate: "bg-slate-300",
   low: "bg-slate-200",
+};
+
+const MATCH_STYLE: Record<string, string> = {
+  EXACT: "bg-green-100 text-green-700",
+  PHRASE: "bg-blue-100 text-blue-700",
+  BROAD: "bg-amber-100 text-amber-700",
+};
+
+const STATUS_STYLE: Record<string, string> = {
+  ready: "bg-green-100 text-green-700",
+  review: "bg-amber-100 text-amber-700",
+  action: "bg-red-100 text-red-700",
 };
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -253,11 +267,60 @@ function CampaignPlanView({
         <div className="space-y-2 text-sm">
           {plan.bidding && (
             <>
-              <div><span className="text-slate-500">Recommended bidding:</span> {plan.bidding.primary}</div>
-              <div><span className="text-slate-500">Brand ad group:</span> {plan.bidding.brand}</div>
-              <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-700">
-                {plan.bidding.upgrade_path}
+              <div className="rounded-md bg-brand-50 p-2.5">
+                <div className="font-medium text-brand-800">
+                  Recommended: {plan.bidding.recommended ?? plan.bidding.primary}
+                </div>
+                {plan.bidding.why && (
+                  <div className="mt-1 text-xs text-slate-600">{plan.bidding.why}</div>
+                )}
+                <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                  {plan.bidding.daily_budget != null && (
+                    <span>Daily budget: <b>{money(plan.bidding.daily_budget)}/day</b></span>
+                  )}
+                  {plan.bidding.max_cpc_cap != null && (
+                    <span>Max-CPC cap: <b>{money(plan.bidding.max_cpc_cap)}</b></span>
+                  )}
+                </div>
               </div>
+              {plan.bidding.options.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        <th className="py-1.5">Strategy</th>
+                        <th>When to use</th>
+                        <th className="text-center">Needs tracking?</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plan.bidding.options.map((o) => (
+                        <tr key={o.name} className="border-b border-slate-50 align-top">
+                          <td className="py-1.5 font-medium text-slate-800">{o.name}</td>
+                          <td className="text-slate-600">{o.when}<div className="text-slate-400">{o.note}</div></td>
+                          <td className="text-center">
+                            {o.needs_tracking ? (
+                              <Badge className="bg-amber-100 text-amber-700">Yes</Badge>
+                            ) : (
+                              <Badge className="bg-green-100 text-green-700">No</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {plan.bidding.guardrails.length > 0 && (
+                <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-800">
+                  <div className="mb-1 font-medium">Guardrails — avoid overspend</div>
+                  <ul className="list-disc space-y-0.5 pl-4">
+                    {plan.bidding.guardrails.map((g, i) => (
+                      <li key={i}>{g}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
           {plan.phasing && (
@@ -457,6 +520,82 @@ function CampaignKeywords({
         </div>
       ))}
     </div>
+  );
+}
+
+function SetupGuideView({ guide }: { guide: SetupGuide }) {
+  return (
+    <Section
+      title="Campaign setup guide — build it from scratch"
+      hint={`${guide.ready_count} ready · ${guide.action_count} need action`}
+    >
+      <ol className="space-y-2">
+        {guide.steps.map((s, i) => (
+          <li key={i} className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-medium text-slate-600">
+              {i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-800">{s.step}</span>
+                <Badge className={STATUS_STYLE[s.status] ?? "bg-slate-100 text-slate-600"}>
+                  {s.status}
+                </Badge>
+              </div>
+              <div className="text-xs text-slate-500">{s.detail}</div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </Section>
+  );
+}
+
+function NegativesView({ neg }: { neg: NegativeKeywordsDetail }) {
+  const all = [...neg.from_search_terms.map((d) => d.term), ...neg.preventive].join("\n");
+  return (
+    <Section
+      title="Negative keywords — stop wasted spend"
+      hint={neg.wasted_spend > 0 ? `₹${Math.round(neg.wasted_spend).toLocaleString("en-IN")} wasted` : undefined}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <span className="text-xs text-slate-500">{neg.note}</span>
+        <CopyChip text={all} label="Copy all negatives" />
+      </div>
+
+      {neg.from_search_terms.length > 0 && (
+        <div className="mb-3 overflow-x-auto">
+          <div className="mb-1 text-xs font-medium text-slate-600">
+            From YOUR search terms (add these first — real wasted spend):
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <th className="py-1.5">Search term</th>
+                <th className="text-right">Clicks</th>
+                <th className="text-right">Wasted</th>
+                <th>Why block it</th>
+              </tr>
+            </thead>
+            <tbody>
+              {neg.from_search_terms.map((d) => (
+                <tr key={d.term} className="border-b border-slate-50">
+                  <td className="py-1.5 font-medium text-slate-800">{d.term}</td>
+                  <td className="text-right">{num(d.clicks)}</td>
+                  <td className="text-right text-red-600">{money(d.cost)}</td>
+                  <td className="text-xs text-slate-500">{d.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="mb-1 text-xs font-medium text-slate-600">
+        Preventive blocks (add as broad negatives to protect the campaign):
+      </div>
+      <Chips items={neg.preventive} tone="red" />
+    </Section>
   );
 }
 
@@ -756,8 +895,16 @@ export default function AiAdCopyGeneratorPage() {
               <CampaignPlanView plan={result.campaign_plan} seasonality={result.seasonality} />
             )}
 
+            {result.setup_guide && result.setup_guide.steps.length > 0 && (
+              <SetupGuideView guide={result.setup_guide} />
+            )}
+
             {result.keyword_history?.available && (
               <KeywordHistoryView hist={result.keyword_history} />
+            )}
+
+            {result.negative_keywords_detail && (
+              <NegativesView neg={result.negative_keywords_detail} />
             )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -856,6 +1003,7 @@ export default function AiAdCopyGeneratorPage() {
                       <th className="text-right">Clicks</th>
                       <th className="text-right">CTR</th>
                       <th className="text-right">CPC</th>
+                      <th className="text-center">Match</th>
                       <th className="text-right">Suggested bid</th>
                       <th className="text-right">Vol.</th>
                     </tr>
@@ -871,6 +1019,11 @@ export default function AiAdCopyGeneratorPage() {
                         <td className="text-right">{num(k.historical_clicks)}</td>
                         <td className="text-right">{pct(k.historical_ctr)}</td>
                         <td className="text-right">{money(k.historical_cpc)}</td>
+                        <td className="text-center" title={k.match_reason ?? ""}>
+                          <Badge className={MATCH_STYLE[k.recommended_match_type ?? ""] ?? "bg-slate-100 text-slate-600"}>
+                            {k.recommended_match_type ?? "—"}
+                          </Badge>
+                        </td>
                         <td className="text-right font-medium text-slate-800" title={k.bid_reason ?? ""}>
                           {k.recommended_bid != null ? money(k.recommended_bid) : "—"}
                         </td>

@@ -102,6 +102,8 @@ class KeywordInsight(BaseModel):
     bid_high: float | None = None
     bid_basis: str | None = None  # history | planner | none
     bid_reason: str | None = None
+    recommended_match_type: str | None = None  # EXACT | PHRASE | BROAD
+    match_reason: str | None = None
 
 
 class KeywordGroup(BaseModel):
@@ -227,10 +229,24 @@ class Phasing(BaseModel):
     note: str = ""
 
 
+class BidOption(BaseModel):
+    name: str
+    when: str
+    needs_tracking: bool
+    note: str
+
+
 class BiddingRecommendation(BaseModel):
     primary: str
     brand: str
     upgrade_path: str
+    # richer, data-aware guidance
+    recommended: str | None = None
+    why: str | None = None
+    options: list[BidOption] = []
+    guardrails: list[str] = []
+    daily_budget: float | None = None
+    max_cpc_cap: float | None = None
 
 
 class DeviceStrategy(BaseModel):
@@ -303,6 +319,38 @@ class KeywordHistoryView(BaseModel):
     summary: KeywordHistorySummary = KeywordHistorySummary()
 
 
+# --------------------------- campaign setup guide ------------------------- #
+class SetupStep(BaseModel):
+    step: str
+    detail: str
+    status: str  # ready | review | action
+
+
+class SetupGuide(BaseModel):
+    campaign_name: str
+    steps: list[SetupStep] = []
+    ready_count: int = 0
+    action_count: int = 0
+
+
+# --------------------------- negative keywords ---------------------------- #
+class WastefulSearchTerm(BaseModel):
+    term: str
+    clicks: int
+    impressions: int
+    cost: float
+    reason: str
+
+
+class NegativeKeywordsDetail(BaseModel):
+    keywords: list[str] = []  # paste-ready flat list
+    from_search_terms: list[WastefulSearchTerm] = []  # data-driven, campus-specific
+    preventive: list[str] = []  # education-specific baseline blocks
+    wasted_spend: float = 0
+    themes_found: list[str] = []
+    note: str = ""
+
+
 # --------------------------- request / response --------------------------- #
 class AdCopyGenerateRequest(BaseModel):
     campus: str
@@ -332,6 +380,8 @@ class AdCopyGenerateResponse(BaseModel):
     seasonality: SeasonalityView | None = None
     campaign_plan: CampaignPlan | None = None
     keyword_history: KeywordHistoryView | None = None
+    setup_guide: SetupGuide | None = None
+    negative_keywords_detail: NegativeKeywordsDetail | None = None
     generated_at: datetime
 
 
