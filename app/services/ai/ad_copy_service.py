@@ -188,7 +188,15 @@ class AdCopyService:
         )
 
         # Seasonality (Keyword Planner month-on-month) + budget plan (when a budget is given).
-        seasonality = build_seasonality(raw_kw, has_exam=bool(brief.exam))
+        # IMPORTANT: only aggregate THIS campus's keywords. Keyword Planner also returns
+        # broad, unrelated "related ideas" (e.g. "ignou admission", "b tech", "iti
+        # admission") with huge national volumes; summing those inflates the curve by ~20×.
+        patterns = brief.patterns()
+        campus_kw = [
+            k for k in raw_kw
+            if any(p in k["keyword"].lower() for p in patterns)
+        ]
+        seasonality = build_seasonality(campus_kw, has_exam=bool(brief.exam))
         campaign_plan = None
         if budget and budget > 0:
             campaign_plan = build_plan(
