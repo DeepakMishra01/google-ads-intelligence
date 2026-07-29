@@ -24,22 +24,21 @@ def test_lower_cpc_lowers_required_cvr():
     assert lo["required_cvr_pct"] < hi["required_cvr_pct"]
 
 
-def test_scenarios_are_honest_about_current_cpl():
+def test_scenarios_report_current_cpl():
     p = build_cpl_plan(budget=1_500_000, blended_cpc=48.83, optimized_cpc=35.0)
     today = next(s for s in p["scenarios"] if s["name"].startswith("Today"))
-    # 48.83 / 0.0013 ≈ ₹37,562 — the real, ugly current CPL
-    assert today["cpl"] > 30_000
+    # 48.83 / 0.13 ≈ ₹376 — the real current CPL (already below target)
+    assert 300 < today["cpl"] < 450
     target = next(s for s in p["scenarios"] if s["name"].startswith("Target"))
     mid = (750 + 850) / 2
     assert abs(target["cpl"] - mid) <= 1  # target scenario lands on the target CPL
 
 
-def test_gap_and_reachability_flag():
+def test_target_reachable_at_real_rates():
     p = build_cpl_plan(budget=1_500_000, blended_cpc=48.83, optimized_cpc=35.0)
-    # 4.375% needed vs 0.58% best → not reachable on ads alone, big gap
-    assert p["reachable_at_best"] is False
-    assert p["gap_vs_best"] and p["gap_vs_best"] > 5
-    assert "landing page" in p["verdict"].lower()
+    # required CVR (~4.4%) is far below the 13% average → comfortably reachable
+    assert p["required_cvr_pct"] < p["current_cvr_avg_pct"]
+    assert p["reachable_at_best"] is True
 
 
 def test_reachable_when_best_funnel_meets_target():

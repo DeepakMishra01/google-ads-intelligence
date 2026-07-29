@@ -289,6 +289,10 @@ class CplPlan(BaseModel):
     target_cpl_high: int
     blended_cpc: float
     optimized_cpc: float
+    current_cpl_avg: int | None = None
+    current_cpl_best: int | None = None
+    already_beating: bool = False
+    status: str = "gap"  # beating | reachable | gap
     required_cvr_pct: float
     required_cvr_pct_at_blended: float
     required_cvr_band_pct: list[float] = []
@@ -429,8 +433,8 @@ class AdCopyGenerateRequest(BaseModel):
     budget: float | None = None
     goal: str = "traffic"  # traffic | leads | both
     timeframe_months: int = 12
-    # Real measured clicks→lead rate (0.13%), not an optimistic guess.
-    assumed_cvr: float = 0.0013
+    # Real measured clicks→lead rate (13%), not an optimistic guess.
+    assumed_cvr: float = 0.13
     target_cpl_low: float = 750.0
     target_cpl_high: float = 850.0
 

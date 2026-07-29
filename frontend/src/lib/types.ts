@@ -565,6 +565,10 @@ export interface CplPlan {
   target_cpl_high: number;
   blended_cpc: number;
   optimized_cpc: number;
+  current_cpl_avg: number | null;
+  current_cpl_best: number | null;
+  already_beating: boolean;
+  status: string; // beating | reachable | gap
   required_cvr_pct: number;
   required_cvr_pct_at_blended: number;
   required_cvr_band_pct: number[];

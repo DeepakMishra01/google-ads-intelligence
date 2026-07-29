@@ -124,17 +124,30 @@ function CplPlanView({ cpl }: { cpl: CplPlan }) {
   return (
     <Section
       title={`CPL optimizer — target ₹${cpl.target_cpl_low}–${cpl.target_cpl_high}`}
-      hint={cpl.reachable_at_best ? "reachable at your best funnel" : "needs funnel improvement"}
+      hint={
+        cpl.status === "beating" ? "already under target"
+        : cpl.status === "reachable" ? "reachable" : "needs funnel improvement"
+      }
     >
       <div
         className={`mb-3 rounded-md p-3 text-sm ${
-          cpl.reachable_at_best ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+          cpl.status === "gap" ? "bg-red-50 text-red-800" : "bg-green-50 text-green-800"
         }`}
       >
         <div className="font-semibold">
-          You need a {cpl.required_cvr_pct}% click→lead rate to hit ₹
-          {Math.round((cpl.target_cpl_low + cpl.target_cpl_high) / 2)} CPL
-          {" "}(at an optimized ₹{cpl.optimized_cpc} CPC).
+          {cpl.already_beating && cpl.current_cpl_avg != null ? (
+            <>
+              You're already under target — ~{money(cpl.current_cpl_avg)} CPL at your{" "}
+              {cpl.current_cvr_avg_pct}% average conversion (need only {cpl.required_cvr_pct}% to
+              stay under ₹{Math.round((cpl.target_cpl_low + cpl.target_cpl_high) / 2)}).
+            </>
+          ) : (
+            <>
+              You need a {cpl.required_cvr_pct}% click→lead rate to hit ₹
+              {Math.round((cpl.target_cpl_low + cpl.target_cpl_high) / 2)} CPL
+              {" "}(at an optimized ₹{cpl.optimized_cpc} CPC).
+            </>
+          )}
         </div>
         <p className="mt-1 text-xs">{cpl.verdict}</p>
       </div>

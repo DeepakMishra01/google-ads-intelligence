@@ -173,7 +173,7 @@ class AdCopyService:
         budget: float | None = None,
         goal: str = "traffic",
         timeframe_months: int = 12,
-        assumed_cvr: float = 0.0013,  # real avg clicks→lead (0.13%), not an optimistic guess
+        assumed_cvr: float = 0.13,  # real avg clicks→lead (13%), not an optimistic guess
         target_cpl_low: float = 750.0,
         target_cpl_high: float = 850.0,
     ) -> dict[str, Any]:

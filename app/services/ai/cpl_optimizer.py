@@ -8,7 +8,7 @@ Cost-per-lead is fixed by two dials, and this models BOTH:
 
 Given a target CPL band (e.g. ₹750–850) and the account's REAL rates — blended
 CPC, an optimized (brand/high-intent) CPC, and the team's true clicks→lead
-conversion (avg ~0.13%, best ~0.58%) — it computes the conversion rate required
+conversion (avg ~13%, best ~58%) — it computes the conversion rate required
 to hit the target at each CPC, the gap versus reality, honest CPL scenarios, and
 a prioritized playbook of levers (each tagged whether it moves CPC or CVR).
 
@@ -21,8 +21,8 @@ from __future__ import annotations
 from typing import Any
 
 # The team's real, measured clicks→lead conversion (decimals, not %).
-DEFAULT_CVR_AVG = 0.0013   # 0.13% — current average across campaigns
-DEFAULT_CVR_BEST = 0.0058  # 0.58% — best observed
+DEFAULT_CVR_AVG = 0.13   # 13% — current average across campaigns
+DEFAULT_CVR_BEST = 0.58  # 58% — best observed
 DEFAULT_TARGET_CPL_LOW = 750.0
 DEFAULT_TARGET_CPL_HIGH = 850.0
 
@@ -104,22 +104,41 @@ def build_cpl_plan(
                    "and avoid Broad match until tracking is live."},
     ]
 
-    if reachable_at_best:
+    # Where do we actually stand? CPL at current conversion, on average and at best.
+    current_cpl_avg = round(blended_cpc / cvr_avg) if cvr_avg else None
+    current_cpl_best = round(blended_cpc / cvr_best) if cvr_best else None
+    already_beating = current_cpl_avg is not None and current_cpl_avg <= target_cpl_high
+    status = "beating" if already_beating else "reachable" if reachable_at_best else "gap"
+
+    if already_beating:
         verdict = (
-            f"Reachable: your best funnel ({round(cvr_best * 100, 2)}%) is close to the "
-            f"~{round(req_low * 100, 1)}% needed at an optimised ₹{round(opt_cpc)} CPC. "
-            "Standardise every campaign to your best-converting setup."
+            f"You're already under target: at your {round(cvr_avg * 100, 1)}% average conversion, "
+            f"CPL is ~₹{current_cpl_avg} — below the "
+            f"₹{round(target_cpl_low)}–{round(target_cpl_high)} goal. The lever now is scaling "
+            "volume while protecting conversion, not fixing CPL. "
+            f"Only ~{round(req_at_optimized * 100, 1)}% conversion is needed to stay under "
+            f"₹{round(target_mid)}, so you have a wide safety margin."
+        )
+    elif reachable_at_best:
+        verdict = (
+            f"Reachable: ₹{round(target_mid)} CPL needs ~{round(req_at_optimized * 100, 1)}% "
+            f"conversion at an optimised ₹{round(opt_cpc)} CPC — within reach of your "
+            f"{round(cvr_best * 100, 1)}% best. Standardise every campaign to your best-"
+            "converting setup and hold CPC down."
         )
     else:
         verdict = (
             f"Not reachable on ads alone. Hitting ₹{round(target_mid)} CPL needs a "
             f"~{round(req_at_optimized * 100, 1)}% conversion rate — about {gap_vs_best}× your "
-            f"best ({round(cvr_best * 100, 2)}%) and {gap_vs_avg}× your average "
-            f"({round(cvr_avg * 100, 2)}%). The ad plan gets you the cheapest quality clicks; "
-            "the landing page + lead follow-up must close the rest."
+            f"best ({round(cvr_best * 100, 2)}%). The ad plan gets you the cheapest quality "
+            "clicks; the landing page + lead follow-up must close the rest."
         )
 
     return {
+        "current_cpl_avg": current_cpl_avg,
+        "current_cpl_best": current_cpl_best,
+        "already_beating": already_beating,
+        "status": status,
         "target_cpl_low": round(target_cpl_low),
         "target_cpl_high": round(target_cpl_high),
         "blended_cpc": round(blended_cpc, 2),
