@@ -23,6 +23,7 @@ from app.services.ai.budget_planner import build_plan
 from app.services.ai.campus_config import find_brief, generic_brief
 from app.services.ai.campus_service import CampusService, campus_campaign_filter
 from app.services.ai.historical_intelligence_service import HistoricalIntelligenceService
+from app.services.ai.keyword_history_service import build_keyword_history
 from app.services.ai.keyword_research_service import KeywordResearchService
 from app.services.ai.keyword_scorer import score_keyword
 from app.services.ai.landing_page_service import LandingPageService
@@ -180,6 +181,12 @@ class AdCopyService:
 
         recommendation = self._campaign_recommendation(brief, keyword_groups)
 
+        # Keyword performance history — "keep or drop last time's keywords?"
+        # (campus-scoped real month-on-month + keep/review/drop verdicts).
+        keyword_history = build_keyword_history(
+            self.db, brief, [k["keyword"] for k in keyword_insights]
+        )
+
         # Seasonality (Keyword Planner month-on-month) + budget plan (when a budget is given).
         seasonality = build_seasonality(raw_kw, has_exam=bool(brief.exam))
         campaign_plan = None
@@ -209,6 +216,7 @@ class AdCopyService:
             "quality": quality,
             "seasonality": seasonality,
             "campaign_plan": campaign_plan,
+            "keyword_history": keyword_history,
             "generated_at": datetime.now(UTC),
             "providers_used": providers_used,
         }
@@ -685,6 +693,7 @@ class AdCopyService:
                         "quality": quality,
                         "campaign_plan": result.get("campaign_plan"),
                         "seasonality": result.get("seasonality"),
+                        "keyword_history": result.get("keyword_history"),
                     },
                     "reasoning": {
                         "headlines": [{"text": a["text"], "reason": a["reason"]}

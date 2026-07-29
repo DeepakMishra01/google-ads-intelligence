@@ -178,6 +178,50 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         if not seasonality.get("available"):
             se.append(["(Keyword Planner seasonality unavailable — budget paced evenly.)"])
 
+    # ---- Keyword History sheet ("keep or drop last time's keywords?") ----
+    kh = (gen.scores or {}).get("keyword_history") or {}
+    if kh.get("available"):
+        rows = kh.get("keywords", [])
+        # Union of months across all keywords → one clicks-column per month (MoM pivot).
+        months: list[str] = sorted({m["month"] for r in rows for m in r.get("months", [])})
+        khs = wb.create_sheet("Keyword History")
+        base_cols = ["Keyword", "In Plan?", "Verdict", "Why", "Trend", "Total Clicks",
+                     "Total Cost", "Total Conv", "Avg CTR", "Avg CPC", "Avg QS"]
+        _header(khs, base_cols + [f"Clicks {m}" for m in months])
+        for r in rows:
+            by_m = {m["month"]: m for m in r.get("months", [])}
+            khs.append(
+                [
+                    r.get("keyword"),
+                    "Yes" if r.get("in_plan") else "No",
+                    (r.get("verdict") or "").upper(),
+                    r.get("verdict_reason"),
+                    r.get("trend"),
+                    r.get("total_clicks"),
+                    r.get("total_cost"),
+                    r.get("total_conversions"),
+                    round((r.get("avg_ctr") or 0) * 100, 1) if r.get("avg_ctr") else None,
+                    r.get("avg_cpc"),
+                    r.get("avg_quality_score"),
+                ]
+                + [(by_m.get(m, {}).get("clicks") if m in by_m else "") for m in months]
+            )
+        khs.append([])
+        s = kh.get("summary", {})
+        khs.append([f"Summary: {s.get('keep', 0)} keep · {s.get('review', 0)} review · "
+                    f"{s.get('drop', 0)} drop · {s.get('new', 0)} new keyword(s) in plan."])
+        khs.append([f"History window: {kh.get('month_range')} "
+                    f"({kh.get('months_covered')} months, campus-scoped real data)."])
+        if not kh.get("has_conversions"):
+            khs.append(["Note: 0 conversions tracked for this campus — verdicts use "
+                        "clicks, CTR, cost and Quality Score, not conversions."])
+        new_kw = kh.get("new_in_plan", [])
+        if new_kw:
+            khs.append([])
+            khs.append(["New keywords in this plan (no prior history — no apples-to-apples):"])
+            for k in new_kw:
+                khs.append([k])
+
     # widen text columns a little
     for sheet in wb.worksheets:
         sheet.column_dimensions["A"].width = 22

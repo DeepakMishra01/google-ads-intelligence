@@ -23,6 +23,7 @@ import type {
   AdCopyGenerateResponse,
   CampaignPlan,
   GeneratedAsset,
+  KeywordHistoryView as KeywordHistoryData,
   SeasonalityView,
 } from "@/lib/types";
 
@@ -228,6 +229,137 @@ function CampaignPlanView({
         </div>
       </Section>
     </>
+  );
+}
+
+const VERDICT_STYLE: Record<string, { badge: string; label: string }> = {
+  keep: { badge: "bg-green-100 text-green-700", label: "KEEP" },
+  review: { badge: "bg-amber-100 text-amber-700", label: "REVIEW" },
+  drop: { badge: "bg-red-100 text-red-700", label: "DROP" },
+};
+const TREND_GLYPH: Record<string, string> = { up: "↑", down: "↓", flat: "→" };
+
+function Sparkline({ months }: { months: { month: string; clicks: number }[] }) {
+  const max = Math.max(1, ...months.map((m) => m.clicks));
+  return (
+    <div className="flex items-end gap-0.5" title={months.map((m) => `${m.month}: ${m.clicks}`).join("\n")}>
+      {months.map((m) => (
+        <div
+          key={m.month}
+          className="w-1.5 rounded-sm bg-brand-400"
+          style={{ height: `${Math.max(2, (m.clicks / max) * 20)}px` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function KeywordHistoryView({ hist }: { hist: KeywordHistoryData }) {
+  const [tab, setTab] = useState<"keep" | "review" | "drop" | "all">("all");
+  const s = hist.summary;
+  const t = hist.totals;
+  const rows = useMemo(
+    () => (tab === "all" ? hist.keywords : hist.keywords.filter((r) => r.verdict === tab)),
+    [hist.keywords, tab],
+  );
+  const tabs: { key: typeof tab; label: string }[] = [
+    { key: "all", label: `All ${hist.keywords.length}` },
+    { key: "keep", label: `Keep ${s.keep}` },
+    { key: "review", label: `Review ${s.review}` },
+    { key: "drop", label: `Drop ${s.drop}` },
+  ];
+  return (
+    <Section
+      title="Keyword performance history — keep or drop last time's keywords?"
+      hint={hist.month_range ? `${hist.months_covered} months · ${hist.month_range}` : undefined}
+    >
+      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile label="Past keywords" value={num(t?.keywords)} />
+        <Tile label="Clicks (all-time)" value={num(t?.clicks)} />
+        <Tile label="Spend (all-time)" value={money(t?.cost)} />
+        <Tile
+          label="Conversions"
+          value={num(t?.conversions)}
+          sub={hist.has_conversions ? undefined : "0 tracked"}
+        />
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {tabs.map((tb) => (
+          <button
+            key={tb.key}
+            onClick={() => setTab(tb.key)}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+              tab === tb.key ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {tb.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className="py-2">Keyword</th>
+              <th>Verdict</th>
+              <th className="text-right">Clicks</th>
+              <th className="text-right">Cost</th>
+              <th className="text-right">CTR</th>
+              <th className="text-right">CPC</th>
+              <th className="text-right">QS</th>
+              <th className="text-center">Trend</th>
+              <th>Month-on-month</th>
+              <th>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const v = VERDICT_STYLE[r.verdict] ?? VERDICT_STYLE.review;
+              return (
+                <tr key={r.keyword} className="border-b border-slate-50 align-top">
+                  <td className="py-1.5 font-medium text-slate-800">
+                    {r.keyword}
+                    {r.in_plan && (
+                      <Badge className="ml-1 bg-brand-50 text-brand-700">in plan</Badge>
+                    )}
+                  </td>
+                  <td>
+                    <Badge className={v.badge}>{v.label}</Badge>
+                  </td>
+                  <td className="text-right">{num(r.total_clicks)}</td>
+                  <td className="text-right">{money(r.total_cost)}</td>
+                  <td className="text-right">{r.avg_ctr != null ? pct(r.avg_ctr) : "—"}</td>
+                  <td className="text-right">{money(r.avg_cpc)}</td>
+                  <td className="text-right">{r.avg_quality_score ?? "—"}</td>
+                  <td className="text-center text-slate-500">{TREND_GLYPH[r.trend] ?? "→"}</td>
+                  <td>
+                    <Sparkline months={r.months} />
+                  </td>
+                  <td className="max-w-[16rem] text-xs text-slate-500">{r.verdict_reason}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {hist.new_in_plan.length > 0 && (
+        <div className="mt-3 rounded-md bg-slate-50 p-2.5">
+          <div className="mb-1 text-xs font-medium text-slate-600">
+            New keywords in this plan (no prior history — no apples-to-apples yet):
+          </div>
+          <Chips items={hist.new_in_plan} tone="brand" />
+        </div>
+      )}
+      {!hist.has_conversions && (
+        <div className="mt-2 text-[11px] text-slate-400">
+          Verdicts use clicks, CTR, cost and Quality Score — this campus has 0 conversions
+          tracked, so conversions aren't used. Fix conversion tracking to sharpen these calls.
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -572,6 +704,10 @@ export default function AiAdCopyGeneratorPage() {
 
             {result.campaign_plan?.available && (
               <CampaignPlanView plan={result.campaign_plan} seasonality={result.seasonality} />
+            )}
+
+            {result.keyword_history?.available && (
+              <KeywordHistoryView hist={result.keyword_history} />
             )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

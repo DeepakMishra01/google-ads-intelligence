@@ -402,6 +402,7 @@ export interface AdCopyGenerateResponse {
   quality: QualityPrediction;
   seasonality: SeasonalityView | null;
   campaign_plan: CampaignPlan | null;
+  keyword_history: KeywordHistoryView | null;
   generated_at: string;
 }
 
@@ -477,4 +478,55 @@ export interface CampaignPlan {
   phasing: Phasing | null;
   bidding: BiddingRecommendation | null;
   device: DeviceStrategy | null;
+}
+
+// --- Keyword performance history ("keep or drop last time's keywords?") --- //
+export interface KeywordMonthPerf {
+  month: string;
+  clicks: number;
+  impressions: number;
+  cost: number;
+  conversions: number;
+  ctr: number | null;
+  cpc: number | null;
+  quality_score: number | null;
+}
+export interface KeywordHistoryRow {
+  keyword: string;
+  in_plan: boolean;
+  verdict: string; // keep | review | drop
+  verdict_reason: string;
+  trend: string; // up | down | flat
+  total_clicks: number;
+  total_impressions: number;
+  total_cost: number;
+  total_conversions: number;
+  avg_ctr: number | null;
+  avg_cpc: number | null;
+  avg_quality_score: number | null;
+  months: KeywordMonthPerf[];
+}
+export interface KeywordHistoryTotals {
+  keywords: number;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  blended_ctr: number | null;
+  blended_cpc: number | null;
+}
+export interface KeywordHistorySummary {
+  keep: number;
+  review: number;
+  drop: number;
+  new: number;
+}
+export interface KeywordHistoryView {
+  available: boolean;
+  months_covered: number;
+  month_range: string | null;
+  has_conversions: boolean;
+  totals: KeywordHistoryTotals | null;
+  keywords: KeywordHistoryRow[];
+  new_in_plan: string[];
+  summary: KeywordHistorySummary;
 }

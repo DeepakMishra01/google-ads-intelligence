@@ -242,6 +242,61 @@ class CampaignPlan(BaseModel):
     device: DeviceStrategy | None = None
 
 
+# --------------------------- keyword history ------------------------------ #
+class KeywordMonthPerf(BaseModel):
+    month: str  # YYYY-MM
+    clicks: int
+    impressions: int
+    cost: float
+    conversions: float
+    ctr: float | None = None
+    cpc: float | None = None
+    quality_score: float | None = None
+
+
+class KeywordHistoryRow(BaseModel):
+    keyword: str
+    in_plan: bool  # is this keyword re-suggested in the current plan?
+    verdict: str  # keep | review | drop
+    verdict_reason: str
+    trend: str  # up | down | flat
+    total_clicks: int
+    total_impressions: int
+    total_cost: float
+    total_conversions: float
+    avg_ctr: float | None = None
+    avg_cpc: float | None = None
+    avg_quality_score: float | None = None
+    months: list[KeywordMonthPerf] = []
+
+
+class KeywordHistoryTotals(BaseModel):
+    keywords: int
+    clicks: int
+    cost: float
+    conversions: float
+    blended_ctr: float | None = None
+    blended_cpc: float | None = None
+
+
+class KeywordHistorySummary(BaseModel):
+    keep: int = 0
+    review: int = 0
+    drop: int = 0
+    new: int = 0
+
+
+class KeywordHistoryView(BaseModel):
+    available: bool
+    months_covered: int = 0
+    month_range: str | None = None
+    has_conversions: bool = False
+    totals: KeywordHistoryTotals | None = None
+    keywords: list[KeywordHistoryRow] = []
+    new_in_plan: list[str] = []
+    summary: KeywordHistorySummary = KeywordHistorySummary()
+
+
 # --------------------------- request / response --------------------------- #
 class AdCopyGenerateRequest(BaseModel):
     campus: str
@@ -270,6 +325,7 @@ class AdCopyGenerateResponse(BaseModel):
     quality: QualityPrediction
     seasonality: SeasonalityView | None = None
     campaign_plan: CampaignPlan | None = None
+    keyword_history: KeywordHistoryView | None = None
     generated_at: datetime
 
 
