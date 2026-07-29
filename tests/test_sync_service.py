@@ -73,15 +73,16 @@ def test_full_sync_populates_all_entities(db_session, fake_reports):
     assert all(log.status == "success" for log in logs)
 
 
-def test_snapshots_are_append_only_across_runs(db_session, fake_reports):
+def test_snapshots_are_idempotent_across_runs(db_session, fake_reports):
     svc = _service(db_session)
     svc.run(customer_ids=["9999999999"], entity="all")
     svc.run(customer_ids=["9999999999"], entity="all")
 
-    # Dimensions stay singular (upsert); snapshots accumulate (append-only).
+    # Re-syncing the same window must NOT stack duplicate (entity, day) rows —
+    # otherwise every summed metric inflates. One row per entity per day.
     assert _count(db_session, Campaign) == 1
-    assert _count(db_session, CampaignSnapshot) == 2
-    assert _count(db_session, KeywordSnapshot) == 2
+    assert _count(db_session, CampaignSnapshot) == 1
+    assert _count(db_session, KeywordSnapshot) == 1
 
 
 def test_quality_score_is_captured(db_session, fake_reports):

@@ -465,7 +465,10 @@ class SyncService:
                     **_metrics(row),
                 }
             )
-        return self.campaign_snaps.bulk_insert(mappings), 0, failed, {"fetched": len(data)}
+        inserted = self.campaign_snaps.replace_window(
+            mappings, account_id=account.id, start=start, end=end
+        )
+        return inserted, 0, failed, {"fetched": len(data)}
 
     def _step_campaign_device_snaps(
         self, account, start, end, log_id
@@ -490,7 +493,10 @@ class SyncService:
                     **_metrics(row),
                 }
             )
-        return self.campaign_device_snaps.bulk_insert(mappings), 0, failed, {"fetched": len(data)}
+        inserted = self.campaign_device_snaps.replace_window(
+            mappings, account_id=account.id, start=start, end=end
+        )
+        return inserted, 0, failed, {"fetched": len(data)}
 
     def _step_campaign_geo_snaps(
         self, account, start, end, log_id
@@ -516,7 +522,10 @@ class SyncService:
                     **_metrics(row),
                 }
             )
-        return self.campaign_geo_snaps.bulk_insert(mappings), 0, failed, {"fetched": len(data)}
+        inserted = self.campaign_geo_snaps.replace_window(
+            mappings, account_id=account.id, start=start, end=end
+        )
+        return inserted, 0, failed, {"fetched": len(data)}
 
     def _step_ad_group_snaps(
         self, account, start, end, log_id
@@ -545,7 +554,10 @@ class SyncService:
                     **_metrics(row),
                 }
             )
-        return self.ad_group_snaps.bulk_insert(mappings), 0, failed, {"fetched": len(data)}
+        inserted = self.ad_group_snaps.replace_window(
+            mappings, account_id=account.id, start=start, end=end
+        )
+        return inserted, 0, failed, {"fetched": len(data)}
 
     def _step_keyword_snaps(self, account, start, end, log_id) -> tuple[int, int, int, dict | None]:
         data = reports.keywords.fetch_keyword_metrics(self.factory, account.customer_id, start, end)
@@ -577,7 +589,10 @@ class SyncService:
                     **_metrics(row),
                 }
             )
-        return self.keyword_snaps.bulk_insert(mappings), 0, failed, {"fetched": len(data)}
+        inserted = self.keyword_snaps.replace_window(
+            mappings, account_id=account.id, start=start, end=end
+        )
+        return inserted, 0, failed, {"fetched": len(data)}
 
     def _step_ad_snaps(self, account, start, end, log_id) -> tuple[int, int, int, dict | None]:
         data = reports.ads.fetch_ad_metrics(self.factory, account.customer_id, start, end)
@@ -605,7 +620,10 @@ class SyncService:
                     **_metrics(row),
                 }
             )
-        return self.ad_snaps.bulk_insert(mappings), 0, failed, {"fetched": len(data)}
+        inserted = self.ad_snaps.replace_window(
+            mappings, account_id=account.id, start=start, end=end
+        )
+        return inserted, 0, failed, {"fetched": len(data)}
 
     def _step_budget_snaps(self, account, start, end, log_id) -> tuple[int, int, int, dict | None]:
         data = reports.budgets.fetch_budget_metrics(self.factory, account.customer_id, start, end)
@@ -628,7 +646,10 @@ class SyncService:
                     "delivery_method": row["delivery_method"],
                 }
             )
-        return self.budget_snaps.bulk_insert(mappings), 0, failed, {"fetched": len(data)}
+        inserted = self.budget_snaps.replace_window(
+            mappings, account_id=account.id, start=start, end=end
+        )
+        return inserted, 0, failed, {"fetched": len(data)}
 
     def _step_search_terms(self, account, start, end, log_id) -> tuple[int, int, int, dict | None]:
         data = reports.search_terms.fetch_search_terms(
@@ -658,7 +679,9 @@ class SyncService:
                     **_metrics(row),
                 }
             )
-        snap_inserted = self.search_term_snaps.bulk_insert(snap_mappings)
+        snap_inserted = self.search_term_snaps.replace_window(
+            snap_mappings, account_id=account.id, start=start, end=end
+        )
         # rows_inserted = new dimension rows + new snapshot rows.
         return snap_inserted + created_dims, updated, failed, {"fetched": len(data)}
 

@@ -7,9 +7,10 @@ repositories flush but never commit (commit is the service/session-scope's job).
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Generic, TypeVar
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.orm import Session
 
 from app.database.base import Base
@@ -94,3 +95,24 @@ class BaseRepository(Generic[ModelType]):
             return 0
         self.db.execute(insert(self.model), mappings)
         return len(mappings)
+
+    def replace_window(
+        self, mappings: list[dict[str, Any]], *, account_id: int, start: date, end: date
+    ) -> int:
+        """Idempotently refresh a snapshot window: delete the account's rows in
+        [start, end] for this table, then insert the freshly fetched ones.
+
+        Snapshots are append-only, but a sync re-run over an overlapping date range
+        would otherwise stack duplicate (entity, day) rows and inflate every summed
+        metric. Clearing the window first makes each sync deterministic — exactly one
+        row per (entity, day). Runs inside the caller's transaction, so a failed
+        insert rolls back the delete too (the old rows survive).
+        """
+        self.db.execute(
+            delete(self.model).where(
+                self.model.account_id == account_id,  # type: ignore[attr-defined]
+                self.model.snapshot_date >= start,  # type: ignore[attr-defined]
+                self.model.snapshot_date <= end,  # type: ignore[attr-defined]
+            )
+        )
+        return self.bulk_insert(mappings)
