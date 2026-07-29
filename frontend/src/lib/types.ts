@@ -518,6 +518,20 @@ export interface DeviceStrategy {
   mobile_share_pct: number;
   recommendation: string;
 }
+export interface ForecastRealism {
+  hist_clicks_per_year: number;
+  hist_spend_per_year: number;
+  hist_cpc: number;
+  hist_ctr: number;
+  budget_multiple: number | null;
+  annual_search_demand: number | null;
+  click_ceiling: number | null;
+  effective_cpc: number;
+  realistic_clicks_low: number;
+  realistic_clicks_high: number;
+  arithmetic_clicks: number;
+  note: string;
+}
 export interface CampaignPlan {
   available: boolean;
   allocation: BudgetAllocationRow[];
@@ -526,6 +540,7 @@ export interface CampaignPlan {
   phasing: Phasing | null;
   bidding: BiddingRecommendation | null;
   device: DeviceStrategy | null;
+  realism: ForecastRealism | null;
 }
 
 // --- Keyword performance history ("keep or drop last time's keywords?") --- //

@@ -7,8 +7,33 @@ CPL = budget/leads) and estimates are flagged.
 
 from __future__ import annotations
 
-from app.services.ai.budget_planner import build_plan
+from app.services.ai.budget_planner import build_plan, build_realism
 from app.services.ai.seasonality_service import build_seasonality
+
+
+# --------------------------- forecast realism ----------------------------- #
+def test_realism_scales_cpc_and_bounds_clicks():
+    # 10x the historical spend → CPC rises, realistic clicks well below flat-CPC.
+    r = build_realism(
+        budget=1_500_000,
+        arithmetic_clicks=31_908,
+        hist_stats={"clicks_per_year": 3050, "spend_per_year": 138_000,
+                    "cpc": 45.34, "ctr": 0.094},
+        annual_search_demand=677_400,
+    )
+    assert r is not None
+    assert r["budget_multiple"] == round(1_500_000 / 138_000, 1)
+    assert r["effective_cpc"] > r["hist_cpc"]  # CPC inflates at scale
+    # realistic range is below the flat-CPC optimistic figure
+    assert r["realistic_clicks_high"] <= r["arithmetic_clicks"]
+    assert r["realistic_clicks_low"] < r["realistic_clicks_high"]
+    # capped by real demand ceiling
+    assert r["click_ceiling"] == int(677_400 * 0.75 * 0.094)
+
+
+def test_realism_none_without_history():
+    assert build_realism(budget=100000, arithmetic_clicks=1000,
+                         hist_stats=None, annual_search_demand=None) is None
 
 
 def _kw(kw, intent, cpc=None, ctr=None, monthly=None):

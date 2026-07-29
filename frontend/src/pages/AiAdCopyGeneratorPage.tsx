@@ -120,10 +120,14 @@ function CampaignPlanView({
   seasonality: SeasonalityView | null;
 }) {
   const f = plan.forecast;
+  const rl = plan.realism;
   const cvrPct = f ? Math.round(f.assumed_cvr * 1000) / 10 : 3;
   const est = f?.cpl_is_estimated ? " *" : "";
   const maxSearch = Math.max(1, ...(seasonality?.months.map((m) => m.searches) ?? [1]));
   const pacingByMonth = new Map(plan.monthly_pacing.map((p) => [p.month, p.budget]));
+  const clicksValue = rl
+    ? `${num(rl.realistic_clicks_low)}–${num(rl.realistic_clicks_high)}`
+    : num(f?.est_clicks);
 
   return (
     <>
@@ -133,16 +137,33 @@ function CampaignPlanView({
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Tile label="Budget" value={money(f?.budget)} />
-          <Tile label="Est. clicks" value={num(f?.est_clicks)} sub="budget ÷ CPC" />
+          <Tile
+            label="Realistic clicks"
+            value={clicksValue}
+            sub={rl ? `@ ~${money(rl.effective_cpc)} CPC at scale` : "budget ÷ CPC"}
+          />
           <Tile label="Est. impressions" value={num(f?.est_impressions)} />
           <Tile label="Blended CPC" value={money(f?.blended_cpc)} sub="from history" />
           <Tile label={`Est. leads${est}`} value={num(f?.est_leads)} sub={`@ ${cvrPct}% CVR`} />
           <Tile label={`Est. CPL${est}`} value={money(f?.est_cpl)} sub={`@ ${cvrPct}% CVR`} />
         </div>
+        {rl && (
+          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <div className="mb-1 font-semibold">Reality check (not a flat-CPC extrapolation)</div>
+            <p>{rl.note}</p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-amber-700">
+              <span>Your history: <b>{num(rl.hist_clicks_per_year)}</b> clicks/yr @ <b>{money(rl.hist_spend_per_year)}</b>/yr</span>
+              {rl.budget_multiple != null && <span>This budget: <b>{rl.budget_multiple}×</b> that</span>}
+              {rl.annual_search_demand != null && <span>Search demand: <b>{num(rl.annual_search_demand)}</b>/yr</span>}
+              {rl.click_ceiling != null && <span>Max ceiling: <b>{num(rl.click_ceiling)}</b> clicks</span>}
+              <span>Flat-CPC (optimistic): <b>{num(rl.arithmetic_clicks)}</b></span>
+            </div>
+          </div>
+        )}
         {f?.cpl_is_estimated && (
           <div className="mt-2 text-xs text-amber-600">
             * Leads &amp; CPL are <b>estimates</b> at a {cvrPct}% conversion rate — this account has
-            no conversion tracking yet. Clicks, CPC, impressions and seasonality are real data.
+            no conversion tracking yet. CPC, impressions and seasonality are real data.
           </div>
         )}
       </Section>

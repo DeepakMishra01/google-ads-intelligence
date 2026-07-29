@@ -254,6 +254,21 @@ class DeviceStrategy(BaseModel):
     recommendation: str
 
 
+class ForecastRealism(BaseModel):
+    hist_clicks_per_year: int
+    hist_spend_per_year: int
+    hist_cpc: float
+    hist_ctr: float
+    budget_multiple: float | None = None
+    annual_search_demand: int | None = None
+    click_ceiling: int | None = None
+    effective_cpc: float
+    realistic_clicks_low: int
+    realistic_clicks_high: int
+    arithmetic_clicks: int
+    note: str
+
+
 class CampaignPlan(BaseModel):
     available: bool
     allocation: list[BudgetAllocationRow] = []
@@ -262,6 +277,7 @@ class CampaignPlan(BaseModel):
     phasing: Phasing | None = None
     bidding: BiddingRecommendation | None = None
     device: DeviceStrategy | None = None
+    realism: ForecastRealism | None = None
 
 
 # --------------------------- keyword history ------------------------------ #

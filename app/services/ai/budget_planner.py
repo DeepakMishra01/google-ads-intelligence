@@ -16,9 +16,87 @@ isn't firing; that is surfaced, not hidden.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from app.services.ai.seasonality_service import MONTH_NAMES
+
+# The most impression share a search campaign can realistically hold (auctions,
+# budget, quality all cap it well below 100%).
+_MAX_IMPRESSION_SHARE = 0.75
+
+
+def build_realism(
+    *,
+    budget: float,
+    arithmetic_clicks: int,
+    hist_stats: dict[str, Any] | None,
+    annual_search_demand: int | None,
+) -> dict[str, Any] | None:
+    """Reality-check the arithmetic forecast against real history + real demand.
+
+    ``budget ÷ CPC`` assumes clicks scale linearly at a flat CPC. They don't: as
+    you scale spend you push into the expensive top-of-auction and broader terms,
+    so CPC rises and returns diminish. This anchors the number to (a) what the
+    account actually did, (b) how much real search demand exists, and (c) a CPC
+    scaling premium — and returns a realistic range instead of one optimistic figure.
+    """
+    if not hist_stats or not hist_stats.get("cpc"):
+        return None
+    hist_cpc = float(hist_stats["cpc"])
+    hist_ctr = float(hist_stats.get("ctr") or 0.09)
+    spend_yr = float(hist_stats.get("spend_per_year") or 0)
+    clicks_yr = float(hist_stats.get("clicks_per_year") or 0)
+
+    multiple = round(budget / spend_yr, 1) if spend_yr > 0 else None
+    # CPC inflation as spend scales (diminishing returns): +15% per doubling.
+    infl = 1 + 0.15 * math.log2(multiple) if (multiple and multiple > 1) else 1.0
+    eff_cpc = round(hist_cpc * infl, 2)
+
+    ceiling = (
+        int(annual_search_demand * _MAX_IMPRESSION_SHARE * hist_ctr)
+        if annual_search_demand
+        else None
+    )
+    optimistic = arithmetic_clicks
+    realistic_mid = int(budget / eff_cpc) if eff_cpc else arithmetic_clicks
+    if ceiling:
+        optimistic = min(optimistic, ceiling)
+        realistic_mid = min(realistic_mid, ceiling)
+    low = int(realistic_mid * 0.85)
+    high = min(optimistic, int(realistic_mid * 1.15)) if ceiling else optimistic
+
+    parts = []
+    if multiple and multiple >= 2:
+        parts.append(
+            f"This budget is ~{multiple:g}× what the account has historically spent "
+            f"(₹{round(spend_yr):,}/yr → ~{round(clicks_yr):,} clicks)."
+        )
+    parts.append(
+        f"Clicks won't scale linearly: as spend grows, CPC typically rises from the "
+        f"current ₹{hist_cpc:.0f} toward ~₹{eff_cpc:.0f}. Expect roughly "
+        f"{low:,}–{high:,} clicks, not the flat-CPC figure of {arithmetic_clicks:,}."
+    )
+    if ceiling:
+        parts.append(
+            f"Real search demand on these terms is ~{annual_search_demand:,}/yr, so the "
+            f"absolute ceiling is ~{ceiling:,} clicks even at max impression share."
+        )
+
+    return {
+        "hist_clicks_per_year": round(clicks_yr),
+        "hist_spend_per_year": round(spend_yr),
+        "hist_cpc": round(hist_cpc, 2),
+        "hist_ctr": round(hist_ctr, 3),
+        "budget_multiple": multiple,
+        "annual_search_demand": annual_search_demand,
+        "click_ceiling": ceiling,
+        "effective_cpc": eff_cpc,
+        "realistic_clicks_low": low,
+        "realistic_clicks_high": high,
+        "arithmetic_clicks": arithmetic_clicks,
+        "note": " ".join(parts),
+    }
 
 # Relative importance of each ad group when splitting the budget. Brand and the
 # high-intent groups get the most; re-normalised over whatever groups are present.
@@ -70,6 +148,8 @@ def build_plan(
     seasonality: dict[str, Any],
     mobile_share: float | None = None,
     has_conversions: bool = False,
+    hist_stats: dict[str, Any] | None = None,
+    annual_search_demand: int | None = None,
 ) -> dict[str, Any]:
     if not budget or budget <= 0 or not keyword_groups:
         return {"available": False}
@@ -252,6 +332,13 @@ def build_plan(
             ),
         }
 
+    realism = build_realism(
+        budget=budget,
+        arithmetic_clicks=tot_clicks,
+        hist_stats=hist_stats,
+        annual_search_demand=annual_search_demand,
+    )
+
     return {
         "available": True,
         "allocation": rows,
@@ -260,4 +347,5 @@ def build_plan(
         "phasing": phasing,
         "bidding": bidding,
         "device": device,
+        "realism": realism,
     }

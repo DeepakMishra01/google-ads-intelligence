@@ -157,6 +157,26 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         bp.append([])
         bp.append(["TOTAL", "", f.get("budget"), f.get("blended_cpc"), f.get("est_clicks"),
                    f.get("est_impressions"), f.get("est_leads"), f.get("est_cpl"), ""])
+        rl = plan.get("realism") or {}
+        if rl:
+            bp.append([])
+            bp.append(["REALITY CHECK — clicks don't scale linearly with budget"])
+            bp.append(["Realistic clicks:",
+                       f"{rl.get('realistic_clicks_low'):,}–{rl.get('realistic_clicks_high'):,}"
+                       f"  (flat-CPC optimistic: {rl.get('arithmetic_clicks'):,})"])
+            bp.append(["Effective CPC at scale:", f"₹{rl.get('effective_cpc')} "
+                       f"(historical ₹{rl.get('hist_cpc')})"])
+            bp.append(["Your real history:",
+                       f"{rl.get('hist_clicks_per_year'):,} clicks/yr @ "
+                       f"₹{rl.get('hist_spend_per_year'):,}/yr"])
+            if rl.get("budget_multiple"):
+                bp.append(["Budget vs history:", f"{rl.get('budget_multiple')}×"])
+            if rl.get("annual_search_demand"):
+                bp.append(["Annual search demand:", f"{rl.get('annual_search_demand'):,}"])
+            if rl.get("click_ceiling"):
+                bp.append(["Absolute click ceiling:", f"{rl.get('click_ceiling'):,}"])
+            bp.append(["Note:", rl.get("note")])
+
         bp.append([])
         bp.append([f"Leads/CPL assume a {round((f.get('assumed_cvr') or 0) * 100, 1)}% "
                    "conversion rate (no conversion tracking on this account yet)."])

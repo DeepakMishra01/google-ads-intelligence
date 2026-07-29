@@ -112,6 +112,53 @@ class AdCopyService:
             return None
         return round(by_dev.get("MOBILE", 0.0) / total, 4)
 
+    def _history_stats(self, brief) -> dict[str, Any] | None:
+        """Real annualised clicks/spend/CPC/CTR for the campus (deduped snapshots).
+
+        The anchor for the forecast reality-check: what the account actually
+        achieves, so we don't extrapolate 10× budget at a flat brand CPC.
+        """
+        from sqlalchemy import func, select
+
+        from app.models.campaign import Campaign, CampaignSnapshot
+
+        row = self.db.execute(
+            select(
+                func.min(CampaignSnapshot.snapshot_date),
+                func.max(CampaignSnapshot.snapshot_date),
+                func.coalesce(func.sum(CampaignSnapshot.clicks), 0),
+                func.coalesce(func.sum(CampaignSnapshot.impressions), 0),
+                func.coalesce(func.sum(CampaignSnapshot.cost_micros), 0),
+            )
+            .select_from(Campaign)
+            .join(CampaignSnapshot, CampaignSnapshot.campaign_id == Campaign.id)
+            .where(campus_campaign_filter(brief))
+        ).one()
+        mn, mx, clk, impr, cost = row
+        clk, impr, cost = int(clk or 0), int(impr or 0), float(cost or 0) / 1_000_000
+        if not (mn and mx and clk > 0):
+            return None
+        days = max(1, (mx - mn).days + 1)
+        return {
+            "clicks_per_year": clk * 365 / days,
+            "spend_per_year": cost * 365 / days,
+            "cpc": (cost / clk) if clk else None,
+            "ctr": (clk / impr) if impr else None,
+        }
+
+    @staticmethod
+    def _annual_demand(campus_kw: list[dict[str, Any]]) -> int | None:
+        """Total yearly search demand across the campus's own keywords."""
+        total = 0
+        for k in campus_kw:
+            mv = k.get("monthly_search_volumes") or []
+            total += (
+                sum(v.get("searches", 0) for v in mv)
+                if mv
+                else (k.get("search_volume") or 0) * 12
+            )
+        return int(total) or None
+
     def generate(
         self,
         *,
@@ -196,6 +243,8 @@ class AdCopyService:
                 seasonality=seasonality,
                 mobile_share=self._mobile_share(brief),
                 has_conversions=has_conversions,
+                hist_stats=self._history_stats(brief),
+                annual_search_demand=self._annual_demand(campus_kw),
             )
 
         # Campaign setup guide — a from-scratch checklist for a Google Ads newcomer.
