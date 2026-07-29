@@ -27,17 +27,17 @@ def test_lower_cpc_lowers_required_cvr():
 def test_scenarios_report_current_cpl():
     p = build_cpl_plan(budget=1_500_000, blended_cpc=48.83, optimized_cpc=35.0)
     today = next(s for s in p["scenarios"] if s["name"].startswith("Today"))
-    # 48.83 / 0.13 ≈ ₹376 — the real current CPL (already below target)
-    assert 300 < today["cpl"] < 450
+    # 48.83 / 0.04 ≈ ₹1,221 — the real average CPL (just above target)
+    assert 1_000 < today["cpl"] < 1_500
     target = next(s for s in p["scenarios"] if s["name"].startswith("Target"))
     mid = (750 + 850) / 2
     assert abs(target["cpl"] - mid) <= 1  # target scenario lands on the target CPL
 
 
-def test_target_reachable_at_real_rates():
+def test_target_reachable_via_best_funnel():
     p = build_cpl_plan(budget=1_500_000, blended_cpc=48.83, optimized_cpc=35.0)
-    # required CVR (~4.4%) is far below the 13% average → comfortably reachable
-    assert p["required_cvr_pct"] < p["current_cvr_avg_pct"]
+    # required CVR (~4.4%) is well below the 27% best → reachable by standardising
+    assert p["required_cvr_pct"] < p["current_cvr_best_pct"]
     assert p["reachable_at_best"] is True
 
 

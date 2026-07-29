@@ -179,7 +179,7 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
 
         bp.append([])
         bp.append([f"Leads/CPL assume a {round((f.get('assumed_cvr') or 0) * 100, 1)}% "
-                   "conversion rate (no conversion tracking on this account yet)."])
+                   "click→lead conversion rate (no conversion tracking on this account yet)."])
         bid = plan.get("bidding") or {}
         bp.append([])
         bp.append(["Recommended bidding:", bid.get("recommended") or bid.get("primary")])
@@ -223,11 +223,11 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         cs.append([f"Target CPL: ₹{cplp.get('target_cpl_low')}–{cplp.get('target_cpl_high')}"])
         cs.append([f"Required conversion rate: {cplp.get('required_cvr_pct')}% "
                    f"(at optimized ₹{cplp.get('optimized_cpc')} CPC)"])
-        cs.append([f"Your rates — avg {cplp.get('current_cvr_avg_pct')}%, "
+        cs.append([f"Your click→lead rates — avg {cplp.get('current_cvr_avg_pct')}%, "
                    f"best {cplp.get('current_cvr_best_pct')}%"])
         cs.append(["Verdict:", cplp.get("verdict")])
         cs.append([])
-        _header(cs, ["Scenario", "CPC", "Conv. rate %", "CPL", "Leads (budget)", "Note"])
+        _header(cs, ["Scenario", "CPC", "Click→lead %", "CPL", "Leads (budget)", "Note"])
         for s in cplp.get("scenarios", []):
             cs.append([s.get("name"), s.get("cpc"), s.get("cvr_pct"), s.get("cpl"),
                        s.get("leads"), s.get("note")])

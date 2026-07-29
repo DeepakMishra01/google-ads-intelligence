@@ -8,7 +8,7 @@ Cost-per-lead is fixed by two dials, and this models BOTH:
 
 Given a target CPL band (e.g. ₹750–850) and the account's REAL rates — blended
 CPC, an optimized (brand/high-intent) CPC, and the team's true clicks→lead
-conversion (avg ~13%, best ~58%) — it computes the conversion rate required
+conversion (clicks→leads: avg ~4%, best ~27%) — it computes the rate required
 to hit the target at each CPC, the gap versus reality, honest CPL scenarios, and
 a prioritized playbook of levers (each tagged whether it moves CPC or CVR).
 
@@ -21,8 +21,8 @@ from __future__ import annotations
 from typing import Any
 
 # The team's real, measured clicks→lead conversion (decimals, not %).
-DEFAULT_CVR_AVG = 0.13   # 13% — current average across campaigns
-DEFAULT_CVR_BEST = 0.58  # 58% — best observed
+DEFAULT_CVR_AVG = 0.04   # 4% — current average clicks→leads across campaigns
+DEFAULT_CVR_BEST = 0.27  # 27% — best observed clicks→leads
 DEFAULT_TARGET_CPL_LOW = 750.0
 DEFAULT_TARGET_CPL_HIGH = 850.0
 

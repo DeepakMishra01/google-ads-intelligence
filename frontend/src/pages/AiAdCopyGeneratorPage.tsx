@@ -152,6 +152,9 @@ function CplPlanView({ cpl }: { cpl: CplPlan }) {
         <p className="mt-1 text-xs">{cpl.verdict}</p>
       </div>
 
+      <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+        Click → lead conversion rate
+      </div>
       <div className="mb-3 grid grid-cols-3 gap-3 text-center">
         <div className="rounded-lg bg-slate-50 p-2">
           <div className="text-[11px] text-slate-500">Your average today</div>
@@ -173,7 +176,7 @@ function CplPlanView({ cpl }: { cpl: CplPlan }) {
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
               <th className="py-1.5">Scenario</th>
               <th className="text-right">CPC</th>
-              <th className="text-right">Conv. rate</th>
+              <th className="text-right">Click→lead %</th>
               <th className="text-right">CPL</th>
               <th className="text-right">Leads (budget)</th>
             </tr>
@@ -242,8 +245,8 @@ function CampaignPlanView({
           />
           <Tile label="Est. impressions" value={num(f?.est_impressions)} />
           <Tile label="Blended CPC" value={money(f?.blended_cpc)} sub="from history" />
-          <Tile label={`Est. leads${est}`} value={num(f?.est_leads)} sub={`@ ${cvrPct}% CVR`} />
-          <Tile label={`Est. CPL${est}`} value={money(f?.est_cpl)} sub={`@ ${cvrPct}% CVR`} />
+          <Tile label={`Est. leads${est}`} value={num(f?.est_leads)} sub={`@ ${cvrPct}% click→lead`} />
+          <Tile label={`Est. CPL${est}`} value={money(f?.est_cpl)} sub={`@ ${cvrPct}% click→lead`} />
         </div>
         {rl && (
           <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -260,8 +263,8 @@ function CampaignPlanView({
         )}
         {f?.cpl_is_estimated && (
           <div className="mt-2 text-xs text-amber-600">
-            * Leads &amp; CPL use your <b>real {cvrPct}%</b> conversion rate. Conversion tracking
-            isn't live, so treat lead counts as directional. CPC &amp; seasonality are real data.
+            * Leads &amp; CPL use your <b>real {cvrPct}% click→lead</b> conversion rate. Conversion
+            tracking isn't live, so treat lead counts as directional. CPC &amp; seasonality are real data.
           </div>
         )}
       </Section>
