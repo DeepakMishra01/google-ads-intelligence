@@ -400,5 +400,81 @@ export interface AdCopyGenerateResponse {
   campaign_recommendation: CampaignRecommendation;
   assets: GeneratedAssets;
   quality: QualityPrediction;
+  seasonality: SeasonalityView | null;
+  campaign_plan: CampaignPlan | null;
   generated_at: string;
+}
+
+// --- Campaign Planner (budget-driven) ------------------------------------- //
+export interface SeasonalityMonth {
+  month: number;
+  name: string;
+  searches: number;
+  index: number;
+  share: number;
+  level: string;
+  emphasis: string;
+}
+export interface SeasonalityView {
+  available: boolean;
+  source: string;
+  months: SeasonalityMonth[];
+  peak_months: string[];
+  peak_share: number | null;
+}
+export interface BudgetAllocationRow {
+  ad_group: string;
+  intent: string;
+  budget: number;
+  share: number;
+  avg_cpc: number;
+  est_clicks: number;
+  est_impressions: number;
+  est_leads: number;
+  est_cpl: number | null;
+  bidding: string;
+  phase: number;
+  match_types: string[];
+}
+export interface CampaignForecast {
+  budget: number;
+  timeframe_months: number;
+  est_clicks: number;
+  est_impressions: number;
+  est_leads: number;
+  blended_cpc: number | null;
+  est_cpl: number | null;
+  cpl_is_estimated: boolean;
+  assumed_cvr: number;
+}
+export interface MonthlyPacing {
+  month: number;
+  name: string;
+  budget: number;
+  level: string;
+}
+export interface Phasing {
+  phase1_ad_groups: string[];
+  phase1_budget: number;
+  phase2_ad_groups: string[];
+  phase2_budget: number;
+  note: string;
+}
+export interface BiddingRecommendation {
+  primary: string;
+  brand: string;
+  upgrade_path: string;
+}
+export interface DeviceStrategy {
+  mobile_share_pct: number;
+  recommendation: string;
+}
+export interface CampaignPlan {
+  available: boolean;
+  allocation: BudgetAllocationRow[];
+  forecast: CampaignForecast | null;
+  monthly_pacing: MonthlyPacing[];
+  phasing: Phasing | null;
+  bidding: BiddingRecommendation | null;
+  device: DeviceStrategy | null;
 }

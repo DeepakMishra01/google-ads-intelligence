@@ -125,8 +125,12 @@ class GoogleKeywordPlannerProvider:
     def ideas(self, brief: CampusBrief) -> list[dict[str, Any]]:
         if not self.settings.keyword_planner_enabled:
             return []
+        from app.utils.cache import dashboard_cache
+
         try:
-            return self._generate(brief)
+            return dashboard_cache.get_or_set(
+                f"kwplanner:{brief.key}", lambda: self._generate(brief), ttl=3600
+            )
         except Exception as exc:  # access/quotas/config — degrade silently
             log.info("keyword_planner.unavailable", campus=brief.brand, error=str(exc))
             return []
@@ -157,6 +161,14 @@ class GoogleKeywordPlannerProvider:
         out: list[dict[str, Any]] = []
         for idea in svc.generate_keyword_ideas(request=request):
             m = idea.keyword_idea_metrics
+            # 12-month seasonality: [{"year","month","searches"}, ...] (chronological).
+            monthly = [
+                {"year": int(v.year), "month": int(v.month),
+                 "searches": int(v.monthly_searches or 0)}
+                for v in getattr(m, "monthly_search_volumes", [])
+            ]
+            low = getattr(m, "low_top_of_page_bid_micros", None)
+            high = getattr(m, "high_top_of_page_bid_micros", None)
             out.append(
                 {
                     "keyword": idea.text,
@@ -165,9 +177,10 @@ class GoogleKeywordPlannerProvider:
                     "competition": comp_name.get(getattr(m, "competition", None)),
                     "historical_clicks": None,
                     "historical_ctr": None,
-                    "historical_cpc": (m.high_top_of_page_bid_micros / _MICROS)
-                    if getattr(m, "high_top_of_page_bid_micros", None)
-                    else None,
+                    "historical_cpc": (high / _MICROS) if high else None,
+                    "top_of_page_bid_low": (low / _MICROS) if low else None,
+                    "top_of_page_bid_high": (high / _MICROS) if high else None,
+                    "monthly_search_volumes": monthly,
                     "quality_score": None,
                 }
             )

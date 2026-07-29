@@ -19,6 +19,10 @@ os.environ.setdefault("GOOGLE_ADS_LOGIN_CUSTOMER_ID", "1234567890")
 os.environ.setdefault("AUDIT_ENABLED", "false")
 # Force a clean, self-contained config regardless of any local .env on disk.
 os.environ["API_KEY"] = ""
+# Keep tests hermetic: never call an external LLM (Anthropic/Gemini) even if a
+# real key is present in .env — the AI Ad Copy tests assert the deterministic path.
+os.environ["AD_COPY_LLM_ENABLED"] = "false"
+os.environ["KEYWORD_PLANNER_ENABLED"] = "false"
 
 from collections.abc import Iterator  # noqa: E402
 from datetime import date, timedelta  # noqa: E402

@@ -138,6 +138,46 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         for kw in grp.get("match_keywords", []):
             ck.append([grp.get("name"), kw, match_types, bid])
 
+    # ---- Campaign plan sheets (only when a budget was provided) ----
+    plan = (gen.scores or {}).get("campaign_plan") or {}
+    seasonality = (gen.scores or {}).get("seasonality") or {}
+    if plan.get("available"):
+        f = plan.get("forecast") or {}
+        est = " (ESTIMATE)" if f.get("cpl_is_estimated") else ""
+
+        bp = wb.create_sheet("Budget Plan")
+        _header(bp, ["Ad Group", "Phase", "Budget (INR)", "Avg CPC", "Est. Clicks",
+                     "Est. Impressions", "Est. Leads" + est, "Est. CPL" + est, "Bidding"])
+        for r in plan.get("allocation", []):
+            bp.append([r.get("ad_group"), r.get("phase"), r.get("budget"), r.get("avg_cpc"),
+                       r.get("est_clicks"), r.get("est_impressions"), r.get("est_leads"),
+                       r.get("est_cpl"), r.get("bidding")])
+        bp.append([])
+        bp.append(["TOTAL", "", f.get("budget"), f.get("blended_cpc"), f.get("est_clicks"),
+                   f.get("est_impressions"), f.get("est_leads"), f.get("est_cpl"), ""])
+        bp.append([])
+        bp.append([f"Leads/CPL assume a {round((f.get('assumed_cvr') or 0) * 100, 1)}% "
+                   "conversion rate (no conversion tracking on this account yet)."])
+        bid = plan.get("bidding") or {}
+        bp.append(["Bidding:", bid.get("primary")])
+        bp.append(["Brand:", bid.get("brand")])
+        bp.append(["Upgrade path:", bid.get("upgrade_path")])
+        dev = plan.get("device") or {}
+        if dev:
+            bp.append(["Device:", dev.get("recommendation")])
+
+        # Seasonality (real Keyword Planner month-on-month) + monthly pacing
+        se = wb.create_sheet("Seasonality & Pacing")
+        _header(se, ["Month", "Searches (Keyword Planner)", "Index (1.0=avg)", "Demand",
+                     "Suggested Budget", "Focus"])
+        pacing_by_m = {p["month"]: p for p in plan.get("monthly_pacing", [])}
+        for mo in seasonality.get("months", []):
+            pm = pacing_by_m.get(mo["month"], {})
+            se.append([mo.get("name"), mo.get("searches"), mo.get("index"), mo.get("level"),
+                       pm.get("budget"), mo.get("emphasis")])
+        if not seasonality.get("available"):
+            se.append(["(Keyword Planner seasonality unavailable — budget paced evenly.)"])
+
     # widen text columns a little
     for sheet in wb.worksheets:
         sheet.column_dimensions["A"].width = 22

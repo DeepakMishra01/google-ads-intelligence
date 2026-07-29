@@ -19,13 +19,15 @@ from app.ai_clients.llm_client import get_llm_client
 from app.config.logging import get_logger
 from app.repositories.ad_copy import AdCopyRepository
 from app.services.ai import intent_classifier
+from app.services.ai.budget_planner import build_plan
 from app.services.ai.campus_config import find_brief, generic_brief
-from app.services.ai.campus_service import CampusService
+from app.services.ai.campus_service import CampusService, campus_campaign_filter
 from app.services.ai.historical_intelligence_service import HistoricalIntelligenceService
 from app.services.ai.keyword_research_service import KeywordResearchService
 from app.services.ai.keyword_scorer import score_keyword
 from app.services.ai.landing_page_service import LandingPageService
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
+from app.services.ai.seasonality_service import build_seasonality
 
 log = get_logger(__name__)
 
@@ -103,6 +105,28 @@ class AdCopyService:
         brief = find_brief(campus) or generic_brief(campus)
         return self.campus.discover_final_url(brief, override=override)
 
+    def _mobile_share(self, brief) -> float | None:
+        """Mobile share of historical clicks for the campus (real device data)."""
+        from sqlalchemy import func, select
+
+        from app.models.campaign import Campaign, CampaignDeviceSnapshot
+
+        rows = self.db.execute(
+            select(
+                CampaignDeviceSnapshot.device,
+                func.coalesce(func.sum(CampaignDeviceSnapshot.clicks), 0),
+            )
+            .select_from(Campaign)
+            .join(CampaignDeviceSnapshot, CampaignDeviceSnapshot.campaign_id == Campaign.id)
+            .where(campus_campaign_filter(brief))
+            .group_by(CampaignDeviceSnapshot.device)
+        ).all()
+        by_dev = {(d or "").upper(): float(c) for d, c in rows}
+        total = sum(by_dev.values())
+        if total <= 0:
+            return None
+        return round(by_dev.get("MOBILE", 0.0) / total, 4)
+
     def generate(
         self,
         *,
@@ -112,6 +136,10 @@ class AdCopyService:
         tone: str | None = None,
         persist: bool = True,
         actor: str | None = None,
+        budget: float | None = None,
+        goal: str = "traffic",
+        timeframe_months: int = 12,
+        assumed_cvr: float = 0.03,
     ) -> dict[str, Any]:
         brief = find_brief(campus) or generic_brief(campus)
 
@@ -152,6 +180,22 @@ class AdCopyService:
 
         recommendation = self._campaign_recommendation(brief, keyword_groups)
 
+        # Seasonality (Keyword Planner month-on-month) + budget plan (when a budget is given).
+        seasonality = build_seasonality(raw_kw, has_exam=bool(brief.exam))
+        campaign_plan = None
+        if budget and budget > 0:
+            campaign_plan = build_plan(
+                budget=float(budget),
+                timeframe_months=timeframe_months,
+                goal=goal,
+                assumed_cvr=assumed_cvr,
+                keyword_groups=keyword_groups,
+                keyword_insights=keyword_insights,
+                seasonality=seasonality,
+                mobile_share=self._mobile_share(brief),
+                has_conversions=(historical.get("total_conversions") or 0) > 0,
+            )
+
         result: dict[str, Any] = {
             "campus": brief.brand,
             "backend": backend,
@@ -163,6 +207,8 @@ class AdCopyService:
             "campaign_recommendation": recommendation,
             "assets": assets,
             "quality": quality,
+            "seasonality": seasonality,
+            "campaign_plan": campaign_plan,
             "generated_at": datetime.now(UTC),
             "providers_used": providers_used,
         }
@@ -635,7 +681,11 @@ class AdCopyService:
                         "groups": result.get("keyword_groups", []),
                     },
                     "generated_assets": assets,
-                    "scores": {"quality": quality},
+                    "scores": {
+                        "quality": quality,
+                        "campaign_plan": result.get("campaign_plan"),
+                        "seasonality": result.get("seasonality"),
+                    },
                     "reasoning": {
                         "headlines": [{"text": a["text"], "reason": a["reason"]}
                                       for a in assets["headlines"]],

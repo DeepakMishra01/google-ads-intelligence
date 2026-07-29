@@ -296,7 +296,16 @@ export function useFinalUrl(campus?: string, override?: string) {
 export function useGenerateAdCopy() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { campus: string; account_id?: number; final_url?: string; tone?: string }) =>
+    mutationFn: (body: {
+      campus: string;
+      account_id?: number;
+      final_url?: string;
+      tone?: string;
+      budget?: number;
+      goal?: string;
+      timeframe_months?: number;
+      assumed_cvr?: number;
+    }) =>
       api.post<AdCopyGenerateResponse>("/ai/ad-copy/generate", body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-history"] }),
   });

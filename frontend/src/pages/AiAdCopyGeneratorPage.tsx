@@ -19,7 +19,12 @@ import {
   useGenerateAdCopy,
 } from "@/lib/queries";
 import { useFilters } from "@/state/FiltersContext";
-import type { AdCopyGenerateResponse, GeneratedAsset } from "@/lib/types";
+import type {
+  AdCopyGenerateResponse,
+  CampaignPlan,
+  GeneratedAsset,
+  SeasonalityView,
+} from "@/lib/types";
 
 const STRENGTH_CLASS: Record<string, string> = {
   EXCELLENT: "bg-green-100 text-green-700",
@@ -72,6 +77,157 @@ function CopyChip({ text, label }: { text: string; label: string }) {
       {done ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
       {done ? "Copied" : label}
     </button>
+  );
+}
+
+const LEVEL_COLOR: Record<string, string> = {
+  peak: "bg-brand-600",
+  high: "bg-brand-400",
+  moderate: "bg-slate-300",
+  low: "bg-slate-200",
+};
+
+function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg bg-slate-50 p-3">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-lg font-semibold text-slate-900">{value}</div>
+      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+    </div>
+  );
+}
+
+function CampaignPlanView({
+  plan,
+  seasonality,
+}: {
+  plan: CampaignPlan;
+  seasonality: SeasonalityView | null;
+}) {
+  const f = plan.forecast;
+  const cvrPct = f ? Math.round(f.assumed_cvr * 1000) / 10 : 3;
+  const est = f?.cpl_is_estimated ? " *" : "";
+  const maxSearch = Math.max(1, ...(seasonality?.months.map((m) => m.searches) ?? [1]));
+  const pacingByMonth = new Map(plan.monthly_pacing.map((p) => [p.month, p.budget]));
+
+  return (
+    <>
+      <Section
+        title="Budget forecast"
+        hint={f ? `${f.timeframe_months}-month plan` : ""}
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <Tile label="Budget" value={money(f?.budget)} />
+          <Tile label="Est. clicks" value={num(f?.est_clicks)} sub="budget ÷ CPC" />
+          <Tile label="Est. impressions" value={num(f?.est_impressions)} />
+          <Tile label="Blended CPC" value={money(f?.blended_cpc)} sub="from history" />
+          <Tile label={`Est. leads${est}`} value={num(f?.est_leads)} sub={`@ ${cvrPct}% CVR`} />
+          <Tile label={`Est. CPL${est}`} value={money(f?.est_cpl)} sub={`@ ${cvrPct}% CVR`} />
+        </div>
+        {f?.cpl_is_estimated && (
+          <div className="mt-2 text-xs text-amber-600">
+            * Leads &amp; CPL are <b>estimates</b> at a {cvrPct}% conversion rate — this account has
+            no conversion tracking yet. Clicks, CPC, impressions and seasonality are real data.
+          </div>
+        )}
+      </Section>
+
+      <Section title="Budget allocation by ad group">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <th className="py-2">Ad group</th>
+                <th>Phase</th>
+                <th className="text-right">Budget</th>
+                <th className="text-right">Avg CPC</th>
+                <th className="text-right">Est. clicks</th>
+                <th className="text-right">Est. leads{est}</th>
+                <th className="text-right">Est. CPL{est}</th>
+                <th>Bidding</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.allocation.map((r) => (
+                <tr key={r.ad_group} className="border-b border-slate-50">
+                  <td className="py-1.5 font-medium text-slate-800">{r.ad_group}</td>
+                  <td>
+                    <Badge className={r.phase === 1 ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-600"}>
+                      P{r.phase}
+                    </Badge>
+                  </td>
+                  <td className="text-right font-medium">{money(r.budget)}</td>
+                  <td className="text-right">{money(r.avg_cpc)}</td>
+                  <td className="text-right">{num(r.est_clicks)}</td>
+                  <td className="text-right">{num(r.est_leads)}</td>
+                  <td className="text-right">{money(r.est_cpl)}</td>
+                  <td className="text-xs text-slate-500">{r.bidding}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {seasonality?.available && (
+        <Section
+          title="Seasonality — month-on-month demand (Keyword Planner)"
+          hint={`Peak: ${seasonality.peak_months.join(", ")}`}
+        >
+          <div className="space-y-1.5">
+            {seasonality.months.map((m) => (
+              <div key={m.month} className="flex items-center gap-2 text-xs">
+                <span className="w-8 shrink-0 text-slate-500">{m.name.slice(0, 3)}</span>
+                <div className="h-4 flex-1 rounded bg-slate-100">
+                  <div
+                    className={`h-4 rounded ${LEVEL_COLOR[m.level] ?? "bg-slate-300"}`}
+                    style={{ width: `${Math.max(3, (m.searches / maxSearch) * 100)}%` }}
+                  />
+                </div>
+                <span className="w-16 shrink-0 text-right text-slate-500">{num(m.searches)}</span>
+                <span className="w-20 shrink-0 text-right text-slate-400">
+                  {money(pacingByMonth.get(m.month))}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400">
+            Bars = real monthly searches. Right column = suggested budget for that month (spends more
+            in peak season). Google reports rounded ranges.
+          </div>
+        </Section>
+      )}
+
+      <Section title="Bidding &amp; launch strategy">
+        <div className="space-y-2 text-sm">
+          {plan.bidding && (
+            <>
+              <div><span className="text-slate-500">Recommended bidding:</span> {plan.bidding.primary}</div>
+              <div><span className="text-slate-500">Brand ad group:</span> {plan.bidding.brand}</div>
+              <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-700">
+                {plan.bidding.upgrade_path}
+              </div>
+            </>
+          )}
+          {plan.phasing && (
+            <div className="rounded-md bg-slate-50 p-2 text-xs">
+              <div>
+                <b>Phase 1</b> ({money(plan.phasing.phase1_budget)}):{" "}
+                {plan.phasing.phase1_ad_groups.join(", ")}
+              </div>
+              <div>
+                <b>Phase 2</b> ({money(plan.phasing.phase2_budget)}):{" "}
+                {plan.phasing.phase2_ad_groups.join(", ") || "—"}
+              </div>
+              <div className="mt-1 text-slate-500">{plan.phasing.note}</div>
+            </div>
+          )}
+          {plan.device && (
+            <div><span className="text-slate-500">Device:</span> {plan.device.recommendation}</div>
+          )}
+        </div>
+      </Section>
+    </>
   );
 }
 
@@ -172,6 +328,9 @@ export default function AiAdCopyGeneratorPage() {
   const [campus, setCampus] = useState<string | null>(null);
   const [override, setOverride] = useState("");
   const [tone, setTone] = useState("");
+  const [budget, setBudget] = useState("");
+  const [goal, setGoal] = useState("traffic");
+  const [cvr, setCvr] = useState("3");
   const [result, setResult] = useState<AdCopyGenerateResponse | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
@@ -194,8 +353,17 @@ export default function AiAdCopyGeneratorPage() {
   const runGenerate = () => {
     if (!campus) return;
     setDownloadErr(null);
+    const budgetNum = Number(budget.replace(/[^0-9.]/g, ""));
     gen.mutate(
-      { campus, account_id: accountId, final_url: override || undefined, tone: tone || undefined },
+      {
+        campus,
+        account_id: accountId,
+        final_url: override || undefined,
+        tone: tone || undefined,
+        budget: budgetNum > 0 ? budgetNum : undefined,
+        goal,
+        assumed_cvr: Math.max(0.001, (Number(cvr) || 3) / 100),
+      },
       { onSuccess: (data) => setResult(data) }
     );
   };
@@ -262,7 +430,38 @@ export default function AiAdCopyGeneratorPage() {
             )}
           </div>
 
-          <div className="lg:w-48">
+          <div className="lg:w-40">
+            <label className="mb-1 block text-xs font-medium text-slate-500">Budget ₹ (optional)</label>
+            <input
+              className="input w-full"
+              placeholder="e.g. 1500000"
+              value={budget}
+              inputMode="numeric"
+              onChange={(e) => setBudget(e.target.value)}
+            />
+          </div>
+
+          <div className="lg:w-36">
+            <label className="mb-1 block text-xs font-medium text-slate-500">Goal</label>
+            <select className="input w-full" value={goal} onChange={(e) => setGoal(e.target.value)}>
+              <option value="traffic">Traffic</option>
+              <option value="leads">Leads</option>
+              <option value="both">Both</option>
+            </select>
+          </div>
+
+          <div className="lg:w-28">
+            <label className="mb-1 block text-xs font-medium text-slate-500">Conv. rate %</label>
+            <input
+              className="input w-full"
+              value={cvr}
+              inputMode="decimal"
+              onChange={(e) => setCvr(e.target.value)}
+              title="Assumed conversion rate for lead/CPL estimates"
+            />
+          </div>
+
+          <div className="lg:w-40">
             <label className="mb-1 block text-xs font-medium text-slate-500">Tone (optional)</label>
             <input
               className="input w-full"
@@ -278,7 +477,7 @@ export default function AiAdCopyGeneratorPage() {
             disabled={!campus || gen.isPending}
           >
             <Wand2 size={16} className={gen.isPending ? "animate-pulse" : ""} />
-            {gen.isPending ? "Generating…" : "Generate Ad Copy"}
+            {gen.isPending ? "Generating…" : budget ? "Generate Plan" : "Generate Ad Copy"}
           </button>
         </div>
 
@@ -370,6 +569,10 @@ export default function AiAdCopyGeneratorPage() {
               </div>
             </Card>
             {downloadErr && <div className="mb-4 text-sm text-red-600">{downloadErr}</div>}
+
+            {result.campaign_plan?.available && (
+              <CampaignPlanView plan={result.campaign_plan} seasonality={result.seasonality} />
+            )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Section title="Headlines" hint="max 30 chars each">

@@ -160,6 +160,88 @@ class QualityPrediction(BaseModel):
     flags: list[ValidationFlag] = []
 
 
+# --------------------------- campaign planner ----------------------------- #
+class SeasonalityMonth(BaseModel):
+    month: int
+    name: str
+    searches: int
+    index: float  # 1.0 = average month
+    share: float
+    level: str  # peak | high | moderate | low
+    emphasis: str
+
+
+class SeasonalityView(BaseModel):
+    available: bool
+    source: str
+    months: list[SeasonalityMonth] = []
+    peak_months: list[str] = []
+    peak_share: float | None = None
+
+
+class BudgetAllocationRow(BaseModel):
+    ad_group: str
+    intent: str
+    budget: float
+    share: float
+    avg_cpc: float
+    est_clicks: int
+    est_impressions: int
+    est_leads: float
+    est_cpl: float | None
+    bidding: str
+    phase: int
+    match_types: list[str] = []
+
+
+class CampaignForecast(BaseModel):
+    budget: float
+    timeframe_months: int
+    est_clicks: int
+    est_impressions: int
+    est_leads: float
+    blended_cpc: float | None
+    est_cpl: float | None
+    cpl_is_estimated: bool
+    assumed_cvr: float
+
+
+class MonthlyPacing(BaseModel):
+    month: int
+    name: str
+    budget: float
+    level: str
+
+
+class Phasing(BaseModel):
+    phase1_ad_groups: list[str] = []
+    phase1_budget: float = 0
+    phase2_ad_groups: list[str] = []
+    phase2_budget: float = 0
+    note: str = ""
+
+
+class BiddingRecommendation(BaseModel):
+    primary: str
+    brand: str
+    upgrade_path: str
+
+
+class DeviceStrategy(BaseModel):
+    mobile_share_pct: int
+    recommendation: str
+
+
+class CampaignPlan(BaseModel):
+    available: bool
+    allocation: list[BudgetAllocationRow] = []
+    forecast: CampaignForecast | None = None
+    monthly_pacing: list[MonthlyPacing] = []
+    phasing: Phasing | None = None
+    bidding: BiddingRecommendation | None = None
+    device: DeviceStrategy | None = None
+
+
 # --------------------------- request / response --------------------------- #
 class AdCopyGenerateRequest(BaseModel):
     campus: str
@@ -167,6 +249,11 @@ class AdCopyGenerateRequest(BaseModel):
     final_url: str | None = None  # manual override; else auto-discovered
     tone: str | None = None  # optional stylistic hint
     persist: bool = True
+    # Campaign planner (optional): when budget is set, a full media plan is built.
+    budget: float | None = None
+    goal: str = "traffic"  # traffic | leads | both
+    timeframe_months: int = 12
+    assumed_cvr: float = 0.03  # for lead/CPL estimates when conversions aren't tracked
 
 
 class AdCopyGenerateResponse(BaseModel):
@@ -181,6 +268,8 @@ class AdCopyGenerateResponse(BaseModel):
     campaign_recommendation: CampaignRecommendation
     assets: GeneratedAssets
     quality: QualityPrediction
+    seasonality: SeasonalityView | None = None
+    campaign_plan: CampaignPlan | None = None
     generated_at: datetime
 
 

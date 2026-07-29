@@ -61,6 +61,10 @@ def generate(
         tone=body.tone,
         persist=body.persist,
         actor=x_actor,
+        budget=body.budget,
+        goal=body.goal,
+        timeframe_months=body.timeframe_months,
+        assumed_cvr=body.assumed_cvr,
     )
     return AdCopyGenerateResponse(**result)
 
