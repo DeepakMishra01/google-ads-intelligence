@@ -15,3 +15,4 @@ httpx>=0.27
 openpyxl>=3.1
 beautifulsoup4>=4.12
 anthropic>=0.40  # optional: hybrid LLM backend for AI Ad Copy (falls back if absent)
+google-generativeai>=0.8  # optional: Gemini LLM backend for AI Ad Copy

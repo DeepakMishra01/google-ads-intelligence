@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # deterministic (data-driven) backend, so the module always works.
     anthropic_api_key: str = ""
     ad_copy_llm_model: str = "claude-sonnet-5"
+    # Gemini is supported for testing; auto = use Anthropic if its key is set,
+    # else Gemini, else the deterministic engine. Force with "anthropic"/"gemini".
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    ad_copy_llm_provider: str = "auto"  # auto | anthropic | gemini
     ad_copy_llm_enabled: bool = True  # master switch for the hybrid LLM backend
     ad_copy_llm_max_tokens: int = 2000
     keyword_planner_enabled: bool = True  # falls back to historical if unavailable
