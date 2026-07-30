@@ -1263,8 +1263,22 @@ export default function AiAdCopyGeneratorPage() {
                   ))}
                 </div>
                 <div>
-                  <div className="mb-1 text-xs font-medium text-slate-500">Sitelinks</div>
-                  <Chips items={result.assets.sitelinks.map((s) => s.text)} tone="brand" />
+                  <div className="mb-1 text-xs font-medium text-slate-500">
+                    Sitelinks <span className="font-normal text-slate-400">(text ≤25 · descriptions ≤35 chars)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {result.assets.sitelinks.map((s, i) => (
+                      <div key={i} className="rounded-md bg-slate-50 p-2">
+                        <div className="text-sm font-medium text-brand-700">{s.text}</div>
+                        {s.description1 && (
+                          <div className="text-xs text-slate-500">{s.description1}</div>
+                        )}
+                        {s.description2 && (
+                          <div className="text-xs text-slate-500">{s.description2}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </Section>

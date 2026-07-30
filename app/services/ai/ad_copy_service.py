@@ -814,10 +814,21 @@ class AdCopyService:
 
     def _sitelinks(self, brief, selected) -> list[dict[str, Any]]:
         url = selected["url"] if selected else (brief.homepage or "")
-        titles = ["Apply Online", "Admissions 2026", "Courses & Fees", "Contact / Enquire"]
+        # Google Ads sitelinks: text ≤25 chars, two optional descriptions ≤35 chars each.
+        items = [
+            ("Apply Online", "Start your application", "Quick online form — apply now"),
+            ("Admissions 2026", "2026 intake now open", "Check dates & eligibility"),
+            ("Courses & Fees", "Explore programmes & fees", "Compare specialisations"),
+            ("Contact / Enquire", "Talk to an admissions expert", "Get a callback today"),
+        ]
         return [
-            {"text": t, "description1": None, "description2": None, "final_url": url}
-            for t in titles
+            {
+                "text": (_fit(t, 25) or t[:25]),
+                "description1": _fit(d1, 35),
+                "description2": _fit(d2, 35),
+                "final_url": url,
+            }
+            for t, d1, d2 in items
         ]
 
     def _campaign_recommendation(self, brief, keyword_groups) -> dict[str, Any]:

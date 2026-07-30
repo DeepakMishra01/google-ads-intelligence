@@ -107,7 +107,7 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
 
     # Extensions
     es = wb.create_sheet("Extensions")
-    _header(es, ["Type", "Value"])
+    _header(es, ["Type", "Value", "Description 1", "Description 2"])
     for p in a.get("display_paths", []):
         es.append(["Display Path", p])
     for c in a.get("callouts", []):
@@ -115,7 +115,7 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
     for label, vals in (a.get("structured_snippets") or {}).items():
         es.append([f"Snippet: {label}", ", ".join(vals)])
     for s in a.get("sitelinks", []):
-        es.append(["Sitelink", s.get("text")])
+        es.append(["Sitelink", s.get("text"), s.get("description1"), s.get("description2")])
 
     # Keywords (scored intelligence)
     ks = wb.create_sheet("Keywords")
