@@ -186,6 +186,7 @@ class AdCopyService:
         assumed_cvr: float = 0.04,  # real avg clicks→lead conversion (4%)
         target_cpl_low: float = 750.0,
         target_cpl_high: float = 850.0,
+        conversion_tracking: str = "auto",  # auto | yes | no — this year's tracking status
     ) -> dict[str, Any]:
         brief = find_brief(campus) or generic_brief(campus)
 
@@ -201,7 +202,15 @@ class AdCopyService:
 
         # Steps 5-7: keyword research → intent → scoring.
         raw_kw, providers_used = self.keywords.collect(brief)
-        has_conversions = (historical.get("total_conversions") or 0) > 0
+        # This year's conversion-tracking status drives the strategy. The account
+        # manager can override the historical auto-detection (tracking is being set
+        # up this year via the Google landing page).
+        detected_conv = (historical.get("total_conversions") or 0) > 0
+        has_conversions = (
+            True if conversion_tracking == "yes"
+            else False if conversion_tracking == "no"
+            else detected_conv
+        )
         keyword_insights = self._score_keywords(brief, raw_kw, has_conversions=has_conversions)
         keyword_groups = self._group_keywords(keyword_insights)
 

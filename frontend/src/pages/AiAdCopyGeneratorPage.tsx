@@ -837,6 +837,7 @@ export default function AiAdCopyGeneratorPage() {
   const [tone, setTone] = useState("");
   const [budget, setBudget] = useState("");
   const [goal, setGoal] = useState("traffic");
+  const [tracking, setTracking] = useState("auto");
   const [cvr, setCvr] = useState("3");
   const [result, setResult] = useState<AdCopyGenerateResponse | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -871,6 +872,7 @@ export default function AiAdCopyGeneratorPage() {
         budget: budgetNum > 0 ? budgetNum : undefined,
         goal,
         assumed_cvr: Math.max(0.001, (Number(cvr) || 3) / 100),
+        conversion_tracking: tracking,
       },
       { onSuccess: (data) => setResult(data) }
     );
@@ -955,6 +957,22 @@ export default function AiAdCopyGeneratorPage() {
               <option value="traffic">Traffic</option>
               <option value="leads">Leads</option>
               <option value="both">Both</option>
+            </select>
+          </div>
+
+          <div className="lg:w-44">
+            <label className="mb-1 block text-xs font-medium text-slate-500">
+              Conversion tracking
+            </label>
+            <select
+              className="input w-full"
+              value={tracking}
+              onChange={(e) => setTracking(e.target.value)}
+              title="Is conversion tracking live this year? Drives the bidding strategy."
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="yes">Yes — live this year</option>
+              <option value="no">No — not yet</option>
             </select>
           </div>
 

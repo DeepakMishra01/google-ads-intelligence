@@ -452,6 +452,7 @@ class AdCopyGenerateRequest(BaseModel):
     assumed_cvr: float = 0.04
     target_cpl_low: float = 750.0
     target_cpl_high: float = 850.0
+    conversion_tracking: str = "auto"  # auto | yes | no
 
 
 class AdCopyGenerateResponse(BaseModel):
