@@ -17,7 +17,9 @@ import {
   useCampusSearch,
   useFinalUrl,
   useGenerateAdCopy,
+  useSaveScorecard,
   useScorecard,
+  useScorecardHistory,
 } from "@/lib/queries";
 import { useFilters } from "@/state/FiltersContext";
 import type {
@@ -951,11 +953,65 @@ function ScorecardBody({ sc }: { sc: Scorecard }) {
   );
 }
 
+function ScorecardTrend({ campus, accountId }: { campus: string; accountId?: number }) {
+  const { data } = useScorecardHistory(campus, accountId);
+  const rows = data?.items ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <Section title="Saved snapshots — week over week" hint={`${rows.length} saved`}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className="py-1.5">Saved</th>
+              <th className="text-right">Achieved leads</th>
+              <th className="text-right">Spent</th>
+              <th className="text-right">Clicks</th>
+              <th className="text-right">Implementation</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-slate-50">
+                <td className="py-1.5">{r.date}</td>
+                <td className="text-right">{num(r.achieved_leads)}</td>
+                <td className="text-right">{money(r.achieved_cost)}</td>
+                <td className="text-right">{num(r.achieved_clicks)}</td>
+                <td className="text-right">{r.implementation_pct != null ? `${r.implementation_pct}%` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
 function ScorecardTab({ campus, accountId }: { campus: string; accountId?: number }) {
   const { data, isLoading, error } = useScorecard(campus, accountId);
-  if (isLoading) return <Section title="Results vs plan"><div className="text-sm text-slate-400">Loading…</div></Section>;
-  if (error || !data) return <Section title="Results vs plan"><div className="text-sm text-red-500">Couldn't load the scorecard.</div></Section>;
-  return <ScorecardBody sc={data} />;
+  const save = useSaveScorecard();
+  if (isLoading)
+    return <Section title="Results vs plan"><div className="text-sm text-slate-400">Loading…</div></Section>;
+  if (error || !data)
+    return <Section title="Results vs plan"><div className="text-sm text-red-500">Couldn't load the scorecard.</div></Section>;
+  return (
+    <>
+      {data.available && (
+        <div className="mb-3 flex items-center gap-3">
+          <button
+            className="btn btn-primary h-9 px-3"
+            disabled={save.isPending}
+            onClick={() => save.mutate({ campus, account_id: accountId })}
+          >
+            {save.isPending ? "Saving…" : "Save this week's snapshot"}
+          </button>
+          {save.isSuccess && <span className="text-xs text-green-600">Saved ✓</span>}
+        </div>
+      )}
+      <ScorecardBody sc={data} />
+      <ScorecardTrend campus={campus} accountId={accountId} />
+    </>
+  );
 }
 
 function LastYearView({ ly }: { ly: LastYearSummary }) {

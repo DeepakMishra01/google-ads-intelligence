@@ -19,6 +19,7 @@ import type {
   Page,
   PriorityTask,
   Scorecard,
+  ScorecardHistoryRow,
   SearchTermRow,
   SyncLog,
   TrendPoint,
@@ -304,6 +305,29 @@ export function useScorecard(campus: string | undefined, accountId?: number, tar
         target_leads: targetLeads,
       }),
     enabled: !!campus,
+  });
+}
+
+export function useScorecardHistory(campus: string | undefined, accountId?: number) {
+  return useQuery({
+    queryKey: ["scorecard-history", campus, accountId],
+    queryFn: () =>
+      get<{ items: ScorecardHistoryRow[] }>("/ai/ad-copy/scorecard/history", { campus }),
+    enabled: !!campus,
+  });
+}
+
+export function useSaveScorecard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { campus: string; account_id?: number; target_leads?: number }) =>
+      api
+        .post("/ai/ad-copy/scorecard/save", null, {
+          params: { campus: p.campus, account_id: p.account_id, target_leads: p.target_leads },
+        })
+        .then((r) => r.data),
+    onSuccess: (_d, v) =>
+      qc.invalidateQueries({ queryKey: ["scorecard-history", v.campus] }),
   });
 }
 

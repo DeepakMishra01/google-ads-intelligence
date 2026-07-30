@@ -83,6 +83,25 @@ def scorecard(
     return svc.scorecard(campus=campus, account_id=account_id, target_leads=target_leads)
 
 
+@router.post("/scorecard/save", response_model=None, summary="Save this week's scorecard")
+def scorecard_save(
+    campus: str = Query(...),
+    account_id: int | None = Query(None),
+    target_leads: int = Query(2000, ge=1),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.save_scorecard(campus=campus, account_id=account_id, target_leads=target_leads)
+
+
+@router.get("/scorecard/history", response_model=None, summary="Saved scorecard snapshots")
+def scorecard_history(
+    campus: str = Query(...),
+    limit: int = Query(12, ge=1, le=52),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.scorecard_history(campus=campus, limit=limit)
+
+
 @router.get("/history", response_model=AdCopyHistoryResponse, summary="Recent generations")
 def history(
     campus: str | None = Query(None),

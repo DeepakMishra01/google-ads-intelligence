@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.ai_clients.llm_client import get_llm_client
 from app.config.logging import get_logger
-from app.repositories.ad_copy import AdCopyRepository
+from app.repositories.ad_copy import AdCopyRepository, ScorecardSnapshotRepository
 from app.services.ai import intent_classifier
 from app.services.ai.budget_planner import build_plan
 from app.services.ai.campaign_scorecard import build_scorecard
@@ -83,6 +83,7 @@ class AdCopyService:
         self.history = HistoricalIntelligenceService(db)
         self.keywords = KeywordResearchService(db)
         self.repo = AdCopyRepository(db)
+        self.scorecards = ScorecardSnapshotRepository(db)
         self.llm = get_llm_client()
 
     # ------------------------------------------------------------------ #
@@ -359,6 +360,55 @@ class AdCopyService:
         return build_scorecard(
             self.db, brief, gen=gen, prev_gen=prev_gen, target_leads=target_leads
         )
+
+    def save_scorecard(
+        self, *, campus: str, account_id: int | None = None, target_leads: int = 2000
+    ) -> dict[str, Any]:
+        """Compute the current scorecard and persist it as a weekly snapshot."""
+        sc = self.scorecard(campus=campus, account_id=account_id, target_leads=target_leads)
+        if not sc.get("available"):
+            return {"saved": False, "reason": sc.get("reason")}
+        gens = self.repo.recent(campus=campus, limit=1)
+        ac = sc.get("achieved") or {}
+        ex = sc.get("expected") or {}
+        impl = sc.get("implementation") or {}
+        row = self.scorecards.save(
+            {
+                "campus": sc.get("campus", campus),
+                "account_id": account_id,
+                "generation_id": gens[0].id if gens else None,
+                "achieved_leads": ac.get("leads"),
+                "achieved_cost": ac.get("cost"),
+                "achieved_clicks": ac.get("clicks"),
+                "implementation_pct": impl.get("score_pct") if impl.get("available") else None,
+                "expected_leads": ex.get("leads"),
+                "target_leads": target_leads,
+                "payload": sc,
+            }
+        )
+        self.db.commit()
+        return {"saved": True, "id": row.id}
+
+    def scorecard_history(self, *, campus: str, limit: int = 12) -> dict[str, Any]:
+        def _f(v: Any) -> float | None:
+            return float(v) if v is not None else None
+
+        rows = self.scorecards.history(campus=campus, limit=limit)
+        return {
+            "items": [
+                {
+                    "id": r.id,
+                    "date": r.created_at.date().isoformat() if r.created_at else None,
+                    "achieved_leads": _f(r.achieved_leads),
+                    "achieved_cost": _f(r.achieved_cost),
+                    "achieved_clicks": r.achieved_clicks,
+                    "implementation_pct": r.implementation_pct,
+                    "expected_leads": _f(r.expected_leads),
+                    "target_leads": r.target_leads,
+                }
+                for r in rows
+            ]
+        }
 
     def history_rows(self, *, campus: str | None = None, limit: int = 50) -> dict[str, Any]:
         rows = self.repo.recent(campus=campus, limit=limit)

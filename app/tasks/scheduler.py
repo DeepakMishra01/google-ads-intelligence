@@ -15,6 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config.logging import get_logger
 from app.config.settings import get_settings
+from app.tasks.scorecard_tasks import weekly_scorecard
 from app.tasks.sync_tasks import daily_sync, hourly_sync
 
 log = get_logger(__name__)
@@ -45,6 +46,18 @@ def create_scheduler() -> BackgroundScheduler:
             CronTrigger(hour=settings.sync_daily_hour, minute=15),
             id="daily_sync",
             name="Daily full sync",
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=3600,
+            replace_existing=True,
+        )
+
+    if settings.scorecard_weekly_enabled:
+        scheduler.add_job(
+            weekly_scorecard,
+            CronTrigger(day_of_week=settings.scorecard_weekly_day, hour=6, minute=0),
+            id="weekly_scorecard",
+            name="Weekly campaign scorecard snapshot",
             max_instances=1,
             coalesce=True,
             misfire_grace_time=3600,

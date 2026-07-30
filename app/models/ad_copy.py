@@ -49,3 +49,33 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     generated_assets: Mapped[dict | None] = mapped_column(JSONType)
     scores: Mapped[dict | None] = mapped_column(JSONType)
     reasoning: Mapped[dict | None] = mapped_column(JSONType)
+
+
+class ScorecardSnapshot(IntPKMixin, TimestampMixin, Base):
+    """A saved weekly scorecard for a campus (objective vs expected vs achieved).
+
+    Persisted on demand or by the weekly job so results can be tracked
+    week-over-week and each report compares against the previous one. The full
+    computed payload is kept in ``payload``; a few metrics are also columns so
+    trend queries stay cheap.
+    """
+
+    __tablename__ = "scorecard_snapshots"
+
+    campus: Mapped[str] = mapped_column(String(255), index=True)
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    generation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ad_copy_generations.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Indexed trend metrics (nullable — a fresh plan may have no results yet).
+    achieved_leads: Mapped[float | None] = mapped_column(Numeric(16, 2))
+    achieved_cost: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    achieved_clicks: Mapped[int | None] = mapped_column()
+    implementation_pct: Mapped[int | None] = mapped_column()
+    expected_leads: Mapped[float | None] = mapped_column(Numeric(16, 2))
+    target_leads: Mapped[int | None] = mapped_column()
+
+    payload: Mapped[dict | None] = mapped_column(JSONType)

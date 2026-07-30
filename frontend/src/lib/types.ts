@@ -398,6 +398,16 @@ export interface Scorecard {
   } | null;
   summary?: string;
 }
+export interface ScorecardHistoryRow {
+  id: number;
+  date: string | null;
+  achieved_leads: number | null;
+  achieved_cost: number | null;
+  achieved_clicks: number | null;
+  implementation_pct: number | null;
+  expected_leads: number | null;
+  target_leads: number | null;
+}
 export interface CampaignRecommendation {
   campaign_name: string;
   ad_group_suggestions: string[];
