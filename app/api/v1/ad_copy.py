@@ -68,6 +68,7 @@ def generate(
         target_cpl_low=body.target_cpl_low,
         target_cpl_high=body.target_cpl_high,
         conversion_tracking=body.conversion_tracking,
+        lp_type=body.lp_type,
     )
     return AdCopyGenerateResponse(**result)
 

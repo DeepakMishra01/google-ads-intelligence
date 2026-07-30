@@ -45,6 +45,38 @@ _CTA_WORDS = ["apply", "enquire", "register", "download", "book", "get in touch"
 _JUNK_RE = re.compile(r"\(\s*\+?\d{1,4}\s*\)")  # phone country codes e.g. "Aruba (+297)"
 
 
+def _detect_tracking(html: str) -> dict:
+    """Scan raw page HTML for the tracking/measurement tags an auditor cares about."""
+    h = html or ""
+
+    def find(pattern: str, *, ci: bool = True) -> str | None:
+        m = re.search(pattern, h, re.IGNORECASE if ci else 0)
+        return m.group(0) if m else None
+
+    # IDs are upper-case tokens — match case-sensitively to avoid CSS false positives
+    # (e.g. a "g-padding" class must NOT read as a GA4 "G-…" id).
+    gtm_id = find(r"\bGTM-[A-Z0-9]{5,}\b", ci=False)
+    ga4_id = find(r"\bG-[A-Z0-9]{8,12}\b", ci=False)
+    aw_id = find(r"\bAW-\d{8,}\b", ci=False)
+    has_gtag = bool(find(r"gtag\(|googletagmanager\.com/gtag/js"))
+    has_meta_pixel = bool(find(r"fbq\(|connect\.facebook\.net/[^\"']*/fbevents\.js"))
+    has_consent = bool(
+        find(r"cookieconsent|onetrust|cookiebot|cookieyes|/consent|gtag\('consent'")
+    )
+    has_remarketing = bool(aw_id or find(r"google_conversion|/remarketing|_ga_"))
+    return {
+        "gtm": bool(gtm_id),
+        "gtm_id": gtm_id,
+        "google_ads_conversion": bool(aw_id) or bool(find(r"google_conversion_id")),
+        "google_ads_id": aw_id,
+        "ga4": bool(ga4_id) or has_gtag,
+        "ga4_id": ga4_id,
+        "meta_pixel": has_meta_pixel,
+        "cookie_consent": has_consent,
+        "remarketing": has_remarketing,
+    }
+
+
 def _is_junk_line(ln: str) -> bool:
     low = ln.strip().lower()
     if _JUNK_RE.search(ln):  # dropdown of dialling codes
@@ -113,6 +145,9 @@ class LandingPageService:
             from bs4 import BeautifulSoup
         except ImportError:  # pragma: no cover
             return {"url": url, "fetched": False, "notes": "beautifulsoup4 not installed."}
+
+        # Detect tracking tags on the RAW html (before scripts are stripped).
+        tracking = _detect_tracking(html)
 
         soup = BeautifulSoup(html, "html.parser")
         for tag in soup(["script", "style", "noscript"]):
@@ -184,6 +219,7 @@ class LandingPageService:
             "deadlines": buckets["deadlines"],
             "highlights": highlights,
             "usps": highlights,
+            "tracking": tracking,
             "notes": None,
         }
 

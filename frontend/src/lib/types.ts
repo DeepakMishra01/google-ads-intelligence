@@ -413,6 +413,7 @@ export interface AdCopyGenerateResponse {
   setup_guide: SetupGuide | null;
   negative_keywords_detail: NegativeKeywordsDetail | null;
   landing_quality: LandingQuality | null;
+  landing_audit: LandingAudit | null;
   last_year_summary: LastYearSummary | null;
   generated_at: string;
 }
@@ -441,6 +442,25 @@ export interface LandingQuality {
   suggestions: string[];
   passed: number;
   max: number;
+}
+export interface TrackingCheck {
+  item: string;
+  status: string; // present | missing
+  guidance: string;
+}
+export interface LandingAuditVerdict {
+  decision: string;
+  label: string;
+  reason: string;
+}
+export interface LandingAudit {
+  available: boolean;
+  is_kapp: boolean;
+  lp_type_label: string;
+  tracking_checks: TrackingCheck[];
+  retargeting: string;
+  segmentation: string[];
+  verdict: LandingAuditVerdict;
 }
 export interface LearningItem {
   issue: string;

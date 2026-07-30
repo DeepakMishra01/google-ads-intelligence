@@ -306,6 +306,7 @@ export function useGenerateAdCopy() {
       timeframe_months?: number;
       assumed_cvr?: number;
       conversion_tracking?: string;
+      lp_type?: string;
     }) =>
       api.post<AdCopyGenerateResponse>("/ai/ad-copy/generate", body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-history"] }),

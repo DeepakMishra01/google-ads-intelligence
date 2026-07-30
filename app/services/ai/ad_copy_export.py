@@ -313,6 +313,25 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         for s in lq.get("suggestions", []):
             ls.append([s])
 
+        au = (gen.scores or {}).get("landing_audit") or {}
+        if au.get("available"):
+            ls.append([])
+            ls.append([f"AUDIT — {au.get('lp_type_label')}"])
+            vr = au.get("verdict") or {}
+            ls.append([f"Verdict: {vr.get('label')}", vr.get("reason")])
+            if au.get("is_kapp"):
+                ls.append([])
+                _header(ls, ["Tracking / measurement", "Status", "Where to place it"])
+                for c in au.get("tracking_checks", []):
+                    ls.append([c.get("item"),
+                               "On page" if c.get("status") == "present" else "ADD IT",
+                               c.get("guidance")])
+                ls.append([])
+                ls.append(["Retargeting:", au.get("retargeting")])
+                ls.append(["Audience segmentation:"])
+                for seg in au.get("segmentation", []):
+                    ls.append(["", seg])
+
     # ---- Campaign Setup Guide sheet (build-from-scratch checklist) ----
     sg = (gen.scores or {}).get("setup_guide") or {}
     if sg.get("steps"):

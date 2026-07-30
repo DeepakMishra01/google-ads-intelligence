@@ -27,6 +27,7 @@ from app.services.ai.historical_intelligence_service import HistoricalIntelligen
 from app.services.ai.keyword_history_service import build_keyword_history
 from app.services.ai.keyword_research_service import KeywordResearchService
 from app.services.ai.keyword_scorer import recommend_bid, recommend_match_type, score_keyword
+from app.services.ai.landing_auditor import build_landing_audit
 from app.services.ai.landing_page_service import LandingPageService
 from app.services.ai.landing_quality import score_landing_page
 from app.services.ai.last_year_summary import build_last_year_summary
@@ -187,6 +188,7 @@ class AdCopyService:
         target_cpl_low: float = 750.0,
         target_cpl_high: float = 850.0,
         conversion_tracking: str = "auto",  # auto | yes | no — this year's tracking status
+        lp_type: str = "auto",  # auto | kapp | client — landing-page ownership
     ) -> dict[str, Any]:
         brief = find_brief(campus) or generic_brief(campus)
 
@@ -293,6 +295,8 @@ class AdCopyService:
         landing_quality = score_landing_page(
             landing, mobile_heavy=((dstats or {}).get("share") or 0) >= 0.6
         )
+        # Landing-page auditor: tracking placement + reuse/rebuild verdict (Kapp LPs).
+        landing_audit = build_landing_audit(landing, landing_quality, lp_type=lp_type)
 
         # Last-year learning summary — evidence-backed "what to fix and why".
         last_year = build_last_year_summary(
@@ -330,6 +334,7 @@ class AdCopyService:
             "setup_guide": setup_guide,
             "negative_keywords_detail": negatives,
             "landing_quality": landing_quality,
+            "landing_audit": landing_audit,
             "last_year_summary": last_year,
             "generated_at": datetime.now(UTC),
             "providers_used": providers_used,
@@ -869,6 +874,7 @@ class AdCopyService:
                         "setup_guide": result.get("setup_guide"),
                         "negative_keywords_detail": result.get("negative_keywords_detail"),
                         "landing_quality": result.get("landing_quality"),
+                        "landing_audit": result.get("landing_audit"),
                     },
                     "reasoning": {
                         "headlines": [{"text": a["text"], "reason": a["reason"]}

@@ -25,6 +25,7 @@ import type {
   CplPlan,
   GeneratedAsset,
   KeywordHistoryView as KeywordHistoryData,
+  LandingAudit,
   LandingQuality,
   LastYearSummary,
   NegativeKeywordsDetail,
@@ -710,6 +711,74 @@ function NegativesView({ neg }: { neg: NegativeKeywordsDetail }) {
   );
 }
 
+const VERDICT_COLOR: Record<string, string> = {
+  reuse: "bg-green-50 text-green-800 border-green-200",
+  reuse_with_fixes: "bg-amber-50 text-amber-800 border-amber-200",
+  rebuild: "bg-red-50 text-red-800 border-red-200",
+  client_lp: "bg-slate-50 text-slate-700 border-slate-200",
+};
+
+function LandingAuditorView({ audit }: { audit: LandingAudit }) {
+  const v = audit.verdict;
+  return (
+    <Section
+      title="Landing page auditor"
+      hint={audit.lp_type_label}
+    >
+      <div className={`mb-3 rounded-md border p-3 ${VERDICT_COLOR[v.decision] ?? "bg-slate-50"}`}>
+        <div className="text-sm font-semibold">Verdict: {v.label}</div>
+        <p className="mt-1 text-xs">{v.reason}</p>
+      </div>
+
+      {audit.is_kapp ? (
+        <>
+          <div className="mb-1 text-xs font-medium text-slate-600">
+            Tracking & measurement (Kapp LP — you control these):
+          </div>
+          <div className="mb-3 space-y-1.5">
+            {audit.tracking_checks.map((c) => (
+              <div key={c.item} className="flex items-start gap-2 text-sm">
+                {c.status === "present" ? (
+                  <Check size={15} className="mt-0.5 shrink-0 text-green-600" />
+                ) : (
+                  <span className="mt-0.5 shrink-0 text-red-500">✕</span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium text-slate-800">{c.item}</span>
+                  <Badge
+                    className={`ml-1 ${c.status === "present" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                  >
+                    {c.status === "present" ? "on page" : "add it"}
+                  </Badge>
+                  <div className="text-xs text-slate-500">{c.guidance}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-600">
+            <b>Retargeting:</b> {audit.retargeting}
+          </div>
+          <div className="rounded-md bg-slate-50 p-2.5">
+            <div className="mb-1 text-xs font-medium text-slate-600">Audience segmentation:</div>
+            <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+              {audit.segmentation.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : (
+        <div className="rounded-md bg-slate-50 p-2.5 text-xs text-slate-500">
+          Tracking placement (GTM, conversion, cookies, remarketing) applies to <b>Kapp landing
+          pages</b> you control. This looks like a client-owned page — see the content fixes below,
+          or route ads to a Kapp LP for full conversion tracking.
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function LandingQualityView({ lq }: { lq: LandingQuality }) {
   const gradeColor =
     lq.grade === "A" ? "text-green-600" : lq.grade === "B" ? "text-emerald-600"
@@ -838,11 +907,12 @@ export default function AiAdCopyGeneratorPage() {
   const [budget, setBudget] = useState("");
   const [goal, setGoal] = useState("traffic");
   const [tracking, setTracking] = useState("auto");
+  const [lpType, setLpType] = useState("auto");
   const [cvr, setCvr] = useState("3");
   const [result, setResult] = useState<AdCopyGenerateResponse | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("landing");
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 250);
@@ -873,6 +943,7 @@ export default function AiAdCopyGeneratorPage() {
         goal,
         assumed_cvr: Math.max(0.001, (Number(cvr) || 3) / 100),
         conversion_tracking: tracking,
+        lp_type: lpType,
       },
       { onSuccess: (data) => setResult(data) }
     );
@@ -973,6 +1044,20 @@ export default function AiAdCopyGeneratorPage() {
               <option value="auto">Auto-detect</option>
               <option value="yes">Yes — live this year</option>
               <option value="no">No — not yet</option>
+            </select>
+          </div>
+
+          <div className="lg:w-40">
+            <label className="mb-1 block text-xs font-medium text-slate-500">Landing page</label>
+            <select
+              className="input w-full"
+              value={lpType}
+              onChange={(e) => setLpType(e.target.value)}
+              title="Kapp LPs are pages you control (tracking can be placed)."
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="kapp">Kapp (we control)</option>
+              <option value="client">Client page</option>
             </select>
           </div>
 
@@ -1099,11 +1184,11 @@ export default function AiAdCopyGeneratorPage() {
             {/* Single-click module nav */}
             <div className="mb-4 flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
               {[
+                { k: "landing", label: "Landing Auditor" },
                 { k: "overview", label: "Overview" },
                 { k: "plan", label: "Budget & Bidding" },
                 { k: "keywords", label: "Keywords" },
                 { k: "adcopy", label: "Ad Copy" },
-                { k: "landing", label: "Landing Page" },
                 { k: "setup", label: "Setup Guide" },
               ].map((t) => (
                 <button
@@ -1124,6 +1209,10 @@ export default function AiAdCopyGeneratorPage() {
 
             {tab === "plan" && result.campaign_plan?.available && (
               <CampaignPlanView plan={result.campaign_plan} seasonality={result.seasonality} />
+            )}
+
+            {tab === "landing" && result.landing_audit?.available && (
+              <LandingAuditorView audit={result.landing_audit} />
             )}
 
             {tab === "landing" && result.landing_quality?.available && (
