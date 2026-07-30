@@ -360,6 +360,44 @@ export interface SitelinkAsset {
   description2: string | null;
   final_url: string | null;
 }
+export interface ScorecardPerf {
+  clicks: number;
+  impressions?: number;
+  cost: number;
+  leads: number;
+  cpl: number | null;
+  cpc?: number | null;
+}
+export interface Scorecard {
+  available: boolean;
+  reason?: string;
+  campus?: string;
+  plan_date?: string;
+  days_elapsed?: number;
+  objective?: { budget: number | null; target_leads: number };
+  expected?: { spend: number | null; clicks: number | null; leads: number | null; cpl: number | null };
+  achieved?: ScorecardPerf;
+  recent_30d?: ScorecardPerf;
+  vs_target?: { target_leads: number; leads_pct: number | null; spend_pct: number | null };
+  implementation?: {
+    available: boolean;
+    score_pct?: number;
+    recommended?: number;
+    live?: number;
+    missing?: string[];
+  };
+  repeated_issues?: { term: string; cost: number; reason: string }[];
+  comparison?: {
+    prev_date: string | null;
+    prev_budget: number | null;
+    prev_expected_leads: number | null;
+    prev_expected_cpl: number | null;
+    cur_budget: number | null;
+    cur_expected_leads: number | null;
+    cur_expected_cpl: number | null;
+  } | null;
+  summary?: string;
+}
 export interface CampaignRecommendation {
   campaign_name: string;
   ad_group_suggestions: string[];

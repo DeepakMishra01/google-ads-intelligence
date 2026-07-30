@@ -17,6 +17,7 @@ import {
   useCampusSearch,
   useFinalUrl,
   useGenerateAdCopy,
+  useScorecard,
 } from "@/lib/queries";
 import { useFilters } from "@/state/FiltersContext";
 import type {
@@ -26,6 +27,7 @@ import type {
   GeneratedAsset,
   KeywordHistoryView as KeywordHistoryData,
   LandingAudit,
+  Scorecard,
   LandingQuality,
   LastYearSummary,
   NegativeKeywordsDetail,
@@ -831,6 +833,131 @@ function LandingQualityView({ lq }: { lq: LandingQuality }) {
   );
 }
 
+function ScorePerfTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg bg-slate-50 p-3">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-lg font-semibold text-slate-900">{value}</div>
+      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+    </div>
+  );
+}
+
+function ScorecardBody({ sc }: { sc: Scorecard }) {
+  if (!sc.available) {
+    return (
+      <Section title="Results vs plan">
+        <div className="text-sm text-slate-500">{sc.reason ?? "No saved plan for this campus yet — generate one first."}</div>
+      </Section>
+    );
+  }
+  const ex = sc.expected;
+  const ac = sc.achieved;
+  const r30 = sc.recent_30d;
+  const impl = sc.implementation;
+  const cmp = sc.comparison;
+  return (
+    <>
+      <Section title="Results vs plan" hint={`plan ${sc.plan_date} · ${sc.days_elapsed}d ago`}>
+        <p className="mb-3 text-sm text-slate-600">{sc.summary}</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <ScorePerfTile label="Objective" value={money(sc.objective?.budget)} sub={`target ${num(sc.objective?.target_leads)} leads`} />
+          <ScorePerfTile label="Expected leads" value={num(ex?.leads)} sub={`@ ${money(ex?.cpl)} CPL`} />
+          <ScorePerfTile label="Achieved leads (since plan)" value={num(ac?.leads)} sub={`${sc.vs_target?.leads_pct ?? 0}% of target`} />
+          <ScorePerfTile label="Spent (since plan)" value={money(ac?.cost)} sub={`${sc.vs_target?.spend_pct ?? 0}% of budget`} />
+        </div>
+        {r30 && (
+          <div className="mt-3 rounded-md bg-slate-50 p-2.5 text-xs text-slate-500">
+            <b>Last 30 days (context):</b> {num(r30.clicks)} clicks · {money(r30.cost)} spent ·{" "}
+            {num(r30.leads)} conversions{r30.cpl != null ? ` · ${money(r30.cpl)} CPL` : ""}.
+          </div>
+        )}
+      </Section>
+
+      {impl?.available && (
+        <Section title="Implementation" hint={`${impl.score_pct}% of the plan applied`}>
+          <div className="mb-2 h-3 rounded bg-slate-100">
+            <div
+              className={`h-3 rounded ${(impl.score_pct ?? 0) >= 75 ? "bg-green-500" : (impl.score_pct ?? 0) >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+              style={{ width: `${impl.score_pct ?? 0}%` }}
+            />
+          </div>
+          <div className="text-sm text-slate-600">
+            {impl.live} of {impl.recommended} recommended keywords are live in the account.
+          </div>
+          {impl.missing && impl.missing.length > 0 && (
+            <div className="mt-2">
+              <div className="mb-1 text-xs font-medium text-slate-500">Not yet added:</div>
+              <Chips items={impl.missing} tone="red" />
+            </div>
+          )}
+        </Section>
+      )}
+
+      {sc.repeated_issues && sc.repeated_issues.length > 0 && (
+        <Section title="Repeated mistakes — still leaking budget" hint={`${sc.repeated_issues.length} terms`}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <th className="py-1.5">Search term</th>
+                <th className="text-right">Wasted</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sc.repeated_issues.map((d) => (
+                <tr key={d.term} className="border-b border-slate-50">
+                  <td className="py-1.5 font-medium text-slate-800">{d.term}</td>
+                  <td className="text-right text-red-600">{money(d.cost)}</td>
+                  <td className="text-xs text-slate-500">{d.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      {cmp && (
+        <Section title="This plan vs the previous one" hint={cmp.prev_date ?? ""}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <th className="py-1.5">Metric</th>
+                <th className="text-right">Previous</th>
+                <th className="text-right">Current</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-slate-50">
+                <td className="py-1.5">Budget</td>
+                <td className="text-right">{money(cmp.prev_budget)}</td>
+                <td className="text-right font-medium">{money(cmp.cur_budget)}</td>
+              </tr>
+              <tr className="border-b border-slate-50">
+                <td className="py-1.5">Expected leads</td>
+                <td className="text-right">{num(cmp.prev_expected_leads)}</td>
+                <td className="text-right font-medium">{num(cmp.cur_expected_leads)}</td>
+              </tr>
+              <tr>
+                <td className="py-1.5">Expected CPL</td>
+                <td className="text-right">{money(cmp.prev_expected_cpl)}</td>
+                <td className="text-right font-medium">{money(cmp.cur_expected_cpl)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </Section>
+      )}
+    </>
+  );
+}
+
+function ScorecardTab({ campus, accountId }: { campus: string; accountId?: number }) {
+  const { data, isLoading, error } = useScorecard(campus, accountId);
+  if (isLoading) return <Section title="Results vs plan"><div className="text-sm text-slate-400">Loading…</div></Section>;
+  if (error || !data) return <Section title="Results vs plan"><div className="text-sm text-red-500">Couldn't load the scorecard.</div></Section>;
+  return <ScorecardBody sc={data} />;
+}
+
 function LastYearView({ ly }: { ly: LastYearSummary }) {
   return (
     <Section title="What we learned from last year" hint="why these recommendations exist">
@@ -1188,6 +1315,7 @@ export default function AiAdCopyGeneratorPage() {
                 { k: "keywords", label: "Keywords" },
                 { k: "adcopy", label: "Ad Copy" },
                 { k: "setup", label: "Setup Guide" },
+                { k: "scorecard", label: "Results vs Plan" },
               ].map((t) => (
                 <button
                   key={t.k}
@@ -1200,6 +1328,10 @@ export default function AiAdCopyGeneratorPage() {
                 </button>
               ))}
             </div>
+
+            {tab === "scorecard" && (
+              <ScorecardTab campus={result.campus} accountId={accountId} />
+            )}
 
             {tab === "overview" && result.last_year_summary?.available && (
               <LastYearView ly={result.last_year_summary} />

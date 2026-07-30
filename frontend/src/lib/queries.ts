@@ -18,6 +18,7 @@ import type {
   Overview,
   Page,
   PriorityTask,
+  Scorecard,
   SearchTermRow,
   SyncLog,
   TrendPoint,
@@ -289,6 +290,19 @@ export function useFinalUrl(campus?: string, override?: string) {
     queryKey: ["final-url", campus, override],
     queryFn: () =>
       get<FinalUrlResponse>("/ai/ad-copy/campus/final-url", { campus, override }),
+    enabled: !!campus,
+  });
+}
+
+export function useScorecard(campus: string | undefined, accountId?: number, targetLeads = 2000) {
+  return useQuery({
+    queryKey: ["scorecard", campus, accountId, targetLeads],
+    queryFn: () =>
+      get<Scorecard>("/ai/ad-copy/scorecard", {
+        campus,
+        account_id: accountId,
+        target_leads: targetLeads,
+      }),
     enabled: !!campus,
   });
 }

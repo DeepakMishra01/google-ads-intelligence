@@ -20,6 +20,7 @@ from app.config.logging import get_logger
 from app.repositories.ad_copy import AdCopyRepository
 from app.services.ai import intent_classifier
 from app.services.ai.budget_planner import build_plan
+from app.services.ai.campaign_scorecard import build_scorecard
 from app.services.ai.campus_config import find_brief, generic_brief
 from app.services.ai.campus_service import CampusService, campus_campaign_filter
 from app.services.ai.cpl_optimizer import build_cpl_plan
@@ -346,6 +347,18 @@ class AdCopyService:
                                    keyword_insights, assets, quality, result)
         result["id"] = gen_id
         return result
+
+    def scorecard(
+        self, *, campus: str, account_id: int | None = None, target_leads: int = 2000
+    ) -> dict[str, Any]:
+        """Objective vs expected vs achieved for a campus's saved plan(s)."""
+        brief = find_brief(campus) or generic_brief(campus)
+        gens = self.repo.recent(campus=campus, limit=5)
+        gen = gens[0] if gens else None
+        prev_gen = gens[1] if len(gens) > 1 else None
+        return build_scorecard(
+            self.db, brief, gen=gen, prev_gen=prev_gen, target_leads=target_leads
+        )
 
     def history_rows(self, *, campus: str | None = None, limit: int = 50) -> dict[str, Any]:
         rows = self.repo.recent(campus=campus, limit=limit)

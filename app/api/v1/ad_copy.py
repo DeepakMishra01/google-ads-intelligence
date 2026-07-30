@@ -73,6 +73,16 @@ def generate(
     return AdCopyGenerateResponse(**result)
 
 
+@router.get("/scorecard", response_model=None, summary="Objective vs expected vs achieved")
+def scorecard(
+    campus: str = Query(..., description="Campus name."),
+    account_id: int | None = Query(None),
+    target_leads: int = Query(2000, ge=1, description="Reference lead target for the objective."),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.scorecard(campus=campus, account_id=account_id, target_leads=target_leads)
+
+
 @router.get("/history", response_model=AdCopyHistoryResponse, summary="Recent generations")
 def history(
     campus: str | None = Query(None),
