@@ -29,6 +29,7 @@ from app.services.ai.keyword_research_service import KeywordResearchService
 from app.services.ai.keyword_scorer import recommend_bid, recommend_match_type, score_keyword
 from app.services.ai.landing_page_service import LandingPageService
 from app.services.ai.landing_quality import score_landing_page
+from app.services.ai.last_year_summary import build_last_year_summary
 from app.services.ai.negative_keywords_service import build_negative_keywords
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
 from app.services.ai.seasonality_service import build_seasonality
@@ -92,8 +93,12 @@ class AdCopyService:
         brief = find_brief(campus) or generic_brief(campus)
         return self.campus.discover_final_url(brief, override=override)
 
-    def _mobile_share(self, brief) -> float | None:
-        """Mobile share of historical clicks for the campus (real device data)."""
+    def _device_stats(self, brief) -> dict[str, Any] | None:
+        """Mobile share + raw click counts for the campus (real device data).
+
+        Returns the grounding for the 88%-mobile claim: the actual mobile and
+        total click counts it's computed from.
+        """
         from sqlalchemy import func, select
 
         from app.models.campaign import Campaign, CampaignDeviceSnapshot
@@ -108,11 +113,16 @@ class AdCopyService:
             .where(campus_campaign_filter(brief))
             .group_by(CampaignDeviceSnapshot.device)
         ).all()
-        by_dev = {(d or "").upper(): float(c) for d, c in rows}
+        by_dev = {(d or "").upper(): int(c) for d, c in rows}
         total = sum(by_dev.values())
         if total <= 0:
             return None
-        return round(by_dev.get("MOBILE", 0.0) / total, 4)
+        mobile = by_dev.get("MOBILE", 0)
+        return {"share": round(mobile / total, 4), "mobile": mobile, "total": total}
+
+    def _mobile_share(self, brief) -> float | None:
+        stats = self._device_stats(brief)
+        return stats["share"] if stats else None
 
     def _history_stats(self, brief) -> dict[str, Any] | None:
         """Real annualised clicks/spend/CPC/CTR for the campus (deduped snapshots).
@@ -217,6 +227,7 @@ class AdCopyService:
         )
 
         recommendation = self._campaign_recommendation(brief, keyword_groups)
+        dstats = self._device_stats(brief)
 
         # Keyword performance history — "keep or drop last time's keywords?"
         # (campus-scoped real month-on-month + keep/review/drop verdicts).
@@ -245,7 +256,9 @@ class AdCopyService:
                 keyword_groups=keyword_groups,
                 keyword_insights=keyword_insights,
                 seasonality=seasonality,
-                mobile_share=self._mobile_share(brief),
+                mobile_share=(dstats or {}).get("share"),
+                mobile_clicks=(dstats or {}).get("mobile"),
+                total_device_clicks=(dstats or {}).get("total"),
                 has_conversions=has_conversions,
                 hist_stats=self._history_stats(brief),
                 annual_search_demand=self._annual_demand(campus_kw),
@@ -268,8 +281,17 @@ class AdCopyService:
                 )
 
         # Landing-page quality score + specific fixes (biggest CVR lever).
-        mob = self._mobile_share(brief)
-        landing_quality = score_landing_page(landing, mobile_heavy=(mob or 0) >= 0.6)
+        landing_quality = score_landing_page(
+            landing, mobile_heavy=((dstats or {}).get("share") or 0) >= 0.6
+        )
+
+        # Last-year learning summary — evidence-backed "what to fix and why".
+        last_year = build_last_year_summary(
+            keyword_history=keyword_history,
+            negatives=negatives,
+            landing_quality=landing_quality,
+            has_conversions=has_conversions,
+        )
 
         # Campaign setup guide — a from-scratch checklist for a Google Ads newcomer.
         setup_guide = build_setup_guide(
@@ -299,6 +321,7 @@ class AdCopyService:
             "setup_guide": setup_guide,
             "negative_keywords_detail": negatives,
             "landing_quality": landing_quality,
+            "last_year_summary": last_year,
             "generated_at": datetime.now(UTC),
             "providers_used": providers_used,
         }

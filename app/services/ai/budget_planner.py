@@ -178,6 +178,8 @@ def build_plan(
     has_conversions: bool = False,
     hist_stats: dict[str, Any] | None = None,
     annual_search_demand: int | None = None,
+    mobile_clicks: int | None = None,
+    total_device_clicks: int | None = None,
 ) -> dict[str, Any]:
     if not budget or budget <= 0 or not keyword_groups:
         return {"available": False}
@@ -355,14 +357,22 @@ def build_plan(
     device = None
     if mobile_share is not None:
         pct = round(mobile_share * 100)
+        basis = (
+            f" ({mobile_clicks:,} of {total_device_clicks:,} historical clicks, "
+            "from your Google Ads device report)"
+            if mobile_clicks and total_device_clicks
+            else ""
+        )
         device = {
             "mobile_share_pct": pct,
+            "mobile_clicks": mobile_clicks,
+            "total_clicks": total_device_clicks,
             "recommendation": (
-                f"{pct}% of historical clicks are mobile — prioritise mobile. "
+                f"{pct}% of clicks are mobile{basis} — prioritise mobile. "
                 "Start at base bids on both; consider a desktop bid adjustment of -20% "
                 "if mobile keeps outperforming."
                 if pct >= 60
-                else f"Mobile is {pct}% of clicks — keep parity across devices; let data decide."
+                else f"Mobile is {pct}% of clicks{basis} — keep parity; let data decide."
             ),
         }
 

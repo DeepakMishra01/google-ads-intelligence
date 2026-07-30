@@ -26,6 +26,7 @@ import type {
   GeneratedAsset,
   KeywordHistoryView as KeywordHistoryData,
   LandingQuality,
+  LastYearSummary,
   NegativeKeywordsDetail,
   SeasonalityView,
   SetupGuide,
@@ -224,8 +225,7 @@ function CampaignPlanView({
   const rl = plan.realism;
   const cvrPct = f ? Math.round(f.assumed_cvr * 1000) / 10 : 3;
   const est = f?.cpl_is_estimated ? " *" : "";
-  const maxSearch = Math.max(1, ...(seasonality?.months.map((m) => m.searches) ?? [1]));
-  const pacingByMonth = new Map(plan.monthly_pacing.map((p) => [p.month, p.budget]));
+  const searchesByMonth = new Map((seasonality?.months ?? []).map((m) => [m.month, m.searches]));
   const clicksValue = rl
     ? `${num(rl.realistic_clicks_low)}–${num(rl.realistic_clicks_high)}`
     : num(f?.est_clicks);
@@ -308,64 +308,40 @@ function CampaignPlanView({
         </div>
       </Section>
 
-      {seasonality?.available && (
-        <Section
-          title="Seasonality — month-on-month demand (Keyword Planner)"
-          hint={`Peak: ${seasonality.peak_months.join(", ")}`}
-        >
-          <div className="space-y-1.5">
-            {seasonality.months.map((m) => (
-              <div key={m.month} className="flex items-center gap-2 text-xs">
-                <span className="w-8 shrink-0 text-slate-500">{m.name.slice(0, 3)}</span>
-                <div className="h-4 flex-1 rounded bg-slate-100">
-                  <div
-                    className={`h-4 rounded ${LEVEL_COLOR[m.level] ?? "bg-slate-300"}`}
-                    style={{ width: `${Math.max(3, (m.searches / maxSearch) * 100)}%` }}
-                  />
-                </div>
-                <span className="w-16 shrink-0 text-right text-slate-500">{num(m.searches)}</span>
-                <span className="w-20 shrink-0 text-right text-slate-400">
-                  {money(pacingByMonth.get(m.month))}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 text-[11px] text-slate-400">
-            Bars = real monthly searches. Right column = suggested budget for that month (spends more
-            in peak season). Google reports rounded ranges.
-          </div>
-        </Section>
-      )}
-
       {plan.monthly_pacing.length > 0 && (
         <Section
-          title="Monthly ad spend — how much to spend each month"
-          hint={`Total ${money(f?.budget)} over the year`}
+          title="Seasonality & monthly ad spend"
+          hint={seasonality?.available ? `Search peak: ${seasonality.peak_months.join(", ")}` : undefined}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                   <th className="py-2">Month</th>
+                  <th className="text-right">Searches</th>
+                  <th>Demand</th>
                   <th className="text-right">Suggested spend</th>
                   <th className="text-right">Share</th>
-                  <th>Demand</th>
-                  <th className="w-1/3">Weighting</th>
+                  <th className="w-1/4">Spend weighting</th>
                 </tr>
               </thead>
               <tbody>
                 {plan.monthly_pacing.map((m) => {
                   const share = f?.budget ? m.budget / f.budget : 0;
+                  const searches = searchesByMonth.get(m.month);
                   return (
                     <tr key={m.month} className="border-b border-slate-50">
                       <td className="py-1.5 font-medium text-slate-800">{m.name}</td>
-                      <td className="text-right font-medium">{money(m.budget)}</td>
-                      <td className="text-right text-slate-500">{pct(share)}</td>
+                      <td className="text-right text-slate-500">
+                        {searches != null ? num(searches) : "—"}
+                      </td>
                       <td>
                         <Badge className={`${LEVEL_COLOR[m.level] ?? "bg-slate-300"} bg-opacity-20 text-slate-600`}>
                           {m.level}
                         </Badge>
                       </td>
+                      <td className="text-right font-medium">{money(m.budget)}</td>
+                      <td className="text-right text-slate-500">{pct(share)}</td>
                       <td>
                         <div className="h-3 rounded bg-slate-100">
                           <div
@@ -380,10 +356,20 @@ function CampaignPlanView({
               </tbody>
             </table>
           </div>
-          <div className="mt-2 text-[11px] text-slate-400">
-            Concentrated on the admission season — <b>May 20% · June 30% · July 20%</b> (70% in the
-            intake peak); the rest spread across other months by real search demand. Sums to your
-            full budget.
+          <div className="mt-2 space-y-1 text-[11px] text-slate-400">
+            <p>
+              One view — real monthly <b>search demand</b> (Keyword Planner) next to the{" "}
+              <b>suggested spend</b>. Spend concentrates on <b>May 20% · June 30% · July 20%</b>{" "}
+              (70% in the intake peak); the rest spreads by demand. Sums to your full budget.
+            </p>
+            {seasonality?.available && (
+              <p>
+                <b>Why spend peaks earlier than searches:</b> search interest peaks around{" "}
+                {seasonality.peak_months[0]}, but that later traffic is largely results /
+                admission-status checking. Applications are submitted in May–July, so spend leads
+                the search peak to capture applicants while they're deciding.
+              </p>
+            )}
           </div>
         </Section>
       )}
@@ -778,6 +764,27 @@ function LandingQualityView({ lq }: { lq: LandingQuality }) {
   );
 }
 
+function LastYearView({ ly }: { ly: LastYearSummary }) {
+  return (
+    <Section title="What we learned from last year" hint="why these recommendations exist">
+      <p className="mb-3 text-sm text-slate-600">{ly.headline}</p>
+      <div className="space-y-2">
+        {ly.items.map((it, i) => (
+          <div key={i} className="rounded-md border border-slate-100 bg-slate-50 p-2.5">
+            <div className="text-sm font-medium text-slate-800">{it.issue}</div>
+            <div className="text-xs text-slate-500">
+              <b>Evidence:</b> {it.evidence}
+            </div>
+            <div className="text-xs text-green-700">
+              <b>What we changed:</b> {it.change}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 function AssetList({ assets, limit }: { assets: GeneratedAsset[]; limit: number }) {
   const [copied, setCopied] = useState<number | null>(null);
   const copy = (text: string, i: number) => {
@@ -834,6 +841,7 @@ export default function AiAdCopyGeneratorPage() {
   const [result, setResult] = useState<AdCopyGenerateResponse | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
+  const [tab, setTab] = useState("overview");
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 250);
@@ -1070,26 +1078,54 @@ export default function AiAdCopyGeneratorPage() {
             </Card>
             {downloadErr && <div className="mb-4 text-sm text-red-600">{downloadErr}</div>}
 
-            {result.campaign_plan?.available && (
+            {/* Single-click module nav */}
+            <div className="mb-4 flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
+              {[
+                { k: "overview", label: "Overview" },
+                { k: "plan", label: "Budget & Bidding" },
+                { k: "keywords", label: "Keywords" },
+                { k: "adcopy", label: "Ad Copy" },
+                { k: "landing", label: "Landing Page" },
+                { k: "setup", label: "Setup Guide" },
+              ].map((t) => (
+                <button
+                  key={t.k}
+                  onClick={() => setTab(t.k)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                    tab === t.k ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {tab === "overview" && result.last_year_summary?.available && (
+              <LastYearView ly={result.last_year_summary} />
+            )}
+
+            {tab === "plan" && result.campaign_plan?.available && (
               <CampaignPlanView plan={result.campaign_plan} seasonality={result.seasonality} />
             )}
 
-            {result.landing_quality?.available && (
+            {tab === "landing" && result.landing_quality?.available && (
               <LandingQualityView lq={result.landing_quality} />
             )}
 
-            {result.setup_guide && result.setup_guide.steps.length > 0 && (
+            {tab === "setup" && result.setup_guide && result.setup_guide.steps.length > 0 && (
               <SetupGuideView guide={result.setup_guide} />
             )}
 
-            {result.keyword_history?.available && (
+            {tab === "keywords" && result.keyword_history?.available && (
               <KeywordHistoryView hist={result.keyword_history} />
             )}
 
-            {result.negative_keywords_detail && (
+            {tab === "keywords" && result.negative_keywords_detail && (
               <NegativesView neg={result.negative_keywords_detail} />
             )}
 
+            {tab === "adcopy" && (
+            <>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Section title="Headlines" hint="max 30 chars each">
                 <AssetList assets={result.assets.headlines} limit={30} />
@@ -1127,9 +1163,11 @@ export default function AiAdCopyGeneratorPage() {
                 </div>
               </div>
             </Section>
+            </>
+            )}
 
             {/* Landing page facts */}
-            {result.landing_page && (
+            {tab === "landing" && result.landing_page && (
               <Section
                 title="Landing page intelligence"
                 hint={result.landing_page.fetched ? result.landing_page.url : result.landing_page.notes ?? ""}
@@ -1158,6 +1196,7 @@ export default function AiAdCopyGeneratorPage() {
             )}
 
             {/* Historical insights */}
+            {tab === "overview" && (
             <Section
               title="Historical insights"
               hint={`avg CTR ${pct(result.historical.avg_ctr)} · avg CPC ${money(result.historical.avg_cpc)} · spend ${money(result.historical.total_spend)}`}
@@ -1173,8 +1212,11 @@ export default function AiAdCopyGeneratorPage() {
                 </div>
               </div>
             </Section>
+            )}
 
             {/* Keyword intelligence */}
+            {tab === "keywords" && (
+            <>
             <Section title="Keyword intelligence" hint="ranked by weighted score">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1223,7 +1265,11 @@ export default function AiAdCopyGeneratorPage() {
             <Section title="Keywords to add to the campaign" hint="match-type formatted, ready to paste">
               <CampaignKeywords groups={result.keyword_groups} />
             </Section>
+            </>
+            )}
 
+            {tab === "overview" && (
+            <>
             <Section title="Recommended campaign structure">
               <div className="mb-3 text-sm">
                 <span className="font-medium text-slate-800">{result.campaign_recommendation.campaign_name}</span>
@@ -1292,6 +1338,8 @@ export default function AiAdCopyGeneratorPage() {
                 </div>
               )}
             </Section>
+            </>
+            )}
           </>
         )}
       </StateBlock>

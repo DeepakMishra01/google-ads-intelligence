@@ -251,6 +251,8 @@ class BiddingRecommendation(BaseModel):
 
 class DeviceStrategy(BaseModel):
     mobile_share_pct: int
+    mobile_clicks: int | None = None
+    total_clicks: int | None = None
     recommendation: str
 
 
@@ -404,6 +406,19 @@ class LandingQuality(BaseModel):
     max: int = 0
 
 
+# --------------------------- last-year learning --------------------------- #
+class LearningItem(BaseModel):
+    issue: str
+    evidence: str
+    change: str
+
+
+class LastYearSummary(BaseModel):
+    available: bool
+    headline: str = ""
+    items: list[LearningItem] = []
+
+
 # --------------------------- negative keywords ---------------------------- #
 class WastefulSearchTerm(BaseModel):
     term: str
@@ -457,6 +472,7 @@ class AdCopyGenerateResponse(BaseModel):
     setup_guide: SetupGuide | None = None
     negative_keywords_detail: NegativeKeywordsDetail | None = None
     landing_quality: LandingQuality | None = None
+    last_year_summary: LastYearSummary | None = None
     generated_at: datetime
 
 

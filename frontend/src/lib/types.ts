@@ -413,6 +413,7 @@ export interface AdCopyGenerateResponse {
   setup_guide: SetupGuide | null;
   negative_keywords_detail: NegativeKeywordsDetail | null;
   landing_quality: LandingQuality | null;
+  last_year_summary: LastYearSummary | null;
   generated_at: string;
 }
 
@@ -440,6 +441,16 @@ export interface LandingQuality {
   suggestions: string[];
   passed: number;
   max: number;
+}
+export interface LearningItem {
+  issue: string;
+  evidence: string;
+  change: string;
+}
+export interface LastYearSummary {
+  available: boolean;
+  headline: string;
+  items: LearningItem[];
 }
 export interface WastefulSearchTerm {
   term: string;
