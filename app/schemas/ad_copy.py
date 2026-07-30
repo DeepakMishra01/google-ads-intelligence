@@ -406,6 +406,28 @@ class LandingQuality(BaseModel):
     max: int = 0
 
 
+class TrackingCheck(BaseModel):
+    item: str
+    status: str  # present | missing
+    guidance: str
+
+
+class LandingAuditVerdict(BaseModel):
+    decision: str
+    label: str
+    reason: str
+
+
+class LandingAudit(BaseModel):
+    available: bool
+    is_kapp: bool = False
+    lp_type_label: str = ""
+    tracking_checks: list[TrackingCheck] = []
+    retargeting: str = ""
+    segmentation: list[str] = []
+    verdict: LandingAuditVerdict | None = None
+
+
 # --------------------------- last-year learning --------------------------- #
 class LearningItem(BaseModel):
     issue: str
@@ -474,6 +496,7 @@ class AdCopyGenerateResponse(BaseModel):
     setup_guide: SetupGuide | None = None
     negative_keywords_detail: NegativeKeywordsDetail | None = None
     landing_quality: LandingQuality | None = None
+    landing_audit: LandingAudit | None = None
     last_year_summary: LastYearSummary | None = None
     generated_at: datetime
 

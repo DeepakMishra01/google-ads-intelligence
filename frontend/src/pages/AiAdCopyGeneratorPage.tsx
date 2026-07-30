@@ -730,51 +730,49 @@ function LandingAuditorView({ audit }: { audit: LandingAudit }) {
         <p className="mt-1 text-xs">{v.reason}</p>
       </div>
 
-      {audit.is_kapp ? (
-        <>
-          <div className="mb-1 text-xs font-medium text-slate-600">
-            Tracking & measurement (Kapp LP — you control these):
-          </div>
-          <div className="mb-3 space-y-1.5">
-            {audit.tracking_checks.map((c) => (
-              <div key={c.item} className="flex items-start gap-2 text-sm">
-                {c.status === "present" ? (
-                  <Check size={15} className="mt-0.5 shrink-0 text-green-600" />
-                ) : (
-                  <span className="mt-0.5 shrink-0 text-red-500">✕</span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <span className="font-medium text-slate-800">{c.item}</span>
-                  <Badge
-                    className={`ml-1 ${c.status === "present" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
-                  >
-                    {c.status === "present" ? "on page" : "add it"}
-                  </Badge>
-                  <div className="text-xs text-slate-500">{c.guidance}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mb-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-600">
-            <b>Retargeting:</b> {audit.retargeting}
-          </div>
-          <div className="rounded-md bg-slate-50 p-2.5">
-            <div className="mb-1 text-xs font-medium text-slate-600">Audience segmentation:</div>
-            <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
-              {audit.segmentation.map((s, i) => (
-                <li key={i}>{s}</li>
-              ))}
-            </ul>
-          </div>
-        </>
-      ) : (
-        <div className="rounded-md bg-slate-50 p-2.5 text-xs text-slate-500">
-          Tracking placement (GTM, conversion, cookies, remarketing) applies to <b>Kapp landing
-          pages</b> you control. This looks like a client-owned page — see the content fixes below,
-          or route ads to a Kapp LP for full conversion tracking.
+      {!audit.is_kapp && (
+        <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-500">
+          This looks like a <b>client-owned page</b>, so you may not control the tags directly —
+          but here's exactly where each one should go. Share it with the college, or route ads to a
+          Kapp LP you control for full conversion tracking.
         </div>
       )}
+
+      <div className="mb-1 text-xs font-medium text-slate-600">
+        Tracking &amp; measurement — where each tag should go:
+      </div>
+      <div className="mb-3 space-y-1.5">
+        {audit.tracking_checks.map((c) => (
+          <div key={c.item} className="flex items-start gap-2 text-sm">
+            {c.status === "present" ? (
+              <Check size={15} className="mt-0.5 shrink-0 text-green-600" />
+            ) : (
+              <span className="mt-0.5 shrink-0 text-red-500">✕</span>
+            )}
+            <div className="min-w-0 flex-1">
+              <span className="font-medium text-slate-800">{c.item}</span>
+              <Badge
+                className={`ml-1 ${c.status === "present" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+              >
+                {c.status === "present" ? "on page" : "add it"}
+              </Badge>
+              <div className="text-xs text-slate-500">{c.guidance}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-600">
+        <b>Retargeting:</b> {audit.retargeting}
+      </div>
+      <div className="rounded-md bg-slate-50 p-2.5">
+        <div className="mb-1 text-xs font-medium text-slate-600">Audience segmentation:</div>
+        <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+          {audit.segmentation.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ul>
+      </div>
     </Section>
   );
 }
