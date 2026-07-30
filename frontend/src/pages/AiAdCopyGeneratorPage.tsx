@@ -1414,7 +1414,7 @@ export default function AiAdCopyGeneratorPage() {
             {/* Single-click module nav */}
             <div className="mb-4 flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
               {[
-                { k: "landing", label: "Landing Auditor" },
+                { k: "landing", label: "Landing Page Auditor" },
                 { k: "overview", label: "Overview" },
                 { k: "plan", label: "Budget & Bidding" },
                 { k: "keywords", label: "Keywords" },
