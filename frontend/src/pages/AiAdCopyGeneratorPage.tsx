@@ -35,6 +35,7 @@ import type {
   NegativeKeywordsDetail,
   SeasonalityView,
   SetupGuide,
+  TopSearchTerms,
 } from "@/lib/types";
 
 const STRENGTH_CLASS: Record<string, string> = {
@@ -663,6 +664,54 @@ function SetupGuideView({ guide }: { guide: SetupGuide }) {
           </li>
         ))}
       </ol>
+    </Section>
+  );
+}
+
+function TopSearchTermsView({ st }: { st: TopSearchTerms }) {
+  const opps = st.terms.filter((t) => !t.is_keyword).length;
+  return (
+    <Section
+      title="Top search terms — real queries for this college"
+      hint={`${st.count} terms${opps ? ` · ${opps} not yet keywords` : ""}`}
+    >
+      <p className="mb-2 text-xs text-slate-400">{st.note}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className="py-2">Search term</th>
+              <th className="text-right">Impressions</th>
+              <th className="text-right">Clicks</th>
+              <th className="text-right">CTR</th>
+              <th className="text-right">CPC</th>
+              <th className="text-right">Cost</th>
+              <th className="text-right">Conv.</th>
+              <th className="text-center">In plan?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {st.terms.map((t) => (
+              <tr key={t.query} className="border-b border-slate-50">
+                <td className="py-1.5 font-medium text-slate-800">{t.query}</td>
+                <td className="text-right">{num(t.impressions)}</td>
+                <td className="text-right">{num(t.clicks)}</td>
+                <td className="text-right">{t.ctr != null ? pct(t.ctr) : "—"}</td>
+                <td className="text-right">{money(t.cpc)}</td>
+                <td className="text-right">{money(t.cost)}</td>
+                <td className="text-right">{num(t.conversions)}</td>
+                <td className="text-center">
+                  {t.is_keyword ? (
+                    <Badge className="bg-green-100 text-green-700">keyword</Badge>
+                  ) : (
+                    <Badge className="bg-amber-100 text-amber-700">add it</Badge>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Section>
   );
 }
@@ -1407,6 +1456,10 @@ export default function AiAdCopyGeneratorPage() {
 
             {tab === "setup" && result.setup_guide && result.setup_guide.steps.length > 0 && (
               <SetupGuideView guide={result.setup_guide} />
+            )}
+
+            {tab === "keywords" && result.top_search_terms?.available && (
+              <TopSearchTermsView st={result.top_search_terms} />
             )}
 
             {tab === "keywords" && result.keyword_history?.available && (

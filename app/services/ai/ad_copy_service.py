@@ -34,6 +34,7 @@ from app.services.ai.landing_quality import score_landing_page
 from app.services.ai.last_year_summary import build_last_year_summary
 from app.services.ai.negative_keywords_service import build_negative_keywords
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
+from app.services.ai.search_terms_service import build_top_search_terms
 from app.services.ai.seasonality_service import build_seasonality
 from app.services.ai.setup_guide import build_setup_guide
 
@@ -248,6 +249,9 @@ class AdCopyService:
             self.db, brief, [k["keyword"] for k in keyword_insights]
         )
 
+        # Top real search terms for this college (actual queries + metrics).
+        top_search_terms = build_top_search_terms(self.db, brief, limit=25)
+
         # Seasonality (Keyword Planner month-on-month) + budget plan (when a budget is given).
         # IMPORTANT: only aggregate THIS campus's own demand. Two traps:
         #  1) Keyword Planner returns broad "related ideas" (e.g. "ignou admission",
@@ -333,6 +337,7 @@ class AdCopyService:
             "seasonality": seasonality,
             "campaign_plan": campaign_plan,
             "keyword_history": keyword_history,
+            "top_search_terms": top_search_terms,
             "setup_guide": setup_guide,
             "negative_keywords_detail": negatives,
             "landing_quality": landing_quality,
@@ -945,6 +950,7 @@ class AdCopyService:
                         "campaign_plan": result.get("campaign_plan"),
                         "seasonality": result.get("seasonality"),
                         "keyword_history": result.get("keyword_history"),
+                        "top_search_terms": result.get("top_search_terms"),
                         "setup_guide": result.get("setup_guide"),
                         "negative_keywords_detail": result.get("negative_keywords_detail"),
                         "landing_quality": result.get("landing_quality"),

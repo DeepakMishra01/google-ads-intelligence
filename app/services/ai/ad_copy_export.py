@@ -236,6 +236,22 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         for lv in cplp.get("levers", []):
             cs.append([lv.get("dial"), lv.get("lever"), lv.get("detail")])
 
+    # ---- Top Search Terms sheet (real queries + metrics) ----
+    st = (gen.scores or {}).get("top_search_terms") or {}
+    if st.get("available"):
+        sts = wb.create_sheet("Top Search Terms")
+        _header(sts, ["Search term", "Impressions", "Clicks", "CTR", "CPC", "Cost",
+                      "Conversions", "Already a keyword?"])
+        for t in st.get("terms", []):
+            sts.append([
+                t.get("query"), t.get("impressions"), t.get("clicks"),
+                round((t.get("ctr") or 0) * 100, 1) if t.get("ctr") else None,
+                t.get("cpc"), t.get("cost"), t.get("conversions"),
+                "Yes" if t.get("is_keyword") else "No — add it",
+            ])
+        sts.append([])
+        sts.append([st.get("note")])
+
     # ---- Keyword History sheet ("keep or drop last time's keywords?") ----
     kh = (gen.scores or {}).get("keyword_history") or {}
     if kh.get("available"):

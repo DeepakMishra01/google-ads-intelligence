@@ -375,6 +375,26 @@ class KeywordHistoryView(BaseModel):
     summary: KeywordHistorySummary = KeywordHistorySummary()
 
 
+# --------------------------- top search terms ----------------------------- #
+class SearchTermRow(BaseModel):
+    query: str
+    impressions: int
+    clicks: int
+    cost: float
+    ctr: float | None = None
+    cpc: float | None = None
+    conversions: float = 0
+    is_keyword: bool = False
+
+
+class TopSearchTerms(BaseModel):
+    available: bool
+    count: int = 0
+    terms: list[SearchTermRow] = []
+    totals: dict[str, float] = {}
+    note: str = ""
+
+
 # --------------------------- campaign setup guide ------------------------- #
 class SetupStep(BaseModel):
     step: str
@@ -493,6 +513,7 @@ class AdCopyGenerateResponse(BaseModel):
     seasonality: SeasonalityView | None = None
     campaign_plan: CampaignPlan | None = None
     keyword_history: KeywordHistoryView | None = None
+    top_search_terms: TopSearchTerms | None = None
     setup_guide: SetupGuide | None = None
     negative_keywords_detail: NegativeKeywordsDetail | None = None
     landing_quality: LandingQuality | None = None

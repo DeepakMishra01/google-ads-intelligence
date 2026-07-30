@@ -398,6 +398,23 @@ export interface Scorecard {
   } | null;
   summary?: string;
 }
+export interface AdCopySearchTerm {
+  query: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  ctr: number | null;
+  cpc: number | null;
+  conversions: number;
+  is_keyword: boolean;
+}
+export interface TopSearchTerms {
+  available: boolean;
+  count: number;
+  terms: AdCopySearchTerm[];
+  totals: { clicks?: number; impressions?: number; cost?: number };
+  note: string;
+}
 export interface ScorecardHistoryRow {
   id: number;
   date: string | null;
@@ -458,6 +475,7 @@ export interface AdCopyGenerateResponse {
   seasonality: SeasonalityView | null;
   campaign_plan: CampaignPlan | null;
   keyword_history: KeywordHistoryView | null;
+  top_search_terms: TopSearchTerms | null;
   setup_guide: SetupGuide | null;
   negative_keywords_detail: NegativeKeywordsDetail | null;
   landing_quality: LandingQuality | null;
