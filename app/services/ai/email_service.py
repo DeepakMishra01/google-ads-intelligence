@@ -27,6 +27,7 @@ def send_email(
     to: str,
     subject: str,
     body: str,
+    html: str | None = None,
     attachment: bytes | None = None,
     attachment_name: str | None = None,
     attachment_mime: tuple[str, str] = ("application", "octet-stream"),
@@ -42,6 +43,8 @@ def send_email(
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
     if attachment is not None and attachment_name:
         maintype, subtype = attachment_mime
         msg.add_attachment(

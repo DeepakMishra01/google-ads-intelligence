@@ -85,6 +85,92 @@ def build_final_strategy(gen: AdCopyGeneration) -> dict[str, Any]:
     }
 
 
+def _esc(v: Any) -> str:
+    return (
+        str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        if v is not None else ""
+    )
+
+
+def _approval_html(gen: AdCopyGeneration, fs: dict[str, Any]) -> str:
+    """A self-contained email so the reviewer can audit everything and approve."""
+    assets = gen.generated_assets or {}
+    ks = gen.keyword_snapshot or {}
+    scores = gen.scores or {}
+    lq = scores.get("landing_quality") or {}
+    neg = scores.get("negative_keywords_detail") or {}
+    approved = gen.approval_status == "approved"
+
+    def _rows(items: list[str]) -> str:
+        return "".join(f"<li>{_esc(i)}</li>" for i in items)
+
+    headlines = [a.get("text") for a in assets.get("headlines", [])][:15]
+    descriptions = [a.get("text") for a in assets.get("descriptions", [])][:4]
+    kws = ks.get("keywords", [])[:15]
+    kw_rows = "".join(
+        f"<tr><td style='padding:2px 8px'>{_esc(k.get('keyword'))}</td>"
+        f"<td style='padding:2px 8px'>{_esc(k.get('intent'))}</td>"
+        f"<td style='padding:2px 8px'>{_esc(k.get('recommended_match_type'))}</td>"
+        f"<td style='padding:2px 8px;text-align:right'>"
+        f"{'₹' + str(k.get('recommended_bid')) if k.get('recommended_bid') else '—'}</td></tr>"
+        for k in kws
+    )
+    strat_rows = "".join(
+        f"<tr><td style='padding:2px 8px'>{_esc(f['label'])}</td>"
+        f"<td style='padding:2px 8px'><b>{_esc(f['value'])}</b>"
+        f"{' (edited)' if f['edited'] else ''}</td></tr>"
+        for f in fs.get("fields", [])
+    )
+    banner_color = "#16a34a" if approved else "#d97706"
+    banner_text = ("✓ APPROVED — cleared to launch" if approved
+                   else f"{gen.approval_status.upper()} — review & approve before launch")
+    banner_css = (
+        f"background:{banner_color};color:#fff;padding:10px 14px;"
+        "border-radius:6px;font-weight:bold"
+    )
+    return f"""\
+<div style="font-family:Arial,sans-serif;max-width:680px;color:#0f172a">
+  <div style="{banner_css}">
+    {banner_text}
+  </div>
+  <h2 style="margin:14px 0 4px">{_esc(gen.campus)} — Campaign strategy for approval</h2>
+
+  <h3>Final strategy</h3>
+  <table style="border-collapse:collapse;font-size:14px">{strat_rows}
+    <tr><td style="padding:2px 8px">Projected leads</td>
+        <td style="padding:2px 8px"><b>{_esc(fs.get('est_leads'))}</b>
+        (target {_esc(fs.get('target_leads'))})</td></tr>
+    <tr><td style="padding:2px 8px">Projected CPL</td>
+        <td style="padding:2px 8px"><b>₹{_esc(fs.get('est_cpl'))}</b></td></tr>
+  </table>
+
+  <h3>Ad copy — headlines</h3>
+  <ul style="font-size:14px">{_rows(headlines)}</ul>
+  <h3>Ad copy — descriptions</h3>
+  <ul style="font-size:14px">{_rows(descriptions)}</ul>
+
+  <h3>Top keywords</h3>
+  <table style="border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0">
+    <tr style="background:#f1f5f9"><th style="padding:2px 8px;text-align:left">Keyword</th>
+      <th style="padding:2px 8px;text-align:left">Intent</th>
+      <th style="padding:2px 8px;text-align:left">Match</th>
+      <th style="padding:2px 8px;text-align:right">Bid</th></tr>
+    {kw_rows}
+  </table>
+
+  <h3>Landing page</h3>
+  <p style="font-size:14px">Score: <b>{_esc(lq.get('score'))}/100</b>
+  (Grade {_esc(lq.get('grade'))}). {_esc((lq.get('suggestions') or [''])[0])}</p>
+
+  <h3>Negative keywords</h3>
+  <p style="font-size:14px">{_esc(len(neg.get('keywords', [])))} negatives prepared
+  ({_esc(neg.get('wasted_spend') or 0)} ₹ wasted on junk queries historically).</p>
+
+  <p style="font-size:13px;color:#64748b">Full plan (all keywords, negatives, month-wise spend,
+  seasonality, setup guide) is in the attached Excel. Reply to approve, or approve in-app.</p>
+</div>"""
+
+
 class ApprovalService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -182,6 +268,7 @@ class ApprovalService:
             to=to,
             subject=f"[Ads Approval] {gen.campus} — {gen.approval_status}",
             body="\n".join(lines),
+            html=_approval_html(gen, fs),
             attachment=xlsx,
             attachment_name=f"strategy_{gen.campus.replace(' ', '_')}_{gen.id}.xlsx",
             attachment_mime=(
