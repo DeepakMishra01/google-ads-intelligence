@@ -7,8 +7,9 @@ Revises: 0004_dedupe_snapshots
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 revision = "0005_scorecard_snapshots"
 down_revision = "0004_dedupe_snapshots"
@@ -19,6 +20,12 @@ _JSON = sa.JSON().with_variant(JSONB(), "postgresql")
 
 
 def upgrade() -> None:
+    # Idempotent: a prior deploy may have created the table but died before Alembic
+    # recorded this revision, leaving the DB half-migrated. Skip if it already exists.
+    bind = op.get_bind()
+    if sa.inspect(bind).has_table("scorecard_snapshots"):
+        return
+
     op.create_table(
         "scorecard_snapshots",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
