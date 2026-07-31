@@ -8,7 +8,7 @@ list exhaustive.
 from app.database.base import Base
 from app.models.account import Account
 from app.models.ad import Ad, AdSnapshot
-from app.models.ad_copy import AdCopyGeneration, ScorecardSnapshot
+from app.models.ad_copy import AdCopyGeneration, ApprovalEvent, ScorecardSnapshot
 from app.models.ad_group import AdGroup, AdGroupSnapshot
 from app.models.alert import Alert, AlertSeverity, AlertStatus
 from app.models.api_token import ApiToken
@@ -40,6 +40,7 @@ __all__ = [
     "Ad",
     "AdSnapshot",
     "AdCopyGeneration",
+    "ApprovalEvent",
     "ScorecardSnapshot",
     "SearchTerm",
     "SearchTermSnapshot",

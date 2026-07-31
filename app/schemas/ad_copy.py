@@ -490,8 +490,9 @@ class AdCopyGenerateRequest(BaseModel):
     budget: float | None = None
     goal: str = "traffic"  # traffic | leads | both
     timeframe_months: int = 12
-    # Real measured clicks→lead conversion rate (4% average).
-    assumed_cvr: float = 0.04
+    # TARGET click→lead conversion rate for planning (15% industry benchmark),
+    # editable per plan — not a claim about current performance.
+    assumed_cvr: float = 0.15
     target_cpl_low: float = 750.0
     target_cpl_high: float = 850.0
     conversion_tracking: str = "auto"  # auto | yes | no

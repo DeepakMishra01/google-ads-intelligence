@@ -6,8 +6,10 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_ad_copy_service, require_api_key
+from app.database.session import get_db
 from app.schemas.ad_copy import (
     AdCopyGenerateRequest,
     AdCopyGenerateResponse,
@@ -17,6 +19,7 @@ from app.schemas.ad_copy import (
 )
 from app.services.ai import ad_copy_export
 from app.services.ai.ad_copy_service import AdCopyService
+from app.services.ai.approval_service import ApprovalService
 
 router = APIRouter(prefix="/ai/ad-copy", tags=["ai-tools"])
 
@@ -100,6 +103,66 @@ def scorecard_history(
     svc: AdCopyService = Depends(get_ad_copy_service),
 ) -> dict:
     return svc.scorecard_history(campus=campus, limit=limit)
+
+
+@router.get("/{gen_id}/approval", response_model=None, summary="Approval state + final strategy")
+def approval_state(
+    gen_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).state(gen_id)
+
+
+@router.post("/{gen_id}/submit", response_model=None, summary="Submit strategy for review")
+def approval_submit(
+    gen_id: int,
+    x_actor: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).submit(gen_id, actor=x_actor)
+
+
+@router.post("/{gen_id}/decide", response_model=None, summary="Approve or reject a strategy")
+def approval_decide(
+    gen_id: int,
+    approved: bool = Query(...),
+    reviewer_name: str = Query(..., min_length=1),
+    note: str | None = Query(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).decide(
+        gen_id, approved=approved, reviewer_name=reviewer_name, note=note
+    )
+
+
+@router.post("/{gen_id}/override", response_model=None, summary="Edit a final-strategy value")
+def approval_override(
+    gen_id: int,
+    field: str = Query(...),
+    value: str = Query(...),
+    by: str | None = Header(None, alias="X-Actor"),
+    db: Session = Depends(get_db),
+) -> dict:
+    # numeric fields come in as strings from the query; coerce where sensible.
+    v: object = value
+    if field in ("budget", "target_leads", "target_cvr_pct"):
+        try:
+            v = float(value)
+            if field in ("target_leads",):
+                v = int(v)
+        except ValueError:
+            v = value
+    return ApprovalService(db).set_override(gen_id, field=field, value=v, by=by)
+
+
+@router.post("/{gen_id}/send-approval", response_model=None, summary="Email strategy for approval")
+def approval_email(
+    gen_id: int,
+    to: str = Query(..., description="Reviewer email address."),
+    x_actor: str | None = Header(None, alias="X-Actor"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).send_approval(gen_id, to=to, actor=x_actor)
 
 
 @router.get("/history", response_model=AdCopyHistoryResponse, summary="Recent generations")

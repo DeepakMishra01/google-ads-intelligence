@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     sync_retry_backoff_seconds: int = 30
     sync_default_lookback_days: int = 7
 
+    # --- Email (approval emails via SMTP, e.g. a team Gmail app password) ---
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""       # the sending Gmail address
+    smtp_password: str = ""   # a Gmail App Password (not the account password)
+    smtp_from: str = ""       # display From; defaults to smtp_user when blank
+    smtp_use_tls: bool = True
+
     # --- Security / audit ---
     api_key: str = ""
     audit_enabled: bool = True  # write an audit row for mutating requests

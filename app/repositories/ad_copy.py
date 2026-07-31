@@ -7,8 +7,26 @@ from typing import Any
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.models.ad_copy import AdCopyGeneration, ScorecardSnapshot
+from app.models.ad_copy import AdCopyGeneration, ApprovalEvent, ScorecardSnapshot
 from app.repositories.base import BaseRepository
+
+
+class ApprovalEventRepository(BaseRepository[ApprovalEvent]):
+    model = ApprovalEvent
+
+    def add_event(self, generation_id: int, event: str, actor: str | None, note: str | None):
+        row = ApprovalEvent(generation_id=generation_id, event=event, actor=actor, note=note)
+        self.db.add(row)
+        self.db.flush()
+        return row
+
+    def for_generation(self, generation_id: int) -> list[ApprovalEvent]:
+        stmt = (
+            select(ApprovalEvent)
+            .where(ApprovalEvent.generation_id == generation_id)
+            .order_by(desc(ApprovalEvent.created_at), desc(ApprovalEvent.id))
+        )
+        return list(self.db.execute(stmt).scalars().all())
 
 
 class ScorecardSnapshotRepository(BaseRepository[ScorecardSnapshot]):

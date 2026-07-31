@@ -8,7 +8,9 @@ pattern from ``sync_log.py`` / ``alert.py``.
 
 from __future__ import annotations
 
-from sqlalchemy import JSON, ForeignKey, Numeric, String, Text
+from datetime import datetime
+
+from sqlalchemy import JSON, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +51,30 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     generated_assets: Mapped[dict | None] = mapped_column(JSONType)
     scores: Mapped[dict | None] = mapped_column(JSONType)
     reasoning: Mapped[dict | None] = mapped_column(JSONType)
+
+    # --- Accountability / approval workflow ---
+    # draft -> submitted -> approved | rejected. A campaign is "cleared to launch"
+    # only when approved. Never physically blocks Google — it's the approval record.
+    approval_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    reviewer_name: Mapped[str | None] = mapped_column(String(160))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    # Operator overrides of auto-generated strategy values: {field: {auto, manual, by, at}}.
+    overrides: Mapped[dict | None] = mapped_column(JSONType)
+
+
+class ApprovalEvent(IntPKMixin, TimestampMixin, Base):
+    """Append-only audit trail of approval actions on a generation."""
+
+    __tablename__ = "approval_events"
+
+    generation_id: Mapped[int] = mapped_column(
+        ForeignKey("ad_copy_generations.id", ondelete="CASCADE"), index=True
+    )
+    event: Mapped[str] = mapped_column(String(24))  # submitted | approved | rejected | edited
+    actor: Mapped[str | None] = mapped_column(String(160))
+    note: Mapped[str | None] = mapped_column(Text)
 
 
 class ScorecardSnapshot(IntPKMixin, TimestampMixin, Base):
