@@ -33,6 +33,7 @@ from app.services.ai.landing_page_service import LandingPageService
 from app.services.ai.landing_quality import score_landing_page
 from app.services.ai.last_year_summary import build_last_year_summary
 from app.services.ai.negative_keywords_service import build_negative_keywords
+from app.services.ai.reverse_planner import build_reverse_plan
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
 from app.services.ai.search_terms_service import build_top_search_terms
 from app.services.ai.seasonality_service import build_seasonality
@@ -187,9 +188,10 @@ class AdCopyService:
         budget: float | None = None,
         goal: str = "traffic",
         timeframe_months: int = 12,
-        assumed_cvr: float = 0.04,  # real avg clicks→lead conversion (4%)
+        assumed_cvr: float = 0.15,  # TARGET click→lead conversion for planning (15% benchmark)
         target_cpl_low: float = 750.0,
         target_cpl_high: float = 850.0,
+        target_leads: int = 2000,  # goal for the reverse planner
         conversion_tracking: str = "auto",  # auto | yes | no — this year's tracking status
         lp_type: str = "auto",  # auto | kapp | client — landing-page ownership
     ) -> dict[str, Any]:
@@ -295,6 +297,14 @@ class AdCopyService:
                     optimized_cpc=opt_cpc,
                     target_cpl_low=target_cpl_low,
                     target_cpl_high=target_cpl_high,
+                )
+                # Reverse planner: start from the GOAL, compute required inputs.
+                campaign_plan["reverse_plan"] = build_reverse_plan(
+                    target_leads=target_leads or 2000,
+                    target_cpl=(target_cpl_low + target_cpl_high) / 2,
+                    cpc=blended,
+                    cvr_pct=(assumed_cvr or 0.15) * 100,
+                    annual_search_demand=self._annual_demand(campus_kw),
                 )
 
         # Landing-page quality score + specific fixes (biggest CVR lever).

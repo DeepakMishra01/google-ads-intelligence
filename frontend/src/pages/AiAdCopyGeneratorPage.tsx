@@ -28,6 +28,7 @@ import type {
   AdCopyGenerateResponse,
   CampaignPlan,
   CplPlan,
+  ReversePlan,
   GeneratedAsset,
   KeywordHistoryView as KeywordHistoryData,
   LandingAudit,
@@ -222,6 +223,40 @@ function CplPlanView({ cpl }: { cpl: CplPlan }) {
   );
 }
 
+function ReversePlanView({ rp }: { rp: ReversePlan }) {
+  return (
+    <Section
+      title={`Reverse plan — to get ${num(rp.target_leads)} leads`}
+      hint={rp.feasible ? "achievable" : "needs adjustment"}
+    >
+      <div
+        className={`mb-3 rounded-md p-3 text-sm ${
+          rp.feasible ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+        }`}
+      >
+        <div className="font-semibold">Start from the goal, work back to the inputs.</div>
+        <p className="mt-1 text-xs">{rp.verdict}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Tile label="Target leads" value={num(rp.target_leads)} sub={`@ ₹${rp.target_cpl} CPL`} />
+        <Tile label="Clicks needed" value={num(rp.required_clicks)} sub={`@ ${rp.cvr_pct}% click→lead`} />
+        <Tile label="Budget needed" value={money(rp.required_budget)} sub={`@ ${money(rp.cpc)} CPC`} />
+        <Tile label="Implied CPL" value={money(rp.implied_cpl)} sub={`target ₹${rp.target_cpl}`} />
+        <Tile
+          label="Demand ceiling"
+          value={rp.click_ceiling != null ? num(rp.click_ceiling) : "—"}
+          sub="max clicks/yr"
+        />
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        To hit ₹{rp.target_cpl} CPL at {money(rp.cpc)} CPC you'd need a{" "}
+        <b>{rp.required_cvr_for_cpl}%</b> click→lead rate. This works back from your goal — the budget
+        forecast above works forward from spend.
+      </p>
+    </Section>
+  );
+}
+
 function CampaignPlanView({
   plan,
   seasonality,
@@ -277,6 +312,7 @@ function CampaignPlanView({
         )}
       </Section>
 
+      {plan.reverse_plan && <ReversePlanView rp={plan.reverse_plan} />}
       {plan.cpl_plan && <CplPlanView cpl={plan.cpl_plan} />}
 
       <Section title="Budget allocation by ad group">

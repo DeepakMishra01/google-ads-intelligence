@@ -70,6 +70,7 @@ def generate(
         assumed_cvr=body.assumed_cvr,
         target_cpl_low=body.target_cpl_low,
         target_cpl_high=body.target_cpl_high,
+        target_leads=body.target_leads,
         conversion_tracking=body.conversion_tracking,
         lp_type=body.lp_type,
     )

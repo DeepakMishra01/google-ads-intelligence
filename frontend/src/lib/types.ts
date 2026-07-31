@@ -715,6 +715,20 @@ export interface CplPlan {
   levers: CplLever[];
   verdict: string;
 }
+export interface ReversePlan {
+  target_leads: number;
+  target_cpl: number;
+  cvr_pct: number;
+  cpc: number;
+  required_clicks: number;
+  required_budget: number;
+  budget_from_target: number;
+  required_cvr_for_cpl: number;
+  implied_cpl: number;
+  click_ceiling: number | null;
+  feasible: boolean;
+  verdict: string;
+}
 export interface CampaignPlan {
   available: boolean;
   allocation: BudgetAllocationRow[];
@@ -725,6 +739,7 @@ export interface CampaignPlan {
   device: DeviceStrategy | null;
   realism: ForecastRealism | null;
   cpl_plan: CplPlan | null;
+  reverse_plan: ReversePlan | null;
 }
 
 // --- Keyword performance history ("keep or drop last time's keywords?") --- //

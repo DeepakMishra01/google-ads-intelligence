@@ -308,6 +308,21 @@ class CplPlan(BaseModel):
     verdict: str
 
 
+class ReversePlan(BaseModel):
+    target_leads: int
+    target_cpl: int
+    cvr_pct: float
+    cpc: float
+    required_clicks: int
+    required_budget: int
+    budget_from_target: int
+    required_cvr_for_cpl: float
+    implied_cpl: int
+    click_ceiling: int | None = None
+    feasible: bool
+    verdict: str
+
+
 class CampaignPlan(BaseModel):
     available: bool
     allocation: list[BudgetAllocationRow] = []
@@ -318,6 +333,7 @@ class CampaignPlan(BaseModel):
     device: DeviceStrategy | None = None
     realism: ForecastRealism | None = None
     cpl_plan: CplPlan | None = None
+    reverse_plan: ReversePlan | None = None
 
 
 # --------------------------- keyword history ------------------------------ #
@@ -495,6 +511,7 @@ class AdCopyGenerateRequest(BaseModel):
     assumed_cvr: float = 0.15
     target_cpl_low: float = 750.0
     target_cpl_high: float = 850.0
+    target_leads: int = 2000  # goal for the reverse planner
     conversion_tracking: str = "auto"  # auto | yes | no
     lp_type: str = "auto"  # auto | kapp | client
 
