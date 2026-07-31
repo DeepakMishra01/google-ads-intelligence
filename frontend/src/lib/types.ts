@@ -415,6 +415,43 @@ export interface TopSearchTerms {
   totals: { clicks?: number; impressions?: number; cost?: number };
   note: string;
 }
+export interface StrategyField {
+  key: string;
+  label: string;
+  auto: number | string | null;
+  value: number | string | null;
+  edited: boolean;
+  by: string | null;
+  at: string | null;
+}
+export interface FinalStrategy {
+  fields: StrategyField[];
+  est_clicks: number | null;
+  target_cvr_pct: number | null;
+  est_leads: number | null;
+  est_cpl: number | null;
+  target_leads: number | null;
+  meets_target: boolean;
+}
+export interface ApprovalEvent {
+  event: string;
+  actor: string | null;
+  note: string | null;
+  at: string | null;
+}
+export interface ApprovalState {
+  available: boolean;
+  id?: number;
+  campus?: string;
+  status?: string; // draft | submitted | approved | rejected
+  cleared_to_launch?: boolean;
+  submitted_at?: string | null;
+  reviewed_at?: string | null;
+  reviewer_name?: string | null;
+  review_note?: string | null;
+  final_strategy?: FinalStrategy;
+  events?: ApprovalEvent[];
+}
 export interface ScorecardHistoryRow {
   id: number;
   date: string | null;

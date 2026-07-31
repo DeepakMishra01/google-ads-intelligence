@@ -17,6 +17,7 @@ import type {
   KeywordHealthRow,
   Overview,
   Page,
+  ApprovalState,
   PriorityTask,
   Scorecard,
   ScorecardHistoryRow,
@@ -329,6 +330,43 @@ export function useSaveScorecard() {
     onSuccess: (_d, v) =>
       qc.invalidateQueries({ queryKey: ["scorecard-history", v.campus] }),
   });
+}
+
+export function useApproval(genId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["approval", genId],
+    queryFn: () => get<ApprovalState>(`/ai/ad-copy/${genId}/approval`),
+    enabled: !!genId,
+  });
+}
+
+export function useApprovalActions(genId: number | null | undefined) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["approval", genId] });
+  const submit = useMutation({
+    mutationFn: () => api.post(`/ai/ad-copy/${genId}/submit`).then((r) => r.data),
+    onSuccess: invalidate,
+  });
+  const decide = useMutation({
+    mutationFn: (p: { approved: boolean; reviewer_name: string; note?: string }) =>
+      api.post(`/ai/ad-copy/${genId}/decide`, null, { params: p }).then((r) => r.data),
+    onSuccess: invalidate,
+  });
+  const override = useMutation({
+    mutationFn: (p: { field: string; value: string; by?: string }) =>
+      api
+        .post(`/ai/ad-copy/${genId}/override`, null, {
+          params: { field: p.field, value: p.value },
+          headers: p.by ? { "X-Actor": p.by } : undefined,
+        })
+        .then((r) => r.data),
+    onSuccess: invalidate,
+  });
+  const email = useMutation({
+    mutationFn: (p: { to: string }) =>
+      api.post(`/ai/ad-copy/${genId}/send-approval`, null, { params: p }).then((r) => r.data),
+  });
+  return { submit, decide, override, email };
 }
 
 export function useGenerateAdCopy() {

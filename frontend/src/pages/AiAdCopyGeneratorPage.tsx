@@ -14,6 +14,8 @@ import { apiErrorMessage } from "@/lib/api";
 import { money, num, pct } from "@/lib/format";
 import {
   downloadAdCopy,
+  useApproval,
+  useApprovalActions,
   useCampusSearch,
   useFinalUrl,
   useGenerateAdCopy,
@@ -1063,6 +1065,165 @@ function ScorecardTab({ campus, accountId }: { campus: string; accountId?: numbe
   );
 }
 
+const APPROVAL_STYLE: Record<string, string> = {
+  approved: "bg-green-50 text-green-800 border-green-200",
+  rejected: "bg-red-50 text-red-800 border-red-200",
+  submitted: "bg-blue-50 text-blue-800 border-blue-200",
+  draft: "bg-amber-50 text-amber-800 border-amber-200",
+};
+
+function ApprovalTab({ genId }: { genId: number }) {
+  const { data, isLoading } = useApproval(genId);
+  const { submit, decide, override, email } = useApprovalActions(genId);
+  const [name, setName] = useState("");
+  const [note, setNote] = useState("");
+  const [emailTo, setEmailTo] = useState("");
+
+  if (isLoading) return <Section title="Approval"><div className="text-sm text-slate-400">Loading…</div></Section>;
+  if (!data?.available) return <Section title="Approval"><div className="text-sm text-slate-500">Generate a plan first.</div></Section>;
+
+  const fs = data.final_strategy;
+  const status = data.status ?? "draft";
+  const editField = (key: string, label: string, cur: number | string | null) => {
+    const v = window.prompt(`New value for "${label}"`, cur == null ? "" : String(cur));
+    if (v != null && v !== "") override.mutate({ field: key, value: v, by: name || "operator" });
+  };
+
+  return (
+    <>
+      <Section title="Approval status" hint={`plan #${data.id}`}>
+        <div className={`mb-3 rounded-md border p-3 text-sm ${APPROVAL_STYLE[status] ?? "bg-slate-50"}`}>
+          <div className="font-semibold">
+            {data.cleared_to_launch ? "✓ Cleared to launch" : `Status: ${status.toUpperCase()} — not approved, do not run`}
+          </div>
+          {data.reviewer_name && (
+            <div className="mt-1 text-xs">
+              {status === "approved" ? "Approved" : "Reviewed"} by <b>{data.reviewer_name}</b>
+              {data.review_note ? ` — “${data.review_note}”` : ""}
+            </div>
+          )}
+        </div>
+
+        <div className="mb-2 flex flex-wrap items-end gap-2">
+          <div>
+            <label className="mb-1 block text-xs text-slate-500">Your name</label>
+            <input className="input h-9 w-44" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Deepak" />
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <label className="mb-1 block text-xs text-slate-500">Note (optional)</label>
+            <input className="input h-9 w-full" value={note} onChange={(e) => setNote(e.target.value)} placeholder="reviewer note" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-ghost h-9 px-3" disabled={submit.isPending} onClick={() => submit.mutate()}>
+            Submit for review
+          </button>
+          <button
+            className="btn btn-primary h-9 px-3"
+            disabled={decide.isPending || !name}
+            title={!name ? "Enter your name first" : ""}
+            onClick={() => decide.mutate({ approved: true, reviewer_name: name, note })}
+          >
+            Approve
+          </button>
+          <button
+            className="btn-ghost h-9 px-3 text-red-600"
+            disabled={decide.isPending || !name}
+            onClick={() => decide.mutate({ approved: false, reviewer_name: name, note })}
+          >
+            Reject
+          </button>
+        </div>
+      </Section>
+
+      {fs && (
+        <Section title="Final strategy" hint="editable — edits reset approval">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                  <th className="py-1.5">Field</th>
+                  <th>Value</th>
+                  <th>Source</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {fs.fields.map((f) => (
+                  <tr key={f.key} className="border-b border-slate-50">
+                    <td className="py-1.5 text-slate-600">{f.label}</td>
+                    <td className="font-medium text-slate-800">
+                      {f.key === "budget" ? money(Number(f.value)) : String(f.value ?? "—")}
+                    </td>
+                    <td>
+                      {f.edited ? (
+                        <Badge className="bg-amber-100 text-amber-700" >edited{f.by ? ` · ${f.by}` : ""}</Badge>
+                      ) : (
+                        <Badge className="bg-slate-100 text-slate-500">auto</Badge>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <button className="btn-ghost h-7 px-2 text-xs" onClick={() => editField(f.key, f.label, f.value)}>
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-4 text-sm">
+            <span>Projected leads: <b>{num(fs.est_leads)}</b> (target {num(fs.target_leads)})</span>
+            <span>Projected CPL: <b>{money(fs.est_cpl)}</b></span>
+            <Badge className={fs.meets_target ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+              {fs.meets_target ? "meets target" : "below target"}
+            </Badge>
+          </div>
+          <div className="mt-1 text-[11px] text-slate-400">
+            Editing conversion %, budget or leads updates the projection instantly. Changing keywords/
+            copy needs a re-generate.
+          </div>
+        </Section>
+      )}
+
+      <Section title="Send for approval">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[200px]">
+            <label className="mb-1 block text-xs text-slate-500">Reviewer email</label>
+            <input className="input h-9 w-full" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="founder@company.com" />
+          </div>
+          <button className="btn btn-primary h-9 px-3" disabled={email.isPending || !emailTo} onClick={() => email.mutate({ to: emailTo })}>
+            {email.isPending ? "Sending…" : "Send email"}
+          </button>
+          <button className="btn-ghost h-9 px-3" onClick={() => downloadAdCopy(genId, "excel")}>
+            <Download size={15} /> Approval sheet
+          </button>
+        </div>
+        {email.data != null && (
+          <div className={`mt-2 text-xs ${email.data.sent ? "text-green-600" : "text-amber-600"}`}>
+            {email.data.sent ? `Sent to ${email.data.to} ✓` : `Not sent: ${email.data.reason}`}
+          </div>
+        )}
+      </Section>
+
+      {data.events && data.events.length > 0 && (
+        <Section title="Approval log">
+          <ul className="space-y-1 text-sm">
+            {data.events.map((e, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <Badge className="bg-slate-100 text-slate-600">{e.event}</Badge>
+                <span className="text-slate-600">{e.actor ?? "—"}</span>
+                {e.note && <span className="text-slate-400">— {e.note}</span>}
+                <span className="ml-auto text-[11px] text-slate-400">{e.at?.slice(0, 16).replace("T", " ")}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+    </>
+  );
+}
+
 function LastYearView({ ly }: { ly: LastYearSummary }) {
   return (
     <Section title="What we learned from last year" hint="why these recommendations exist">
@@ -1420,6 +1581,7 @@ export default function AiAdCopyGeneratorPage() {
                 { k: "keywords", label: "Keywords" },
                 { k: "adcopy", label: "Ad Copy" },
                 { k: "setup", label: "Setup Guide" },
+                { k: "approval", label: "Approval" },
                 { k: "scorecard", label: "Results vs Plan" },
               ].map((t) => (
                 <button
@@ -1433,6 +1595,18 @@ export default function AiAdCopyGeneratorPage() {
                 </button>
               ))}
             </div>
+
+            {tab === "approval" && result.id != null && (
+              <ApprovalTab genId={result.id} />
+            )}
+            {tab === "approval" && result.id == null && (
+              <Section title="Approval">
+                <div className="text-sm text-slate-500">
+                  This plan wasn't saved, so it can't be submitted for approval. Generate with
+                  saving enabled.
+                </div>
+              </Section>
+            )}
 
             {tab === "scorecard" && (
               <ScorecardTab campus={result.campus} accountId={accountId} />
