@@ -344,7 +344,12 @@ export function useApprovalActions(genId: number | null | undefined) {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["approval", genId] });
   const submit = useMutation({
-    mutationFn: () => api.post(`/ai/ad-copy/${genId}/submit`).then((r) => r.data),
+    mutationFn: (p?: { by?: string }) =>
+      api
+        .post(`/ai/ad-copy/${genId}/submit`, null, {
+          headers: p?.by ? { "X-Actor": p.by } : undefined,
+        })
+        .then((r) => r.data),
     onSuccess: invalidate,
   });
   const decide = useMutation({

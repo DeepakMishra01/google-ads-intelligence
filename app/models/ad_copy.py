@@ -62,6 +62,8 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     review_note: Mapped[str | None] = mapped_column(Text)
     # Operator overrides of auto-generated strategy values: {field: {auto, manual, by, at}}.
     overrides: Mapped[dict | None] = mapped_column(JSONType)
+    # Unguessable token backing the one-click Approve/Reject links in the email.
+    approval_token: Mapped[str | None] = mapped_column(String(64), index=True)
 
 
 class ApprovalEvent(IntPKMixin, TimestampMixin, Base):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_ad_copy_service, require_api_key
@@ -164,6 +164,52 @@ def approval_email(
     db: Session = Depends(get_db),
 ) -> dict:
     return ApprovalService(db).send_approval(gen_id, to=to, actor=x_actor)
+
+
+def _decision_page(title: str, message: str, ok: bool) -> HTMLResponse:
+    color = "#16a34a" if ok else "#dc2626"
+    html = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title></head>
+<body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:48px 16px">
+  <div style="max-width:440px;margin:0 auto;background:#fff;border-radius:12px;
+       box-shadow:0 1px 3px rgba(0,0,0,.1);padding:32px;text-align:center">
+    <div style="font-size:44px;line-height:1;color:{color}">{'✓' if ok else '✗'}</div>
+    <h1 style="margin:12px 0 6px;font-size:20px;color:#0f172a">{title}</h1>
+    <p style="color:#475569;font-size:14px">{message}</p>
+  </div>
+</body></html>"""
+    return HTMLResponse(content=html, status_code=200 if ok else 400)
+
+
+@router.get("/{gen_id}/approve", response_model=None, summary="One-click approve (email link)")
+def approval_approve_link(
+    gen_id: int, token: str = Query(...), db: Session = Depends(get_db)
+) -> HTMLResponse:
+    r = ApprovalService(db).approve_via_token(gen_id, token=token, reject=False)
+    if not r.get("ok"):
+        return _decision_page("Link not valid", str(r.get("reason", "")), ok=False)
+    return _decision_page(
+        "Approved — cleared to launch",
+        f"“{r.get('campus', 'This plan')}” is approved. The ad manager can run it. "
+        "You can close this tab.",
+        ok=True,
+    )
+
+
+@router.get("/{gen_id}/reject", response_model=None, summary="One-click reject (email link)")
+def approval_reject_link(
+    gen_id: int, token: str = Query(...), db: Session = Depends(get_db)
+) -> HTMLResponse:
+    r = ApprovalService(db).approve_via_token(gen_id, token=token, reject=True)
+    if not r.get("ok"):
+        return _decision_page("Link not valid", str(r.get("reason", "")), ok=False)
+    return _decision_page(
+        "Rejected",
+        f"“{r.get('campus', 'This plan')}” was rejected and is not cleared to launch. "
+        "You can close this tab.",
+        ok=False,
+    )
 
 
 @router.get("/history", response_model=AdCopyHistoryResponse, summary="Recent generations")

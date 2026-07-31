@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     smtp_from: str = ""       # display From; defaults to smtp_user when blank
     smtp_use_tls: bool = True
 
+    # --- Approval routing ---
+    # Fixed reviewer inbox the approval email is auto-sent to on submit.
+    approval_reviewer_email: str = "Operations@kollegeapply.com"
+    # Public base URL used to build the one-click Approve/Reject links in the email.
+    # The reviewer must be able to reach this, and the plan must live on this server —
+    # so in production point it at the deployed URL (Render). Env: PUBLIC_BASE_URL.
+    public_base_url: str = "https://ads-intelligence-mnr2.onrender.com"
+
     # --- Security / audit ---
     api_key: str = ""
     audit_enabled: bool = True  # write an audit row for mutating requests

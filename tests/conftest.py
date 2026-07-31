@@ -19,6 +19,11 @@ os.environ.setdefault("GOOGLE_ADS_LOGIN_CUSTOMER_ID", "1234567890")
 os.environ.setdefault("AUDIT_ENABLED", "false")
 # Force a clean, self-contained config regardless of any local .env on disk.
 os.environ["API_KEY"] = ""
+# Tests must NEVER send real email. Hard-override any SMTP creds from a local .env
+# so smtp_configured() is False and approval auto-send is a no-op in tests.
+os.environ["SMTP_HOST"] = ""
+os.environ["SMTP_USER"] = ""
+os.environ["SMTP_PASSWORD"] = ""
 # Keep tests hermetic: never call an external LLM (Anthropic/Gemini) even if a
 # real key is present in .env — the AI Ad Copy tests assert the deterministic path.
 os.environ["AD_COPY_LLM_ENABLED"] = "false"

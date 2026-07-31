@@ -12,11 +12,13 @@ the effective numbers.
 
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.config.settings import get_settings
 from app.models.ad_copy import AdCopyGeneration
 from app.repositories.ad_copy import AdCopyRepository, ApprovalEventRepository
 
@@ -92,7 +94,33 @@ def _esc(v: Any) -> str:
     )
 
 
-def _approval_html(gen: AdCopyGeneration, fs: dict[str, Any]) -> str:
+def _approval_buttons(approve_url: str | None, reject_url: str | None) -> str:
+    """Green Approve / red Reject buttons for one-click decisions from the inbox."""
+    if not approve_url or not reject_url:
+        return ""
+    btn = (
+        "display:inline-block;padding:11px 22px;border-radius:6px;color:#fff;"
+        "font-weight:bold;text-decoration:none;font-size:15px"
+    )
+    ok_btn = f"{btn};background:#16a34a"
+    no_btn = f"{btn};background:#dc2626"
+    return f"""
+  <div style="margin:16px 0">
+    <a href="{_esc(approve_url)}" style="{ok_btn}">✓ Approve &amp; clear to launch</a>
+    &nbsp;&nbsp;
+    <a href="{_esc(reject_url)}" style="{no_btn}">✗ Reject</a>
+    <div style="margin-top:6px;font-size:12px;color:#64748b">
+      One click records your decision (with your name and a timestamp). No login needed.
+    </div>
+  </div>"""
+
+
+def _approval_html(
+    gen: AdCopyGeneration,
+    fs: dict[str, Any],
+    approve_url: str | None = None,
+    reject_url: str | None = None,
+) -> str:
     """A self-contained email so the reviewer can audit everything and approve."""
     assets = gen.generated_assets or {}
     ks = gen.keyword_snapshot or {}
@@ -133,6 +161,7 @@ def _approval_html(gen: AdCopyGeneration, fs: dict[str, Any]) -> str:
   <div style="{banner_css}">
     {banner_text}
   </div>
+  {"" if approved else _approval_buttons(approve_url, reject_url)}
   <h2 style="margin:14px 0 4px">{_esc(gen.campus)} — Campaign strategy for approval</h2>
 
   <h3>Final strategy</h3>
@@ -183,15 +212,60 @@ class ApprovalService:
     def _now(self) -> datetime:
         return datetime.now(UTC)
 
-    def submit(self, gen_id: int, *, actor: str | None) -> dict[str, Any]:
+    def _ensure_token(self, gen: AdCopyGeneration) -> str:
+        if not gen.approval_token:
+            gen.approval_token = secrets.token_urlsafe(24)
+        return gen.approval_token
+
+    def _decision_urls(self, gen: AdCopyGeneration) -> tuple[str, str]:
+        """(approve_url, reject_url) — one-click links backed by the token."""
+        s = get_settings()
+        base = (s.public_base_url or "").rstrip("/")
+        tok = self._ensure_token(gen)
+        root = f"{base}{s.api_prefix}/ai/ad-copy/{gen.id}"
+        return f"{root}/approve?token={tok}", f"{root}/reject?token={tok}"
+
+    def submit(
+        self, gen_id: int, *, actor: str | None, auto_send: bool = True
+    ) -> dict[str, Any]:
         gen = self._get(gen_id)
         if gen is None:
             return {"ok": False, "reason": "not found"}
         gen.approval_status = "submitted"
         gen.submitted_at = self._now()
+        self._ensure_token(gen)
         self.events.add_event(gen_id, "submitted", actor, None)
         self.db.commit()
-        return self.state(gen_id)
+        email = None
+        if auto_send:
+            reviewer = get_settings().approval_reviewer_email
+            if reviewer:
+                email = self.send_approval(gen_id, to=reviewer, actor=actor)
+        return {**self.state(gen_id), "email": email}
+
+    def approve_via_token(
+        self, gen_id: int, *, token: str, reject: bool = False
+    ) -> dict[str, Any]:
+        """One-click decision from the email link. Validates the per-plan token."""
+        gen = self._get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        if not gen.approval_token or not token or token != gen.approval_token:
+            return {"ok": False, "reason": "invalid or expired link"}
+        reviewer = get_settings().approval_reviewer_email or "Reviewer (email)"
+        approved = not reject
+        gen.approval_status = "approved" if approved else "rejected"
+        gen.reviewed_at = self._now()
+        gen.reviewer_name = reviewer
+        gen.review_note = "via one-click email link"
+        self.events.add_event(
+            gen_id,
+            "approved" if approved else "rejected",
+            reviewer,
+            "one-click email link",
+        )
+        self.db.commit()
+        return {"ok": True, **self.state(gen_id)}
 
     def decide(
         self, gen_id: int, *, approved: bool, reviewer_name: str, note: str | None
@@ -241,6 +315,8 @@ class ApprovalService:
         gen = self._get(gen_id)
         if gen is None:
             return {"sent": False, "reason": "not found"}
+        approve_url, reject_url = self._decision_urls(gen)
+        self.db.commit()  # persist token generated while building the links
         fs = build_final_strategy(gen)
         lines = [
             f"Campaign strategy for {gen.campus}",
@@ -260,6 +336,12 @@ class ApprovalService:
             + ("CLEARED to launch." if gen.approval_status == "approved"
                else "NOT yet approved — do not launch."),
         ]
+        if gen.approval_status != "approved":
+            lines += [
+                "",
+                "APPROVE (one click): " + approve_url,
+                "REJECT  (one click): " + reject_url,
+            ]
         try:
             xlsx = ad_copy_export.render_excel(gen)
         except Exception:  # noqa: BLE001
@@ -268,7 +350,7 @@ class ApprovalService:
             to=to,
             subject=f"[Ads Approval] {gen.campus} — {gen.approval_status}",
             body="\n".join(lines),
-            html=_approval_html(gen, fs),
+            html=_approval_html(gen, fs, approve_url, reject_url),
             attachment=xlsx,
             attachment_name=f"strategy_{gen.campus.replace(' ', '_')}_{gen.id}.xlsx",
             attachment_mime=(

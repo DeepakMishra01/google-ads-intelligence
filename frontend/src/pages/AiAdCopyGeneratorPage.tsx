@@ -1242,6 +1242,9 @@ function ScorecardTab({ campus, accountId }: { campus: string; accountId?: numbe
   );
 }
 
+// Fixed reviewer inbox (mirrors settings.approval_reviewer_email on the backend).
+const REVIEWER_EMAIL = "Operations@kollegeapply.com";
+
 const APPROVAL_STYLE: Record<string, string> = {
   approved: "bg-green-50 text-green-800 border-green-200",
   rejected: "bg-red-50 text-red-800 border-red-200",
@@ -1254,7 +1257,6 @@ function ApprovalTab({ genId }: { genId: number }) {
   const { submit, decide, override, email } = useApprovalActions(genId);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [emailTo, setEmailTo] = useState("");
 
   if (isLoading) return <Section title="Approval"><div className="text-sm text-slate-400">Loading…</div></Section>;
   if (!data?.available) return <Section title="Approval"><div className="text-sm text-slate-500">Generate a plan first.</div></Section>;
@@ -1292,25 +1294,43 @@ function ApprovalTab({ genId }: { genId: number }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-ghost h-9 px-3" disabled={submit.isPending} onClick={() => submit.mutate()}>
-            Submit for review
-          </button>
           <button
             className="btn btn-primary h-9 px-3"
+            disabled={submit.isPending || !name}
+            title={!name ? "Enter your name first" : ""}
+            onClick={() => submit.mutate({ by: name })}
+          >
+            {submit.isPending ? "Submitting…" : `Submit → email ${REVIEWER_EMAIL}`}
+          </button>
+          <button
+            className="btn-ghost h-9 px-3"
             disabled={decide.isPending || !name}
             title={!name ? "Enter your name first" : ""}
             onClick={() => decide.mutate({ approved: true, reviewer_name: name, note })}
           >
-            Approve
+            Approve here
           </button>
           <button
             className="btn-ghost h-9 px-3 text-red-600"
             disabled={decide.isPending || !name}
             onClick={() => decide.mutate({ approved: false, reviewer_name: name, note })}
           >
-            Reject
+            Reject here
           </button>
         </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Enter your name and click <b>Submit</b> — the full plan is emailed to{" "}
+          <b>{REVIEWER_EMAIL}</b> automatically, with one-click <b>Approve</b> / <b>Reject</b>{" "}
+          buttons. You don't need to type their address. (The “Approve/Reject here” buttons are for
+          reviewing inside the app.)
+        </p>
+        {submit.data?.email != null && (
+          <div className={`mt-1 text-xs ${submit.data.email.sent ? "text-green-600" : "text-amber-600"}`}>
+            {submit.data.email.sent
+              ? `Approval request emailed to ${submit.data.email.to} ✓`
+              : `Submitted, but email not sent: ${submit.data.email.reason}`}
+          </div>
+        )}
       </Section>
 
       {fs && (
@@ -1363,19 +1383,23 @@ function ApprovalTab({ genId }: { genId: number }) {
         </Section>
       )}
 
-      <Section title="Send for approval">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[200px]">
-            <label className="mb-1 block text-xs text-slate-500">Reviewer email</label>
-            <input className="input h-9 w-full" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="founder@company.com" />
-          </div>
-          <button className="btn btn-primary h-9 px-3" disabled={email.isPending || !emailTo} onClick={() => email.mutate({ to: emailTo })}>
-            {email.isPending ? "Sending…" : "Send email"}
+      <Section title="Approval email" hint={`goes to ${REVIEWER_EMAIL}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className="btn-ghost h-9 px-3"
+            disabled={email.isPending}
+            onClick={() => email.mutate({ to: REVIEWER_EMAIL })}
+          >
+            {email.isPending ? "Sending…" : `Resend to ${REVIEWER_EMAIL}`}
           </button>
           <button className="btn-ghost h-9 px-3" onClick={() => downloadAdCopy(genId, "excel")}>
             <Download size={15} /> Approval sheet
           </button>
         </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Sent automatically on Submit — this only re-sends if needed. The reviewer approves with the
+          one-click buttons in the email.
+        </p>
         {email.data != null && (
           <div className={`mt-2 text-xs ${email.data.sent ? "text-green-600" : "text-amber-600"}`}>
             {email.data.sent ? `Sent to ${email.data.to} ✓` : `Not sent: ${email.data.reason}`}

@@ -64,3 +64,43 @@ def test_send_approval_without_smtp(db_session):
     gen = _make_gen(db_session)
     r = ApprovalService(db_session).send_approval(gen.id, to="x@y.com", actor="op")
     assert r["sent"] is False and r["configured"] is False
+
+
+def test_submit_generates_token_and_attempts_email(db_session):
+    gen = _make_gen(db_session)
+    svc = ApprovalService(db_session)
+    st = svc.submit(gen.id, actor="Deepak")
+    assert st["status"] == "submitted"
+    # A per-plan token is minted so the email links work.
+    assert gen.approval_token
+    # Auto-send is attempted to the fixed reviewer inbox (no SMTP in tests -> not sent).
+    assert st["email"] is not None
+    assert st["email"]["sent"] is False
+
+
+def test_one_click_approve_via_token(db_session):
+    gen = _make_gen(db_session)
+    svc = ApprovalService(db_session)
+    svc.submit(gen.id, actor="Deepak")
+    token = gen.approval_token
+
+    # Wrong token is rejected.
+    bad = svc.approve_via_token(gen.id, token="nope", reject=False)
+    assert bad["ok"] is False
+
+    # Correct token approves and clears to launch, recording the reviewer.
+    ok = svc.approve_via_token(gen.id, token=token, reject=False)
+    assert ok["ok"] is True
+    assert ok["status"] == "approved"
+    assert ok["cleared_to_launch"] is True
+    assert ok["reviewer_name"]  # the fixed reviewer inbox
+
+
+def test_one_click_reject_via_token(db_session):
+    gen = _make_gen(db_session)
+    svc = ApprovalService(db_session)
+    svc.submit(gen.id, actor="Deepak")
+    r = svc.approve_via_token(gen.id, token=gen.approval_token, reject=True)
+    assert r["ok"] is True
+    assert r["status"] == "rejected"
+    assert r["cleared_to_launch"] is False
