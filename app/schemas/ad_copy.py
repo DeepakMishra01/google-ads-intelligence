@@ -444,7 +444,7 @@ class LandingQuality(BaseModel):
 
 class TrackingCheck(BaseModel):
     item: str
-    status: str  # present | missing
+    status: str  # present | missing | pass | warn | fail
     guidance: str
 
 
@@ -459,6 +459,7 @@ class LandingAudit(BaseModel):
     is_kapp: bool = False
     lp_type_label: str = ""
     tracking_checks: list[TrackingCheck] = []
+    technical_checks: list[TrackingCheck] = []
     retargeting: str = ""
     segmentation: list[str] = []
     verdict: LandingAuditVerdict | None = None

@@ -36,6 +36,7 @@ from app.services.ai.last_year_summary import build_last_year_summary
 from app.services.ai.negative_keywords_service import build_negative_keywords
 from app.services.ai.reverse_planner import build_reverse_plan
 from app.services.ai.rsa_validator import D_MAX, H_MAX, validate_assets
+from app.services.ai.scorecard_alerts import build_week_alerts
 from app.services.ai.search_terms_service import build_top_search_terms
 from app.services.ai.seasonality_service import build_seasonality
 from app.services.ai.setup_guide import build_setup_guide
@@ -316,7 +317,9 @@ class AdCopyService:
             landing, mobile_heavy=((dstats or {}).get("share") or 0) >= 0.6
         )
         # Landing-page auditor: tracking placement + reuse/rebuild verdict (Kapp LPs).
-        landing_audit = build_landing_audit(landing, landing_quality, lp_type=lp_type)
+        landing_audit = build_landing_audit(
+            landing, landing_quality, lp_type=lp_type, brand=brief.brand
+        )
 
         # Last-year learning summary — evidence-backed "what to fix and why".
         last_year = build_last_year_summary(
@@ -414,21 +417,20 @@ class AdCopyService:
             return float(v) if v is not None else None
 
         rows = self.scorecards.history(campus=campus, limit=limit)
-        return {
-            "items": [
-                {
-                    "id": r.id,
-                    "date": r.created_at.date().isoformat() if r.created_at else None,
-                    "achieved_leads": _f(r.achieved_leads),
-                    "achieved_cost": _f(r.achieved_cost),
-                    "achieved_clicks": r.achieved_clicks,
-                    "implementation_pct": r.implementation_pct,
-                    "expected_leads": _f(r.expected_leads),
-                    "target_leads": r.target_leads,
-                }
-                for r in rows
-            ]
-        }
+        items = [
+            {
+                "id": r.id,
+                "date": r.created_at.date().isoformat() if r.created_at else None,
+                "achieved_leads": _f(r.achieved_leads),
+                "achieved_cost": _f(r.achieved_cost),
+                "achieved_clicks": r.achieved_clicks,
+                "implementation_pct": r.implementation_pct,
+                "expected_leads": _f(r.expected_leads),
+                "target_leads": r.target_leads,
+            }
+            for r in rows
+        ]
+        return {"items": items, "week_alerts": build_week_alerts(items)}
 
     def history_rows(self, *, campus: str | None = None, limit: int = 50) -> dict[str, Any]:
         rows = self.repo.recent(campus=campus, limit=limit)

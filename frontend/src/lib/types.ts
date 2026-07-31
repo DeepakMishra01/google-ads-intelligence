@@ -462,6 +462,25 @@ export interface ScorecardHistoryRow {
   expected_leads: number | null;
   target_leads: number | null;
 }
+export interface WeekAlert {
+  level: string; // red | amber
+  title: string;
+  detail: string;
+}
+export interface WeekAlerts {
+  available: boolean;
+  alerts: WeekAlert[];
+  this_week: {
+    new_leads: number;
+    new_cost: number;
+    new_clicks: number;
+    incremental_cpl: number | null;
+  } | null;
+}
+export interface ScorecardHistoryResponse {
+  items: ScorecardHistoryRow[];
+  week_alerts: WeekAlerts;
+}
 export interface CampaignRecommendation {
   campaign_name: string;
   ad_group_suggestions: string[];
@@ -582,6 +601,7 @@ export interface LandingAudit {
   is_kapp: boolean;
   lp_type_label: string;
   tracking_checks: TrackingCheck[];
+  technical_checks: TrackingCheck[];
   retargeting: string;
   segmentation: string[];
   verdict: LandingAuditVerdict;

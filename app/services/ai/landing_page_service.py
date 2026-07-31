@@ -98,10 +98,10 @@ class LandingPageService:
         if not self._is_safe(url):
             return {**empty, "notes": "URL refused (not http(s) or points to a private host)."}
 
-        html = self._fetch(url)
+        html, load_ms = self._fetch(url)
         if html is None:
             return {**empty, "notes": "Page could not be fetched — using historical data only."}
-        return self._parse(url, html)
+        return self._parse(url, html, load_ms=load_ms)
 
     # ------------------------------------------------------------------ #
     def _is_safe(self, url: str) -> bool:
@@ -121,11 +121,12 @@ class LandingPageService:
                 return False
         return True
 
-    def _fetch(self, url: str) -> str | None:
+    def _fetch(self, url: str) -> tuple[str | None, int | None]:
+        """Return (html, load_ms). load_ms is the real server response time."""
         try:
             import httpx
         except ImportError:  # pragma: no cover
-            return None
+            return None, None
         try:
             with httpx.Client(
                 timeout=self.settings.landing_page_timeout_seconds,
@@ -135,12 +136,13 @@ class LandingPageService:
                 resp = client.get(url)
                 resp.raise_for_status()
                 content = resp.text
-                return content[: self.settings.landing_page_max_bytes]
+                load_ms = round(resp.elapsed.total_seconds() * 1000)
+                return content[: self.settings.landing_page_max_bytes], load_ms
         except Exception as exc:  # network / status / parse — degrade gracefully
             log.info("landing_page.fetch_failed", url=url, error=str(exc))
-            return None
+            return None, None
 
-    def _parse(self, url: str, html: str) -> dict:
+    def _parse(self, url: str, html: str, *, load_ms: int | None = None) -> dict:
         try:
             from bs4 import BeautifulSoup
         except ImportError:  # pragma: no cover
@@ -150,6 +152,22 @@ class LandingPageService:
         tracking = _detect_tracking(html)
 
         soup = BeautifulSoup(html, "html.parser")
+
+        # Technical checks (read tags that decompose() would otherwise leave intact,
+        # but grab them now to be safe).
+        viewport_el = soup.find("meta", attrs={"name": re.compile(r"^viewport$", re.I)})
+        has_viewport = bool(viewport_el and viewport_el.get("content"))
+        has_form = bool(soup.find("form"))
+        priv_terms = {"privacy": False, "terms": False}
+        for a in soup.select("a"):
+            blob = (
+                (a.get_text(" ", strip=True) or "") + " " + (a.get("href") or "")
+            ).lower()
+            if "privacy" in blob:
+                priv_terms["privacy"] = True
+            if "terms" in blob or "t&c" in blob or "conditions" in blob:
+                priv_terms["terms"] = True
+
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()
 
@@ -220,6 +238,11 @@ class LandingPageService:
             "highlights": highlights,
             "usps": highlights,
             "tracking": tracking,
+            "load_ms": load_ms,
+            "has_viewport": has_viewport,
+            "has_form": has_form,
+            "has_privacy": priv_terms["privacy"],
+            "has_terms": priv_terms["terms"],
             "notes": None,
         }
 

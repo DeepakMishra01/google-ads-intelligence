@@ -58,11 +58,107 @@ def _resolve_kapp(url: str | None, tracking: dict[str, Any], lp_type: str) -> bo
     return bool(tracking.get("gtm") or tracking.get("google_ads_conversion") or tracking.get("ga4"))
 
 
+def _technical_checks(landing: dict[str, Any], brand: str | None) -> list[dict[str, Any]]:
+    """Ad-readiness technical checks: speed, mobile, capture, compliance, message match."""
+    checks: list[dict[str, Any]] = []
+
+    # Page speed (real server response time).
+    load_ms = landing.get("load_ms")
+    if load_ms is not None:
+        if load_ms <= 2500:
+            status, note = "pass", f"Server responded in {load_ms} ms — fast."
+        elif load_ms <= 5000:
+            status, note = "warn", (
+                f"Server took {load_ms} ms — trim page weight; mobile visitors drop off after ~3s."
+            )
+        else:
+            status, note = "fail", (
+                f"Slow: {load_ms} ms to respond. On mobile this bleeds conversions — "
+                "compress images, lazy-load, and check the host."
+            )
+        checks.append({"item": "Page load speed", "status": status, "guidance": note})
+
+    # Mobile viewport (you're ~88% mobile).
+    checks.append({
+        "item": "Mobile viewport tag",
+        "status": "pass" if landing.get("has_viewport") else "fail",
+        "guidance": (
+            "Responsive viewport meta present — good for your mobile-heavy traffic."
+            if landing.get("has_viewport")
+            else "No <meta name='viewport'> — the page won't scale on phones. Add it; you're "
+            "~88% mobile."
+        ),
+    })
+
+    # Lead-capture form (needed to convert + attribute UTMs).
+    checks.append({
+        "item": "Lead-capture form",
+        "status": "pass" if landing.get("has_form") else "warn",
+        "guidance": (
+            "A form is present — make sure its submit fires the conversion tag and preserves "
+            "UTM parameters as hidden fields for attribution."
+            if landing.get("has_form")
+            else "No <form> detected — without an on-page enquiry form you can't capture leads or "
+            "attribute them to UTMs/keywords. Add one above the fold."
+        ),
+    })
+
+    # Privacy policy (Google Ads policy requires it).
+    checks.append({
+        "item": "Privacy policy link",
+        "status": "pass" if landing.get("has_privacy") else "fail",
+        "guidance": (
+            "Privacy policy link found."
+            if landing.get("has_privacy")
+            else "No privacy-policy link — Google Ads policy requires one on lead-gen pages, and "
+            "it can cause disapprovals. Add it in the footer."
+        ),
+    })
+
+    # Terms / conditions (good practice).
+    checks.append({
+        "item": "Terms & conditions link",
+        "status": "pass" if landing.get("has_terms") else "warn",
+        "guidance": (
+            "Terms/conditions link found."
+            if landing.get("has_terms")
+            else "No terms/conditions link — add one for trust and policy safety."
+        ),
+    })
+
+    # H1 ↔ ad message match (Quality Score lever).
+    h1s = landing.get("h1") or []
+    h1_text = " ".join(h1s).lower()
+    brand_l = (brand or "").lower().strip()
+    brand_hit = bool(brand_l) and any(tok in h1_text for tok in brand_l.split() if len(tok) > 3)
+    if h1s:
+        checks.append({
+            "item": "H1 ↔ ad message match",
+            "status": "pass" if brand_hit else "warn",
+            "guidance": (
+                f"The H1 names the brand ('{h1s[0][:60]}') — good ad-to-page match for Quality "
+                "Score."
+                if brand_hit
+                else f"The H1 ('{h1s[0][:60]}') doesn't clearly name the college/offer. Align it "
+                "with the ad headline so the visitor sees the same message (lifts Quality Score, "
+                "lowers CPC)."
+            ),
+        })
+    else:
+        checks.append({
+            "item": "H1 ↔ ad message match",
+            "status": "fail",
+            "guidance": "No H1 on the page — add one that matches the ad headline.",
+        })
+    return checks
+
+
 def build_landing_audit(
     landing: dict[str, Any],
     quality: dict[str, Any],
     *,
     lp_type: str = "auto",
+    brand: str | None = None,
 ) -> dict[str, Any]:
     if not landing or not landing.get("fetched"):
         return {"available": False}
@@ -146,6 +242,7 @@ def build_landing_audit(
             "Kapp LP — tracking available" if is_kapp else "Client LP — college-controlled"
         ),
         "tracking_checks": checks,
+        "technical_checks": _technical_checks(landing, brand),
         "retargeting": retargeting,
         "segmentation": segmentation,
         "verdict": verdict,

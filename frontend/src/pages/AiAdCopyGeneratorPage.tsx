@@ -930,6 +930,44 @@ function LandingAuditorView({ audit }: { audit: LandingAudit }) {
         ))}
       </div>
 
+      {audit.technical_checks.length > 0 && (
+        <>
+          <div className="mb-1 text-xs font-medium text-slate-600">
+            Technical &amp; ad-readiness checks:
+          </div>
+          <div className="mb-3 space-y-1.5">
+            {audit.technical_checks.map((c) => {
+              const tone =
+                c.status === "pass"
+                  ? { icon: "✓", badge: "bg-green-100 text-green-700", label: "pass" }
+                  : c.status === "warn"
+                  ? { icon: "!", badge: "bg-amber-100 text-amber-700", label: "check" }
+                  : { icon: "✕", badge: "bg-red-100 text-red-700", label: "fix" };
+              return (
+                <div key={c.item} className="flex items-start gap-2 text-sm">
+                  <span
+                    className={`mt-0.5 shrink-0 ${
+                      c.status === "pass"
+                        ? "text-green-600"
+                        : c.status === "warn"
+                        ? "text-amber-500"
+                        : "text-red-500"
+                    }`}
+                  >
+                    {tone.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-slate-800">{c.item}</span>
+                    <Badge className={`ml-1 ${tone.badge}`}>{tone.label}</Badge>
+                    <div className="text-xs text-slate-500">{c.guidance}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
       <div className="mb-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-600">
         <b>Retargeting:</b> {audit.retargeting}
       </div>
@@ -1120,9 +1158,35 @@ function ScorecardBody({ sc }: { sc: Scorecard }) {
 function ScorecardTrend({ campus, accountId }: { campus: string; accountId?: number }) {
   const { data } = useScorecardHistory(campus, accountId);
   const rows = data?.items ?? [];
+  const wa = data?.week_alerts;
   if (rows.length === 0) return null;
   return (
     <Section title="Saved snapshots — week over week" hint={`${rows.length} saved`}>
+      {wa?.available && (
+        <div className="mb-3 space-y-2">
+          {wa.this_week && (
+            <div className="rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+              This week: <b>{num(wa.this_week.new_leads)}</b> new leads,{" "}
+              <b>{money(wa.this_week.new_cost)}</b> spent,{" "}
+              <b>{num(wa.this_week.new_clicks)}</b> clicks
+              {wa.this_week.incremental_cpl != null && (
+                <> — CPL <b>{money(wa.this_week.incremental_cpl)}</b></>
+              )}
+            </div>
+          )}
+          {wa.alerts.map((a, i) => (
+            <div
+              key={i}
+              className={`rounded-md p-2.5 text-sm ${
+                a.level === "red" ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-800"
+              }`}
+            >
+              <span className="mr-1">{a.level === "red" ? "🔴" : "🟡"}</span>
+              <b>{a.title}.</b> {a.detail}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -1417,6 +1481,7 @@ export default function AiAdCopyGeneratorPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
   const [tab, setTab] = useState("landing");
+  const [showAllKw, setShowAllKw] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 250);
@@ -1868,12 +1933,16 @@ export default function AiAdCopyGeneratorPage() {
             {/* Keyword intelligence */}
             {tab === "keywords" && (
             <>
-            <Section title="Keyword intelligence" hint="ranked by weighted score">
+            <Section
+              title="Keyword intelligence"
+              hint={`ranked by performance score · ${result.keywords.length} keywords`}
+            >
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                      <th className="py-2">Keyword</th>
+                      <th className="py-2">#</th>
+                      <th>Keyword</th>
                       <th>Intent</th>
                       <th className="text-right">Score</th>
                       <th className="text-right">Clicks</th>
@@ -1885,8 +1954,9 @@ export default function AiAdCopyGeneratorPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.keywords.slice(0, 15).map((k) => (
+                    {(showAllKw ? result.keywords : result.keywords.slice(0, 15)).map((k, i) => (
                       <tr key={k.keyword} className="border-b border-slate-50">
+                        <td className="py-1.5 pr-2 text-right font-mono text-xs text-slate-400">{i + 1}</td>
                         <td className="py-1.5 font-medium text-slate-800">{k.keyword}</td>
                         <td>
                           <Badge className="bg-slate-100 text-slate-600">{k.intent}</Badge>
@@ -1909,6 +1979,17 @@ export default function AiAdCopyGeneratorPage() {
                   </tbody>
                 </table>
               </div>
+              {result.keywords.length > 15 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllKw((v) => !v)}
+                  className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                >
+                  {showAllKw
+                    ? "Show top 15 only"
+                    : `Show all ${result.keywords.length} keywords`}
+                </button>
+              )}
             </Section>
 
             {/* Campaign recommendation */}

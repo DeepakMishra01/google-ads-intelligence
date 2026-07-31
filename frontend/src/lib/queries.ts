@@ -20,7 +20,7 @@ import type {
   ApprovalState,
   PriorityTask,
   Scorecard,
-  ScorecardHistoryRow,
+  ScorecardHistoryResponse,
   SearchTermRow,
   SyncLog,
   TrendPoint,
@@ -313,7 +313,7 @@ export function useScorecardHistory(campus: string | undefined, accountId?: numb
   return useQuery({
     queryKey: ["scorecard-history", campus, accountId],
     queryFn: () =>
-      get<{ items: ScorecardHistoryRow[] }>("/ai/ad-copy/scorecard/history", { campus }),
+      get<ScorecardHistoryResponse>("/ai/ad-copy/scorecard/history", { campus }),
     enabled: !!campus,
   });
 }
