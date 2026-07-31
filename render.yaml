@@ -1,0 +1,59 @@
+# Render Blueprint — deploys the whole platform (API + built UI in one Docker
+# service) plus a managed Postgres database.
+#
+# In Render: New +  ->  Blueprint  ->  connect this GitHub repo. Render reads this
+# file, creates the database and the web service, and wires DATABASE_URL for you.
+# Then open the service's "Environment" tab and fill in the secret values marked
+# `sync: false` below (Google Ads creds, an API_KEY, the Gemini key).
+#
+# Free tier notes:
+#  * The free web service SLEEPS after ~15 min idle (first request after that is
+#    slow) and the in-process weekly/sync jobs won't fire while it's asleep.
+#  * Free Postgres is capped and expires after 90 days.
+#  * For an always-on internal tool (reliable scheduler), set both `plan: starter`.
+
+databases:
+  - name: ads-intelligence-db
+    plan: free
+    databaseName: ads_intelligence
+    user: ads
+
+services:
+  - type: web
+    name: ads-intelligence
+    runtime: docker
+    plan: free            # change to `starter` for always-on + working scheduler
+    healthCheckPath: /api/v1/health
+    autoDeploy: true      # redeploy on every push to the default branch
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ads-intelligence-db
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_LOG_JSON
+        value: "true"
+      # --- Auth: set a strong value; users type it on the login screen ---
+      - key: API_KEY
+        sync: false
+      # --- Google Ads API (set these in the Render dashboard) ---
+      - key: GOOGLE_ADS_DEVELOPER_TOKEN
+        sync: false
+      - key: GOOGLE_ADS_CLIENT_ID
+        sync: false
+      - key: GOOGLE_ADS_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_ADS_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_ADS_LOGIN_CUSTOMER_ID
+        sync: false
+      # --- AI Ad Copy LLM (optional; falls back to deterministic if unset) ---
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-lite-latest
+      - key: AD_COPY_LLM_PROVIDER
+        value: auto

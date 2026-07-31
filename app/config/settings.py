@@ -105,9 +105,19 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def sqlalchemy_database_uri(self) -> str:
-        """Effective DB URI: explicit DATABASE_URL wins, else assembled from parts."""
+        """Effective DB URI: explicit DATABASE_URL wins, else assembled from parts.
+
+        Managed hosts (Render/Heroku/Neon) hand out ``postgres://`` or
+        ``postgresql://`` URLs; normalise those to the psycopg3 driver scheme so
+        the app connects without any manual editing of the URL.
+        """
         if self.database_url:
-            return self.database_url
+            url = self.database_url
+            if url.startswith("postgres://"):
+                return "postgresql+psycopg://" + url[len("postgres://") :]
+            if url.startswith("postgresql://"):
+                return "postgresql+psycopg://" + url[len("postgresql://") :]
+            return url
         return (
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
