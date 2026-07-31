@@ -497,6 +497,26 @@ export interface QualityPrediction {
   flags: ValidationFlag[];
 }
 
+export interface BidFinding {
+  keyword: string;
+  intent: string | null;
+  status: string; // underbidding | overbidding
+  paid_cpc: number;
+  top_of_page_low: number | null;
+  top_of_page_high: number | null;
+  gap_pct: number;
+  recommended_bid: number | null;
+  message: string;
+}
+export interface BidAudit {
+  available: boolean;
+  checked: number;
+  underbidding_count: number;
+  overbidding_count: number;
+  findings: BidFinding[];
+  verdict: string;
+}
+
 export interface AdCopyGenerateResponse {
   id: number | null;
   campus: string;
@@ -512,6 +532,7 @@ export interface AdCopyGenerateResponse {
   seasonality: SeasonalityView | null;
   campaign_plan: CampaignPlan | null;
   keyword_history: KeywordHistoryView | null;
+  bid_audit: BidAudit | null;
   top_search_terms: TopSearchTerms | null;
   setup_guide: SetupGuide | null;
   negative_keywords_detail: NegativeKeywordsDetail | null;

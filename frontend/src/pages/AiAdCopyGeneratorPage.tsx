@@ -26,6 +26,7 @@ import {
 import { useFilters } from "@/state/FiltersContext";
 import type {
   AdCopyGenerateResponse,
+  BidAudit,
   CampaignPlan,
   CplPlan,
   ReversePlan,
@@ -252,6 +253,82 @@ function ReversePlanView({ rp }: { rp: ReversePlan }) {
         To hit ₹{rp.target_cpl} CPL at {money(rp.cpc)} CPC you'd need a{" "}
         <b>{rp.required_cvr_for_cpl}%</b> click→lead rate. This works back from your goal — the budget
         forecast above works forward from spend.
+      </p>
+    </Section>
+  );
+}
+
+function BidAuditView({ audit }: { audit: BidAudit }) {
+  return (
+    <Section
+      title="Bid & auction accountability"
+      hint={`${audit.checked} keywords checked vs Google top-of-page`}
+    >
+      <div
+        className={`mb-3 rounded-md p-3 text-sm ${
+          audit.underbidding_count > 0
+            ? "bg-red-50 text-red-800"
+            : audit.overbidding_count > 0
+            ? "bg-amber-50 text-amber-800"
+            : "bg-green-50 text-green-800"
+        }`}
+      >
+        {audit.verdict}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className="py-1.5">Keyword</th>
+              <th>Status</th>
+              <th className="text-right">You pay</th>
+              <th className="text-right">Google top-of-page</th>
+              <th className="text-right">Gap</th>
+              <th className="text-right">Fix bid to</th>
+            </tr>
+          </thead>
+          <tbody>
+            {audit.findings.map((f) => (
+              <tr key={f.keyword} className="border-b border-slate-50 align-top">
+                <td className="py-1.5 font-medium text-slate-800">
+                  {f.keyword}
+                  <div className="text-[11px] font-normal text-slate-400">{f.message}</div>
+                </td>
+                <td>
+                  <Badge
+                    className={
+                      f.status === "underbidding"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-amber-100 text-amber-700"
+                    }
+                  >
+                    {f.status}
+                  </Badge>
+                </td>
+                <td className="text-right">{money(f.paid_cpc)}</td>
+                <td className="text-right">
+                  {f.top_of_page_low != null ? money(f.top_of_page_low) : "—"}
+                  {f.top_of_page_high != null ? `–${money(f.top_of_page_high)}` : ""}
+                </td>
+                <td
+                  className={`text-right font-medium ${
+                    f.status === "underbidding" ? "text-red-600" : "text-amber-600"
+                  }`}
+                >
+                  {f.status === "underbidding" ? "-" : "+"}
+                  {f.gap_pct}%
+                </td>
+                <td className="text-right">
+                  {f.recommended_bid != null ? money(f.recommended_bid) : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">
+        Compares the account's real cost-per-click against Google Keyword Planner's top-of-page bid
+        range. Underbidding = your ad likely shows below the fold and loses clicks.
       </p>
     </Section>
   );
@@ -1670,6 +1747,10 @@ export default function AiAdCopyGeneratorPage() {
 
             {tab === "keywords" && result.top_search_terms?.available && (
               <TopSearchTermsView st={result.top_search_terms} />
+            )}
+
+            {tab === "keywords" && result.bid_audit?.available && (
+              <BidAuditView audit={result.bid_audit} />
             )}
 
             {tab === "keywords" && result.keyword_history?.available && (

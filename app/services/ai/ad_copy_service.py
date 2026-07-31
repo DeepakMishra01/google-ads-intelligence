@@ -19,6 +19,7 @@ from app.ai_clients.llm_client import get_llm_client
 from app.config.logging import get_logger
 from app.repositories.ad_copy import AdCopyRepository, ScorecardSnapshotRepository
 from app.services.ai import intent_classifier
+from app.services.ai.bid_auction_service import build_bid_audit
 from app.services.ai.budget_planner import build_plan
 from app.services.ai.campaign_scorecard import build_scorecard
 from app.services.ai.campus_config import find_brief, generic_brief
@@ -307,6 +308,9 @@ class AdCopyService:
                     annual_search_demand=self._annual_demand(campus_kw),
                 )
 
+        # Bid / auction accountability — real CPC vs Google's top-of-page range.
+        bid_audit = build_bid_audit(keyword_insights)
+
         # Landing-page quality score + specific fixes (biggest CVR lever).
         landing_quality = score_landing_page(
             landing, mobile_heavy=((dstats or {}).get("share") or 0) >= 0.6
@@ -347,6 +351,7 @@ class AdCopyService:
             "seasonality": seasonality,
             "campaign_plan": campaign_plan,
             "keyword_history": keyword_history,
+            "bid_audit": bid_audit,
             "top_search_terms": top_search_terms,
             "setup_guide": setup_guide,
             "negative_keywords_detail": negatives,
@@ -544,6 +549,8 @@ class AdCopyService:
                     "historical_ctr": kw.get("historical_ctr"),
                     "historical_cpc": kw.get("historical_cpc"),
                     "quality_score": kw.get("quality_score"),
+                    "top_of_page_bid_low": kw.get("top_of_page_bid_low"),
+                    "top_of_page_bid_high": kw.get("top_of_page_bid_high"),
                     "reason": f"{sc['reason']}. {cls['reason']}",
                     **recommend_bid(
                         {

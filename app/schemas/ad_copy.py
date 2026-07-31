@@ -516,6 +516,27 @@ class AdCopyGenerateRequest(BaseModel):
     lp_type: str = "auto"  # auto | kapp | client
 
 
+class BidFinding(BaseModel):
+    keyword: str
+    intent: str | None = None
+    status: str  # underbidding | overbidding
+    paid_cpc: int
+    top_of_page_low: int | None = None
+    top_of_page_high: int | None = None
+    gap_pct: int
+    recommended_bid: float | None = None
+    message: str
+
+
+class BidAudit(BaseModel):
+    available: bool
+    checked: int
+    underbidding_count: int
+    overbidding_count: int
+    findings: list[BidFinding] = []
+    verdict: str
+
+
 class AdCopyGenerateResponse(BaseModel):
     id: int | None = None
     campus: str
@@ -531,6 +552,7 @@ class AdCopyGenerateResponse(BaseModel):
     seasonality: SeasonalityView | None = None
     campaign_plan: CampaignPlan | None = None
     keyword_history: KeywordHistoryView | None = None
+    bid_audit: BidAudit | None = None
     top_search_terms: TopSearchTerms | None = None
     setup_guide: SetupGuide | None = None
     negative_keywords_detail: NegativeKeywordsDetail | None = None
