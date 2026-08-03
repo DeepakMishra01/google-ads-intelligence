@@ -310,6 +310,22 @@ class ApprovalService:
         self.db.commit()
         return {"ok": True, **self.state(gen_id)}
 
+    def set_account(self, gen_id: int, *, customer_id: str) -> dict[str, Any]:
+        """Assign the Google Ads account (by customer ID) to build this campaign in."""
+        from app.models.account import Account
+
+        gen = self._get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        cid = (customer_id or "").replace("-", "").strip()
+        acc = self.db.query(Account).filter(Account.customer_id == cid).first()
+        if acc is None:
+            return {"ok": False, "reason": f"no account with customer id {customer_id}"}
+        gen.account_id = acc.id
+        self.events.add_event(gen_id, "account_set", None, acc.descriptive_name or cid)
+        self.db.commit()
+        return {"ok": True, **self.state(gen_id)}
+
     def approve_via_token(
         self, gen_id: int, *, token: str, reject: bool = False
     ) -> dict[str, Any]:

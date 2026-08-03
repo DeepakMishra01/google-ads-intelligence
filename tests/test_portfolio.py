@@ -49,6 +49,29 @@ def test_unassigned_manager_default(db_session):
     assert p["campaigns"][0]["ad_manager"] == "Unassigned"
 
 
+def test_assigned_account_shows_where_to_build(db_session):
+    from app.models.account import Account
+
+    acc = Account(customer_id="1234567890", descriptive_name="KollegeApply MCC 3")
+    db_session.add(acc)
+    db_session.flush()
+    g = _gen(db_session, "Alpha College", "A. Sharma", 100_000)
+    g.account_id = acc.id
+    db_session.commit()
+
+    row = build_portfolio(db_session)["campaigns"][0]
+    assert row["account_name"] == "KollegeApply MCC 3"
+    assert row["customer_id"] == "1234567890"
+    assert row["account_source"] == "assigned"
+
+
+def test_unknown_account_when_no_link(db_session):
+    _gen(db_session, "Alpha College", "A. Sharma", 100_000)
+    row = build_portfolio(db_session)["campaigns"][0]
+    assert row["account_source"] == "unknown"
+    assert row["account_name"] is None
+
+
 def test_no_conversion_tracking_flags_pending(db_session):
     _gen(db_session, "Alpha College", "A. Sharma", 100_000)
     p = build_portfolio(db_session)

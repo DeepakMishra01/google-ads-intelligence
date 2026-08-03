@@ -760,6 +760,10 @@ export interface PortfolioCampaign {
   id: number;
   campus: string;
   ad_manager: string;
+  account_id: number | null;
+  account_name: string | null;
+  customer_id: string | null;
+  account_source: string; // assigned | inferred | unknown
   approval_status: string;
   cleared_to_launch: boolean;
   plan_date: string;

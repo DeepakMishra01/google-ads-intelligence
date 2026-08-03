@@ -2,7 +2,7 @@ import { RefreshCw, Pencil } from "lucide-react";
 import { useState } from "react";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { money, num } from "@/lib/format";
-import { usePortfolio, useSetAdManager } from "@/lib/queries";
+import { usePortfolio, useSetAdManager, useSetCampaignAccount } from "@/lib/queries";
 import type { ManagerRollup, PortfolioCampaign } from "@/lib/types";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -97,9 +97,17 @@ function ManagerCard({
 
 function CampaignRow({ c }: { c: PortfolioCampaign }) {
   const setManager = useSetAdManager();
+  const setAccount = useSetCampaignAccount();
   const editManager = () => {
     const name = window.prompt(`Ad manager for "${c.campus}"`, c.ad_manager === "Unassigned" ? "" : c.ad_manager);
     if (name != null) setManager.mutate({ id: c.id, name });
+  };
+  const editAccount = () => {
+    const customer_id = window.prompt(
+      `Google Ads account (customer ID) to build "${c.campus}" in:`,
+      c.customer_id ?? ""
+    );
+    if (customer_id) setAccount.mutate({ id: c.id, customer_id });
   };
   return (
     <tr className="border-b border-slate-50">
@@ -107,6 +115,26 @@ function CampaignRow({ c }: { c: PortfolioCampaign }) {
       <td>
         <button className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-600" onClick={editManager}>
           {c.ad_manager}
+          <Pencil size={12} className="opacity-50" />
+        </button>
+      </td>
+      <td>
+        <button
+          className="inline-flex items-center gap-1 text-left text-slate-600 hover:text-blue-600"
+          onClick={editAccount}
+          title={c.account_source === "inferred" ? "Inferred from existing campaigns — click to confirm/change" : "Click to change"}
+        >
+          {c.account_name ? (
+            <span>
+              {c.account_name}
+              {c.customer_id && <span className="text-slate-400"> · {c.customer_id}</span>}
+              {c.account_source === "inferred" && (
+                <Badge className="ml-1 bg-slate-100 text-slate-500">inferred</Badge>
+              )}
+            </span>
+          ) : (
+            <span className="text-red-500">set account</span>
+          )}
           <Pencil size={12} className="opacity-50" />
         </button>
       </td>
@@ -211,6 +239,7 @@ export default function AccountabilityPage() {
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
               <th className="py-2">Campaign</th>
               <th>Ad manager</th>
+              <th>Make live in (account)</th>
               <th>Approval</th>
               <th className="text-right">Budget</th>
               <th className="text-right">Plan (leads @ CPL)</th>

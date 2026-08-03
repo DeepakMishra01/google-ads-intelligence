@@ -169,6 +169,15 @@ def approval_set_ad_manager(
     return ApprovalService(db).set_ad_manager(gen_id, name=name)
 
 
+@router.post("/{gen_id}/account", response_model=None, summary="Assign the target ad account")
+def approval_set_account(
+    gen_id: int,
+    customer_id: str = Query(..., description="Google Ads customer ID to build the campaign in."),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).set_account(gen_id, customer_id=customer_id)
+
+
 @router.post("/{gen_id}/decide", response_model=None, summary="Approve or reject a strategy")
 def approval_decide(
     gen_id: int,

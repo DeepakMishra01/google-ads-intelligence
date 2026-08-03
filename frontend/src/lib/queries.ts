@@ -398,6 +398,17 @@ export function useSetAdManager() {
   });
 }
 
+export function useSetCampaignAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { id: number; customer_id: string }) =>
+      api
+        .post(`/ai/ad-copy/${p.id}/account`, null, { params: { customer_id: p.customer_id } })
+        .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-portfolio"] }),
+  });
+}
+
 export function useGenerateAdCopy() {
   const qc = useQueryClient();
   return useMutation({

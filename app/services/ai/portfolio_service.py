@@ -14,14 +14,58 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from app.models.account import Account
+from app.models.campaign import Campaign
 from app.repositories.ad_copy import AdCopyRepository
 from app.services.ai.approval_service import build_final_strategy
 from app.services.ai.campaign_scorecard import _achieved, _plan_forecast
 from app.services.ai.campus_config import find_brief, generic_brief
+from app.services.ai.campus_service import campus_campaign_filter
 
 _UNASSIGNED = "Unassigned"
+
+
+def _resolve_account(db: Session, brief: Any, gen: Any) -> dict[str, Any]:
+    """Which Google Ads account the ad manager should build this campaign in.
+
+    Prefers an account explicitly assigned to the plan; otherwise infers it from
+    where this campus's campaigns already run (the account with the most of them,
+    excluding manager/MCC accounts).
+    """
+    if gen.account_id:
+        acc = db.get(Account, gen.account_id)
+        if acc:
+            return {
+                "account_id": acc.id,
+                "account_name": acc.descriptive_name or acc.customer_id,
+                "customer_id": acc.customer_id,
+                "source": "assigned",
+            }
+    row = db.execute(
+        select(
+            Account.id,
+            Account.descriptive_name,
+            Account.customer_id,
+            func.count(Campaign.id).label("n"),
+        )
+        .select_from(Campaign)
+        .join(Account, Campaign.account_id == Account.id)
+        .where(campus_campaign_filter(brief), Account.is_manager.is_(False))
+        .group_by(Account.id, Account.descriptive_name, Account.customer_id)
+        .order_by(desc("n"))
+        .limit(1)
+    ).first()
+    if row:
+        return {
+            "account_id": row[0],
+            "account_name": row[1] or row[2],
+            "customer_id": row[2],
+            "source": "inferred",
+        }
+    return {"account_id": None, "account_name": None, "customer_id": None, "source": "unknown"}
 
 
 def _status_from_pace(pace_pct: float | None) -> str:
@@ -39,6 +83,7 @@ def _campaign_row(db: Session, gen: Any, today: date) -> dict[str, Any]:
     brief = find_brief(gen.campus) or generic_brief(gen.campus)
     fs = build_final_strategy(gen)
     forecast = _plan_forecast(gen)
+    account = _resolve_account(db, brief, gen)
 
     plan_date = (gen.created_at or datetime.utcnow()).date()
     days_elapsed = max(0, (today - plan_date).days)
@@ -75,6 +120,10 @@ def _campaign_row(db: Session, gen: Any, today: date) -> dict[str, Any]:
         "id": gen.id,
         "campus": gen.campus,
         "ad_manager": gen.ad_manager or _UNASSIGNED,
+        "account_id": account["account_id"],
+        "account_name": account["account_name"],
+        "customer_id": account["customer_id"],
+        "account_source": account["source"],
         "approval_status": gen.approval_status or "draft",
         "cleared_to_launch": gen.approval_status == "approved",
         "plan_date": plan_date.isoformat(),
