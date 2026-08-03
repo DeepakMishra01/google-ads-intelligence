@@ -96,6 +96,17 @@ def test_one_click_approve_via_token(db_session):
     assert ok["reviewer_name"]  # the fixed reviewer inbox
 
 
+def test_decision_urls_point_at_submit_host(db_session):
+    # The link must resolve to the host the plan was submitted on (its own DB),
+    # not a hard-coded default — this is the cross-environment bug fix.
+    gen = _make_gen(db_session)
+    svc = ApprovalService(db_session)
+    approve, reject = svc._decision_urls(gen, "http://localhost:8000")
+    assert approve.startswith("http://localhost:8000/api/v1/ai/ad-copy/")
+    assert "/approve?token=" in approve
+    assert "/reject?token=" in reject
+
+
 def test_one_click_reject_via_token(db_session):
     gen = _make_gen(db_session)
     svc = ApprovalService(db_session)

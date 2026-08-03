@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -114,13 +114,31 @@ def approval_state(
     return ApprovalService(db).state(gen_id)
 
 
+def _request_base_url(request: Request) -> str:
+    """External base URL of THIS server, honoring a reverse proxy (Render, etc.).
+
+    The approve/reject link must point back at the host that holds the plan, so we
+    build it from the live request rather than a hard-coded default.
+    """
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or request.url.netloc
+    )
+    return f"{proto}://{host.split(',')[0].strip()}"
+
+
 @router.post("/{gen_id}/submit", response_model=None, summary="Submit strategy for review")
 def approval_submit(
     gen_id: int,
+    request: Request,
     x_actor: str | None = Header(None),
     db: Session = Depends(get_db),
 ) -> dict:
-    return ApprovalService(db).submit(gen_id, actor=x_actor)
+    return ApprovalService(db).submit(
+        gen_id, actor=x_actor, base_url=_request_base_url(request)
+    )
 
 
 @router.post("/{gen_id}/decide", response_model=None, summary="Approve or reject a strategy")
@@ -159,11 +177,14 @@ def approval_override(
 @router.post("/{gen_id}/send-approval", response_model=None, summary="Email strategy for approval")
 def approval_email(
     gen_id: int,
+    request: Request,
     to: str = Query(..., description="Reviewer email address."),
     x_actor: str | None = Header(None, alias="X-Actor"),
     db: Session = Depends(get_db),
 ) -> dict:
-    return ApprovalService(db).send_approval(gen_id, to=to, actor=x_actor)
+    return ApprovalService(db).send_approval(
+        gen_id, to=to, actor=x_actor, base_url=_request_base_url(request)
+    )
 
 
 def _decision_page(title: str, message: str, ok: bool) -> HTMLResponse:

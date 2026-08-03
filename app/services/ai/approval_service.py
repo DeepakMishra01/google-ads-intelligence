@@ -217,16 +217,28 @@ class ApprovalService:
             gen.approval_token = secrets.token_urlsafe(24)
         return gen.approval_token
 
-    def _decision_urls(self, gen: AdCopyGeneration) -> tuple[str, str]:
-        """(approve_url, reject_url) — one-click links backed by the token."""
+    def _decision_urls(
+        self, gen: AdCopyGeneration, base_url: str | None = None
+    ) -> tuple[str, str]:
+        """(approve_url, reject_url) — one-click links backed by the token.
+
+        ``base_url`` is the host the plan was submitted on (so the link resolves to
+        the DB that actually holds the plan). Falls back to the configured public
+        URL only when no request context is available (e.g. the weekly job).
+        """
         s = get_settings()
-        base = (s.public_base_url or "").rstrip("/")
+        base = (base_url or s.public_base_url or "").rstrip("/")
         tok = self._ensure_token(gen)
         root = f"{base}{s.api_prefix}/ai/ad-copy/{gen.id}"
         return f"{root}/approve?token={tok}", f"{root}/reject?token={tok}"
 
     def submit(
-        self, gen_id: int, *, actor: str | None, auto_send: bool = True
+        self,
+        gen_id: int,
+        *,
+        actor: str | None,
+        auto_send: bool = True,
+        base_url: str | None = None,
     ) -> dict[str, Any]:
         gen = self._get(gen_id)
         if gen is None:
@@ -240,7 +252,9 @@ class ApprovalService:
         if auto_send:
             reviewer = get_settings().approval_reviewer_email
             if reviewer:
-                email = self.send_approval(gen_id, to=reviewer, actor=actor)
+                email = self.send_approval(
+                    gen_id, to=reviewer, actor=actor, base_url=base_url
+                )
         return {**self.state(gen_id), "email": email}
 
     def approve_via_token(
@@ -308,14 +322,16 @@ class ApprovalService:
         self.db.commit()
         return self.state(gen_id)
 
-    def send_approval(self, gen_id: int, *, to: str, actor: str | None) -> dict[str, Any]:
+    def send_approval(
+        self, gen_id: int, *, to: str, actor: str | None, base_url: str | None = None
+    ) -> dict[str, Any]:
         from app.services.ai import ad_copy_export
         from app.services.ai.email_service import send_email
 
         gen = self._get(gen_id)
         if gen is None:
             return {"sent": False, "reason": "not found"}
-        approve_url, reject_url = self._decision_urls(gen)
+        approve_url, reject_url = self._decision_urls(gen, base_url)
         self.db.commit()  # persist token generated while building the links
         fs = build_final_strategy(gen)
         lines = [
