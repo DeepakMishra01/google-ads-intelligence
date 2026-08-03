@@ -72,3 +72,18 @@ class AdCopyRepository(BaseRepository[AdCopyGeneration]):
             stmt = stmt.where(AdCopyGeneration.campus.ilike(f"%{campus}%"))
         stmt = stmt.order_by(desc(AdCopyGeneration.created_at)).limit(limit)
         return list(self.db.execute(stmt).scalars().all())
+
+    def latest_per_campus(self) -> list[AdCopyGeneration]:
+        """The newest generation for each campus — one row per campaign portfolio."""
+        rows = self.db.execute(
+            select(AdCopyGeneration).order_by(
+                AdCopyGeneration.campus,
+                desc(AdCopyGeneration.created_at),
+                desc(AdCopyGeneration.id),
+            )
+        ).scalars().all()
+        seen: dict[str, AdCopyGeneration] = {}
+        for g in rows:
+            if g.campus not in seen:
+                seen[g.campus] = g
+        return list(seen.values())

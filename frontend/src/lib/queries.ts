@@ -17,6 +17,7 @@ import type {
   KeywordHealthRow,
   Overview,
   Page,
+  Portfolio,
   ApprovalState,
   PriorityTask,
   Scorecard,
@@ -371,7 +372,30 @@ export function useApprovalActions(genId: number | null | undefined) {
     mutationFn: (p: { to: string }) =>
       api.post(`/ai/ad-copy/${genId}/send-approval`, null, { params: p }).then((r) => r.data),
   });
-  return { submit, decide, override, email };
+  const requestChanges = useMutation({
+    mutationFn: (p: { reviewer_name: string; note?: string }) =>
+      api.post(`/ai/ad-copy/${genId}/request-changes`, null, { params: p }).then((r) => r.data),
+    onSuccess: invalidate,
+  });
+  return { submit, decide, override, email, requestChanges };
+}
+
+export function usePortfolio() {
+  return useQuery({
+    queryKey: ["ad-copy-portfolio"],
+    queryFn: () => api.get("/ai/ad-copy/portfolio").then((r) => r.data as Portfolio),
+  });
+}
+
+export function useSetAdManager() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { id: number; name: string }) =>
+      api
+        .post(`/ai/ad-copy/${p.id}/ad-manager`, null, { params: { name: p.name } })
+        .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-portfolio"] }),
+  });
 }
 
 export function useGenerateAdCopy() {

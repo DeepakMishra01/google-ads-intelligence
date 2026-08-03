@@ -141,6 +141,34 @@ def approval_submit(
     )
 
 
+@router.get("/portfolio", response_model=None, summary="Campaign + ad-manager accountability")
+def portfolio(db: Session = Depends(get_db)) -> dict:
+    from app.services.ai.portfolio_service import build_portfolio
+
+    return build_portfolio(db)
+
+
+@router.post("/{gen_id}/request-changes", response_model=None, summary="Ask for changes")
+def approval_request_changes(
+    gen_id: int,
+    reviewer_name: str = Query(...),
+    note: str | None = Query(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).request_changes(
+        gen_id, reviewer_name=reviewer_name, note=note
+    )
+
+
+@router.post("/{gen_id}/ad-manager", response_model=None, summary="Assign the ad manager")
+def approval_set_ad_manager(
+    gen_id: int,
+    name: str = Query(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).set_ad_manager(gen_id, name=name)
+
+
 @router.post("/{gen_id}/decide", response_model=None, summary="Approve or reject a strategy")
 def approval_decide(
     gen_id: int,

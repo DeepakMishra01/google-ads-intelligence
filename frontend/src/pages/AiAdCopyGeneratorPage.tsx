@@ -1254,7 +1254,7 @@ const APPROVAL_STYLE: Record<string, string> = {
 
 function ApprovalTab({ genId }: { genId: number }) {
   const { data, isLoading } = useApproval(genId);
-  const { submit, decide, override, email } = useApprovalActions(genId);
+  const { submit, decide, override, email, requestChanges } = useApprovalActions(genId);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
 
@@ -1309,6 +1309,14 @@ function ApprovalTab({ genId }: { genId: number }) {
             onClick={() => decide.mutate({ approved: true, reviewer_name: name, note })}
           >
             Approve here
+          </button>
+          <button
+            className="btn-ghost h-9 px-3 text-amber-700"
+            disabled={requestChanges.isPending || !name}
+            title={!name ? "Enter your name first" : "Send back with change requests"}
+            onClick={() => requestChanges.mutate({ reviewer_name: name, note })}
+          >
+            Request changes
           </button>
           <button
             className="btn-ghost h-9 px-3 text-red-600"

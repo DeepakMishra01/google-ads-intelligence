@@ -64,6 +64,8 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     overrides: Mapped[dict | None] = mapped_column(JSONType)
     # Unguessable token backing the one-click Approve/Reject links in the email.
     approval_token: Mapped[str | None] = mapped_column(String(64), index=True)
+    # The ad manager who owns this campaign (for per-manager performance rollups).
+    ad_manager: Mapped[str | None] = mapped_column(String(160), index=True)
 
 
 class ApprovalEvent(IntPKMixin, TimestampMixin, Base):

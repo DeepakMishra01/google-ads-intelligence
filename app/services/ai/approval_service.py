@@ -87,6 +87,19 @@ def build_final_strategy(gen: AdCopyGeneration) -> dict[str, Any]:
     }
 
 
+def kpi_status(gen: AdCopyGeneration) -> dict[str, Any]:
+    """KPIs required before a budget can be sent for approval."""
+    fs = build_final_strategy(gen)
+    budget = next((f["value"] for f in fs.get("fields", []) if f["key"] == "budget"), None)
+    checks = {
+        "budget": budget,
+        "target leads": fs.get("target_leads"),
+        "target CPL": fs.get("est_cpl"),
+    }
+    missing = [label for label, val in checks.items() if not val]
+    return {"complete": not missing, "missing": missing}
+
+
 def _esc(v: Any) -> str:
     return (
         str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -120,6 +133,7 @@ def _approval_html(
     fs: dict[str, Any],
     approve_url: str | None = None,
     reject_url: str | None = None,
+    requested_by: str | None = None,
 ) -> str:
     """A self-contained email so the reviewer can audit everything and approve."""
     assets = gen.generated_assets or {}
@@ -163,6 +177,10 @@ def _approval_html(
   </div>
   {"" if approved else _approval_buttons(approve_url, reject_url)}
   <h2 style="margin:14px 0 4px">{_esc(gen.campus)} — Campaign strategy for approval</h2>
+  <p style="margin:0 0 8px;font-size:13px;color:#64748b">
+    Requested by <b>{_esc(requested_by or "—")}</b>
+    &nbsp;·&nbsp; Ad manager: <b>{_esc(gen.ad_manager or "Unassigned")}</b>
+  </p>
 
   <h3>Final strategy</h3>
   <table style="border-collapse:collapse;font-size:14px">{strat_rows}
@@ -243,6 +261,16 @@ class ApprovalService:
         gen = self._get(gen_id)
         if gen is None:
             return {"ok": False, "reason": "not found"}
+        # KPI gate: no budget goes for approval without its targets defined.
+        kpi = kpi_status(gen)
+        if not kpi["complete"]:
+            return {
+                "ok": False,
+                "reason": "Define KPIs before submitting: missing "
+                + ", ".join(kpi["missing"]),
+                "missing_kpis": kpi["missing"],
+                **self.state(gen_id),
+            }
         gen.approval_status = "submitted"
         gen.submitted_at = self._now()
         self._ensure_token(gen)
@@ -253,9 +281,34 @@ class ApprovalService:
             reviewer = get_settings().approval_reviewer_email
             if reviewer:
                 email = self.send_approval(
-                    gen_id, to=reviewer, actor=actor, base_url=base_url
+                    gen_id, to=reviewer, actor=actor, base_url=base_url,
+                    requested_by=actor,
                 )
-        return {**self.state(gen_id), "email": email}
+        return {"ok": True, **self.state(gen_id), "email": email}
+
+    def request_changes(
+        self, gen_id: int, *, reviewer_name: str, note: str | None
+    ) -> dict[str, Any]:
+        """Reviewer asks for specific changes — sends the plan back for revision."""
+        gen = self._get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        gen.approval_status = "changes_requested"
+        gen.reviewed_at = self._now()
+        gen.reviewer_name = reviewer_name
+        gen.review_note = note
+        self.events.add_event(gen_id, "changes_requested", reviewer_name, note)
+        self.db.commit()
+        return {"ok": True, **self.state(gen_id)}
+
+    def set_ad_manager(self, gen_id: int, *, name: str) -> dict[str, Any]:
+        gen = self._get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        gen.ad_manager = (name or "").strip() or None
+        self.events.add_event(gen_id, "ad_manager_set", name, None)
+        self.db.commit()
+        return {"ok": True, **self.state(gen_id)}
 
     def approve_via_token(
         self, gen_id: int, *, token: str, reject: bool = False
@@ -323,7 +376,13 @@ class ApprovalService:
         return self.state(gen_id)
 
     def send_approval(
-        self, gen_id: int, *, to: str, actor: str | None, base_url: str | None = None
+        self,
+        gen_id: int,
+        *,
+        to: str,
+        actor: str | None,
+        base_url: str | None = None,
+        requested_by: str | None = None,
     ) -> dict[str, Any]:
         from app.services.ai import ad_copy_export
         from app.services.ai.email_service import send_email
@@ -331,11 +390,18 @@ class ApprovalService:
         gen = self._get(gen_id)
         if gen is None:
             return {"sent": False, "reason": "not found"}
+        if requested_by is None:  # manual resend — recover the submitter from the log
+            requested_by = next(
+                (e.actor for e in self.events.for_generation(gen_id)
+                 if e.event == "submitted" and e.actor),
+                None,
+            )
         approve_url, reject_url = self._decision_urls(gen, base_url)
         self.db.commit()  # persist token generated while building the links
         fs = build_final_strategy(gen)
         lines = [
             f"Campaign strategy for {gen.campus}",
+            f"Requested by: {requested_by or '—'}   Ad manager: {gen.ad_manager or 'Unassigned'}",
             f"Status: {gen.approval_status.upper()}"
             + (f"  (approved by {gen.reviewer_name})" if gen.approval_status == "approved" else ""),
             "",
@@ -366,7 +432,7 @@ class ApprovalService:
             to=to,
             subject=f"[Ads Approval] {gen.campus} — {gen.approval_status}",
             body="\n".join(lines),
-            html=_approval_html(gen, fs, approve_url, reject_url),
+            html=_approval_html(gen, fs, approve_url, reject_url, requested_by),
             attachment=xlsx,
             attachment_name=f"strategy_{gen.campus.replace(' ', '_')}_{gen.id}.xlsx",
             attachment_mime=(
@@ -389,6 +455,8 @@ class ApprovalService:
             "campus": gen.campus,
             "status": gen.approval_status,
             "cleared_to_launch": gen.approval_status == "approved",
+            "ad_manager": gen.ad_manager,
+            "kpi": kpi_status(gen),
             "submitted_at": gen.submitted_at.isoformat() if gen.submitted_at else None,
             "reviewed_at": gen.reviewed_at.isoformat() if gen.reviewed_at else None,
             "reviewer_name": gen.reviewer_name,

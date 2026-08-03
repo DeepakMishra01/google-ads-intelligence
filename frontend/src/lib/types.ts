@@ -756,6 +756,62 @@ export interface CplPlan {
   levers: CplLever[];
   verdict: string;
 }
+export interface PortfolioCampaign {
+  id: number;
+  campus: string;
+  ad_manager: string;
+  approval_status: string;
+  cleared_to_launch: boolean;
+  plan_date: string;
+  days_elapsed: number;
+  budget: number | null;
+  target_leads: number | null;
+  plan_cpl: number | null;
+  expected_by_now: number | null;
+  actual_leads: number | null;
+  actual_clicks: number;
+  actual_spend: number;
+  actual_cpl: number | null;
+  pace_pct: number | null;
+  status: string; // on_track | watch | off_track | tracking_pending | no_data
+  tracking_pending: boolean;
+  kpis_complete: boolean;
+  missing_kpis: string[];
+}
+export interface ManagerRollup {
+  ad_manager: string;
+  campaigns: number;
+  live: number;
+  budget: number;
+  target_leads: number;
+  expected_by_now: number;
+  actual_leads: number;
+  actual_spend: number;
+  pace_pct: number | null;
+  on_track: number;
+  watch: number;
+  off_track: number;
+  tracking_pending: number;
+  campaign_rows: PortfolioCampaign[];
+}
+export interface Portfolio {
+  campaigns: PortfolioCampaign[];
+  managers: ManagerRollup[];
+  totals: {
+    campaigns: number;
+    managers: number;
+    budget: number;
+    target_leads: number;
+    expected_by_now: number;
+    actual_leads: number;
+    actual_spend: number;
+    on_track: number;
+    off_track: number;
+    tracking_pending: number;
+  };
+  as_of: string;
+}
+
 export interface ReversePlan {
   target_leads: number;
   target_cpl: number;

@@ -46,6 +46,36 @@ def test_approval_lifecycle_and_recompute(db_session):
     assert [e["event"] for e in st["events"]][:3] == ["approved", "edited", "submitted"]
 
 
+def test_submit_blocked_without_kpis(db_session):
+    # A generation with no plan/forecast has no budget or targets -> gate blocks submit.
+    repo = AdCopyRepository(db_session)
+    gen = repo.record({"campus": "No KPI College", "scores": {}})
+    db_session.commit()
+    svc = ApprovalService(db_session)
+    r = svc.submit(gen.id, actor="op")
+    assert r["ok"] is False
+    assert "budget" in r["missing_kpis"]
+    assert svc.state(gen.id)["status"] == "draft"  # unchanged
+
+
+def test_request_changes_sets_status(db_session):
+    gen = _make_gen(db_session)
+    svc = ApprovalService(db_session)
+    svc.submit(gen.id, actor="Deepak")
+    r = svc.request_changes(gen.id, reviewer_name="Founder", note="lower the CPL target")
+    assert r["ok"] is True
+    assert r["status"] == "changes_requested"
+    assert r["cleared_to_launch"] is False
+    assert [e["event"] for e in r["events"]][0] == "changes_requested"
+
+
+def test_set_ad_manager(db_session):
+    gen = _make_gen(db_session)
+    r = ApprovalService(db_session).set_ad_manager(gen.id, name="A. Sharma")
+    assert r["ok"] is True
+    assert r["ad_manager"] == "A. Sharma"
+
+
 def test_non_editable_field_rejected(db_session):
     gen = _make_gen(db_session)
     r = ApprovalService(db_session).set_override(gen.id, field="nope", value=1, by="x")

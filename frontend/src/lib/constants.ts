@@ -33,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/trends", label: "Trends", icon: BarChart3 },
   { to: "/reports", label: "Reports", icon: FileText },
   { to: "/ai/ad-copy", label: "AI Ad Copy Generator", icon: Sparkles, group: "AI Tools" },
+  { to: "/accountability", label: "Campaign Accountability", icon: Target, group: "AI Tools" },
 ];
 
 export const APP_ICON = Target;
