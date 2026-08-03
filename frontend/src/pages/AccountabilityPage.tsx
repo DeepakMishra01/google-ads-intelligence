@@ -109,63 +109,79 @@ function CampaignRow({ c }: { c: PortfolioCampaign }) {
     );
     if (customer_id) setAccount.mutate({ id: c.id, customer_id });
   };
+  const div = "border-l border-slate-100";
   return (
-    <tr className="border-b border-slate-50">
-      <td className="py-2 font-medium text-slate-800">{c.campus}</td>
-      <td>
-        <button className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-600" onClick={editManager}>
-          {c.ad_manager}
-          <Pencil size={12} className="opacity-50" />
-        </button>
-      </td>
-      <td>
+    <tr className="border-b border-slate-100 align-top even:bg-slate-50/40 hover:bg-blue-50/40">
+      {/* Campaign + ad manager */}
+      <td className="py-3 pr-3 pl-1">
+        <div className="font-medium text-slate-800">{c.campus}</div>
         <button
-          className="inline-flex items-center gap-1 text-left text-slate-600 hover:text-blue-600"
-          onClick={editAccount}
-          title={c.account_source === "inferred" ? "Inferred from existing campaigns — click to confirm/change" : "Click to change"}
+          className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
+          onClick={editManager}
+          title="Change ad manager"
         >
-          {c.account_name ? (
-            <span>
-              {c.account_name}
-              {c.customer_id && <span className="text-slate-400"> · {c.customer_id}</span>}
-              {c.account_source === "inferred" && (
-                <Badge className="ml-1 bg-slate-100 text-slate-500">inferred</Badge>
-              )}
-            </span>
-          ) : (
-            <span className="text-red-500">set account</span>
-          )}
-          <Pencil size={12} className="opacity-50" />
+          {c.ad_manager}
+          <Pencil size={11} className="opacity-40" />
         </button>
       </td>
-      <td>
+      {/* Make live in (account) */}
+      <td className={`px-3 ${div}`}>
+        <button className="text-left hover:text-blue-600" onClick={editAccount} title="Set / change the account">
+          {c.account_name ? (
+            <>
+              <div className="text-slate-700">{c.account_name}</div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400 tabular-nums">
+                {c.customer_id}
+                {c.account_source === "inferred" && (
+                  <Badge className="bg-slate-100 text-slate-500">inferred</Badge>
+                )}
+              </div>
+            </>
+          ) : (
+            <span className="inline-flex items-center gap-1 font-medium text-red-500">
+              Set account <Pencil size={11} className="opacity-60" />
+            </span>
+          )}
+        </button>
+      </td>
+      {/* Approval */}
+      <td className="px-3">
         <Badge className={APPROVAL_STYLE[c.approval_status] ?? "bg-slate-100 text-slate-600"}>
           {c.approval_status.replace("_", " ")}
         </Badge>
       </td>
-      <td className="text-right tabular-nums">{c.budget != null ? money(c.budget) : "—"}</td>
-      <td className="text-right tabular-nums">
+      {/* Plan: budget */}
+      <td className={`px-3 text-right tabular-nums ${div}`}>
+        {c.budget != null ? money(c.budget) : <span className="text-red-500">set KPIs</span>}
+      </td>
+      {/* Plan: target */}
+      <td className="px-3 text-right tabular-nums">
         {c.target_leads != null ? (
           <>
-            {num(c.target_leads)}
-            {c.plan_cpl != null && <span className="text-slate-400"> @ {money(c.plan_cpl)}</span>}
+            <div className="font-medium text-slate-800">{num(c.target_leads)}</div>
+            {c.plan_cpl != null && <div className="text-xs text-slate-400">@ {money(c.plan_cpl)}</div>}
           </>
         ) : (
-          <span className="text-red-500">set KPIs</span>
+          "—"
         )}
       </td>
-      <td className="text-right tabular-nums">{c.expected_by_now != null ? num(c.expected_by_now) : "—"}</td>
-      <td className="text-right tabular-nums">
+      {/* Progress: expected */}
+      <td className={`px-3 text-right tabular-nums ${div}`}>
+        {c.expected_by_now != null ? num(c.expected_by_now) : "—"}
+      </td>
+      {/* Progress: actual */}
+      <td className="px-3 text-right tabular-nums">
         {c.tracking_pending ? (
-          <span className="text-slate-400" title="Conversion tracking not live — showing clicks/spend">
-            {num(c.actual_clicks)} clk
-          </span>
+          <div className="text-slate-500" title="Conversion tracking not live yet">
+            {num(c.actual_clicks)} <span className="text-xs text-slate-400">clicks</span>
+          </div>
         ) : (
-          num(c.actual_leads)
+          <div className="font-medium text-slate-800">{num(c.actual_leads)}</div>
         )}
+        <div className="text-xs text-slate-400">{money(c.actual_spend)} spent</div>
       </td>
-      <td className="text-right tabular-nums text-slate-500">{money(c.actual_spend)}</td>
-      <td className="text-right"><StatusChip status={c.status} /></td>
+      {/* Status */}
+      <td className="px-3 text-right"><StatusChip status={c.status} /></td>
     </tr>
   );
 }
@@ -234,19 +250,26 @@ export default function AccountabilityPage() {
         )}
       </div>
       <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[860px] text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-              <th className="py-2">Campaign</th>
-              <th>Ad manager</th>
-              <th>Make live in (account)</th>
-              <th>Approval</th>
-              <th className="text-right">Budget</th>
-              <th className="text-right">Plan (leads @ CPL)</th>
-              <th className="text-right">Expected now</th>
-              <th className="text-right">Actual</th>
-              <th className="text-right">Spend</th>
-              <th className="text-right">Status</th>
+            <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <th colSpan={3} className="px-1 pt-3 pb-1 text-left">Campaign &amp; ownership</th>
+              <th colSpan={2} className="border-l border-slate-100 px-3 pt-3 pb-1 text-right">
+                Plan
+              </th>
+              <th colSpan={3} className="border-l border-slate-100 px-3 pt-3 pb-1 text-right">
+                Progress — as of {data.as_of}
+              </th>
+            </tr>
+            <tr className="border-b-2 border-slate-200 text-left text-xs font-medium text-slate-500">
+              <th className="px-1 pb-2 pl-1">Campaign / ad manager</th>
+              <th className="border-l border-slate-100 px-3 pb-2">Make live in (account)</th>
+              <th className="px-3 pb-2">Approval</th>
+              <th className="border-l border-slate-100 px-3 pb-2 text-right">Budget</th>
+              <th className="px-3 pb-2 text-right">Target</th>
+              <th className="border-l border-slate-100 px-3 pb-2 text-right">Expected</th>
+              <th className="px-3 pb-2 text-right">Actual</th>
+              <th className="px-3 pb-2 text-right">Status</th>
             </tr>
           </thead>
           <tbody>
