@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import type {
   Account,
+  AccountAlert,
+  AccountBudget,
   AdCopyGenerateResponse,
   Alert,
   AlertEvaluateResult,
@@ -384,6 +386,16 @@ export function usePortfolio() {
   return useQuery({
     queryKey: ["ad-copy-portfolio"],
     queryFn: () => api.get("/ai/ad-copy/portfolio").then((r) => r.data as Portfolio),
+  });
+}
+
+export function useAccountBudgets() {
+  return useQuery({
+    queryKey: ["account-budgets"],
+    queryFn: () =>
+      api.get("/ai/ad-copy/account-budgets").then(
+        (r) => r.data as { accounts: AccountBudget[]; alerts: AccountAlert[]; as_of: string }
+      ),
   });
 }
 

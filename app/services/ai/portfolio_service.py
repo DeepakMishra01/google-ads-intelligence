@@ -11,14 +11,14 @@ clearly flagged (leads need conversion tracking; where it's absent we say so).
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.account import Account
-from app.models.campaign import Campaign
+from app.models.campaign import Campaign, CampaignSnapshot
 from app.repositories.ad_copy import AdCopyRepository
 from app.services.ai.approval_service import build_final_strategy
 from app.services.ai.campaign_scorecard import _achieved, _plan_forecast
@@ -26,6 +26,7 @@ from app.services.ai.campus_config import find_brief, generic_brief
 from app.services.ai.campus_service import campus_campaign_filter
 
 _UNASSIGNED = "Unassigned"
+_MICROS = 1_000_000
 
 
 def _resolve_account(db: Session, brief: Any, gen: Any) -> dict[str, Any]:
@@ -172,6 +173,94 @@ def _rollup(manager: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _spend_by_account(db: Session, since: date) -> dict[int, float]:
+    """Real spend per account over a window (all its campaigns, deduped snapshots)."""
+    rows = db.execute(
+        select(
+            Campaign.account_id,
+            func.coalesce(func.sum(CampaignSnapshot.cost_micros), 0),
+        )
+        .select_from(Campaign)
+        .join(CampaignSnapshot, CampaignSnapshot.campaign_id == Campaign.id)
+        .where(CampaignSnapshot.snapshot_date >= since)
+        .group_by(Campaign.account_id)
+    ).all()
+    return {aid: float(cost or 0) / _MICROS for aid, cost in rows if aid is not None}
+
+
+def _account_budgets(
+    rows: list[dict[str, Any]],
+    spend_by_acct: dict[int, float],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Roll campaign rows up per account: allotted (plan) vs spent, remaining, alerts.
+
+    Allotted = sum of the account's campaign plan budgets. Spent = the account's real
+    actual spend over the trailing window (not just since a plan date, so a freshly
+    generated plan still shows meaningful budget consumption).
+    """
+    by_acct: dict[str, dict[str, Any]] = {}
+    seen_accounts: set[int] = set()
+    for r in rows:
+        key = r.get("account_name") or "Unassigned account"
+        a = by_acct.setdefault(key, {
+            "account_name": key,
+            "customer_id": r.get("customer_id"),
+            "account_id": r.get("account_id"),
+            "campaigns": 0,
+            "allotted": 0.0,
+            "spent": 0.0,
+        })
+        a["campaigns"] += 1
+        a["allotted"] += r.get("budget") or 0
+        # Count each account's real spend once, not per campaign row.
+        aid = r.get("account_id")
+        if aid is not None and aid not in seen_accounts:
+            a["spent"] += spend_by_acct.get(aid, 0.0)
+            seen_accounts.add(aid)
+
+    accounts: list[dict[str, Any]] = []
+    alerts: list[dict[str, Any]] = []
+    for a in by_acct.values():
+        allotted = round(a["allotted"], 2)
+        spent = round(a["spent"], 2)
+        pending = round(allotted - spent, 2)
+        util = round(spent / allotted * 100) if allotted else None
+        if not allotted:
+            status = "no_budget"
+        elif spent > allotted:
+            status = "overspent"
+        elif util is not None and util >= 85:
+            status = "near_limit"
+        else:
+            status = "on_budget"
+        acct = {**a, "allotted": allotted, "spent": spent, "pending": pending,
+                "utilization_pct": util, "status": status}
+        accounts.append(acct)
+
+        name = a["account_name"]
+        if status == "overspent":
+            alerts.append({
+                "level": "critical",
+                "account_name": name,
+                "customer_id": a["customer_id"],
+                "message": f"{name} is OVER budget by ₹{abs(pending):,.0f} "
+                           f"(spent ₹{spent:,.0f} of ₹{allotted:,.0f}).",
+            })
+        elif status == "near_limit":
+            alerts.append({
+                "level": "warning",
+                "account_name": name,
+                "customer_id": a["customer_id"],
+                "message": f"{name} has only ₹{pending:,.0f} left "
+                           f"({100 - (util or 0)}% of budget) — nearing its limit.",
+            })
+
+    accounts.sort(key=lambda x: (x["status"] != "overspent", -x["spent"]))
+    # Critical alerts first.
+    alerts.sort(key=lambda x: x["level"] != "critical")
+    return accounts, alerts
+
+
 def build_portfolio(db: Session, *, today: date | None = None) -> dict[str, Any]:
     """One row per campaign + a rollup per ad manager, newest plan per campus."""
     ref = today or date.today()
@@ -196,5 +285,8 @@ def build_portfolio(db: Session, *, today: date | None = None) -> dict[str, Any]
         "off_track": sum(1 for r in rows if r["status"] == "off_track"),
         "tracking_pending": sum(1 for r in rows if r["tracking_pending"]),
     }
-    return {"campaigns": rows, "managers": managers, "totals": totals,
+    spend_by_acct = _spend_by_account(db, ref - timedelta(days=365))
+    accounts, account_alerts = _account_budgets(rows, spend_by_acct)
+    return {"campaigns": rows, "managers": managers, "accounts": accounts,
+            "account_alerts": account_alerts, "totals": totals,
             "as_of": ref.isoformat()}

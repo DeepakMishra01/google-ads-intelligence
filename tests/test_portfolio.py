@@ -72,6 +72,42 @@ def test_unknown_account_when_no_link(db_session):
     assert row["account_name"] is None
 
 
+def test_account_budget_rollup_and_overspend_alert(db_session):
+    from app.services.ai.portfolio_service import _account_budgets
+
+    def _r(acct, aid, budget):
+        return {"account_name": acct, "customer_id": str(aid), "account_id": aid, "budget": budget}
+
+    rows = [
+        _r("Kollege3", 3, 100_000),
+        _r("Kollege3", 3, 50_000),
+        _r("Kollege7", 7, 200_000),
+    ]
+    spend = {3: 130_000.0, 7: 20_000.0}  # real account spend, last 12 months
+    accounts, alerts = _account_budgets(rows, spend)
+    k3 = next(a for a in accounts if a["account_name"] == "Kollege3")
+    assert k3["allotted"] == 150_000
+    assert k3["spent"] == 130_000  # counted once for the account, not per campaign
+    assert k3["pending"] == 20_000
+    # Kollege7 is well under budget -> on_budget, no alert.
+    k7 = next(a for a in accounts if a["account_name"] == "Kollege7")
+    assert k7["status"] == "on_budget"
+    assert not any(al["account_name"] == "Kollege7" for al in alerts)
+
+
+def test_account_overspend_raises_critical_alert(db_session):
+    from app.services.ai.portfolio_service import _account_budgets
+
+    rows = [{
+        "account_name": "Kollege9", "customer_id": "9", "account_id": 9, "budget": 100_000,
+    }]
+    accounts, alerts = _account_budgets(rows, {9: 140_000.0})
+    assert accounts[0]["status"] == "overspent"
+    assert accounts[0]["pending"] == -40_000
+    assert alerts and alerts[0]["level"] == "critical"
+    assert "OVER budget" in alerts[0]["message"]
+
+
 def test_no_conversion_tracking_flags_pending(db_session):
     _gen(db_session, "Alpha College", "A. Sharma", 100_000)
     p = build_portfolio(db_session)

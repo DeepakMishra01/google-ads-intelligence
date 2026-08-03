@@ -148,6 +148,18 @@ def portfolio(db: Session = Depends(get_db)) -> dict:
     return build_portfolio(db)
 
 
+@router.get("/account-budgets", response_model=None, summary="Account budgets: allotted vs spent")
+def account_budgets(db: Session = Depends(get_db)) -> dict:
+    from app.services.ai.portfolio_service import build_portfolio
+
+    p = build_portfolio(db)
+    return {
+        "accounts": p["accounts"],
+        "alerts": p["account_alerts"],
+        "as_of": p["as_of"],
+    }
+
+
 @router.post("/{gen_id}/request-changes", response_model=None, summary="Ask for changes")
 def approval_request_changes(
     gen_id: int,

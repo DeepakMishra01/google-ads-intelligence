@@ -45,6 +45,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
+
 function ManagerCard({
   m,
   active,

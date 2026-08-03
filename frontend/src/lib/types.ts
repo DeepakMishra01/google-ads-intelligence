@@ -798,9 +798,27 @@ export interface ManagerRollup {
   tracking_pending: number;
   campaign_rows: PortfolioCampaign[];
 }
+export interface AccountBudget {
+  account_name: string;
+  customer_id: string | null;
+  campaigns: number;
+  allotted: number;
+  spent: number;
+  pending: number;
+  utilization_pct: number | null;
+  status: string; // overspent | near_limit | on_budget | no_budget
+}
+export interface AccountAlert {
+  level: string; // critical | warning
+  account_name: string;
+  customer_id: string | null;
+  message: string;
+}
 export interface Portfolio {
   campaigns: PortfolioCampaign[];
   managers: ManagerRollup[];
+  accounts: AccountBudget[];
+  account_alerts: AccountAlert[];
   totals: {
     campaigns: number;
     managers: number;
