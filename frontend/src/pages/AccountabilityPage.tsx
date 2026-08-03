@@ -2,7 +2,7 @@ import { RefreshCw, Pencil } from "lucide-react";
 import { useState } from "react";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { money, num } from "@/lib/format";
-import { usePortfolio, useSetAdManager, useSetCampaignAccount } from "@/lib/queries";
+import { usePortfolio, useSetAdManager, useSetCampaignAccount, useSetKpis } from "@/lib/queries";
 import type { ManagerRollup, PortfolioCampaign } from "@/lib/types";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -98,6 +98,16 @@ function ManagerCard({
 function CampaignRow({ c }: { c: PortfolioCampaign }) {
   const setManager = useSetAdManager();
   const setAccount = useSetCampaignAccount();
+  const setKpis = useSetKpis();
+  const editKpis = () => {
+    const b = window.prompt(`Budget (₹) for "${c.campus}":`, c.budget != null ? String(c.budget) : "");
+    if (b == null) return;
+    const budget = Number(b.replace(/[^0-9.]/g, ""));
+    if (!budget) return;
+    const t = window.prompt("Target leads:", c.target_leads != null ? String(c.target_leads) : "2000");
+    const target_leads = t ? Number(t.replace(/[^0-9]/g, "")) : undefined;
+    setKpis.mutate({ id: c.id, budget, target_leads });
+  };
   const editManager = () => {
     const name = window.prompt(`Ad manager for "${c.campus}"`, c.ad_manager === "Unassigned" ? "" : c.ad_manager);
     if (name != null) setManager.mutate({ id: c.id, name });
@@ -150,20 +160,30 @@ function CampaignRow({ c }: { c: PortfolioCampaign }) {
           {c.approval_status.replace("_", " ")}
         </Badge>
       </td>
-      {/* Plan: budget */}
+      {/* Plan: budget (click to set/edit KPIs) */}
       <td className={`px-3 text-right tabular-nums ${div}`}>
-        {c.budget != null ? money(c.budget) : <span className="text-red-500">set KPIs</span>}
+        <button className="hover:text-blue-600" onClick={editKpis} title="Set / edit budget & target leads">
+          {c.budget != null ? (
+            money(c.budget)
+          ) : (
+            <span className="inline-flex items-center gap-1 font-medium text-red-500">
+              Set KPIs <Pencil size={11} className="opacity-60" />
+            </span>
+          )}
+        </button>
       </td>
-      {/* Plan: target */}
+      {/* Plan: target (click to edit too) */}
       <td className="px-3 text-right tabular-nums">
-        {c.target_leads != null ? (
-          <>
-            <div className="font-medium text-slate-800">{num(c.target_leads)}</div>
-            {c.plan_cpl != null && <div className="text-xs text-slate-400">@ {money(c.plan_cpl)}</div>}
-          </>
-        ) : (
-          "—"
-        )}
+        <button className="hover:text-blue-600" onClick={editKpis} title="Set / edit target leads">
+          {c.target_leads != null ? (
+            <>
+              <div className="font-medium text-slate-800">{num(c.target_leads)}</div>
+              {c.plan_cpl != null && <div className="text-xs text-slate-400">@ {money(c.plan_cpl)} CPL</div>}
+            </>
+          ) : (
+            "—"
+          )}
+        </button>
       </td>
       {/* Progress: expected */}
       <td className={`px-3 text-right tabular-nums ${div}`}>

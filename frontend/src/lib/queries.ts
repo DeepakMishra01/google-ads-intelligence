@@ -398,6 +398,24 @@ export function useSetAdManager() {
   });
 }
 
+export function useSetKpis() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { id: number; budget: number; target_leads?: number }) => {
+      await api.post(`/ai/ad-copy/${p.id}/override`, null, {
+        params: { field: "budget", value: String(p.budget) },
+      });
+      if (p.target_leads) {
+        await api.post(`/ai/ad-copy/${p.id}/override`, null, {
+          params: { field: "target_leads", value: String(p.target_leads) },
+        });
+      }
+      return true;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-portfolio"] }),
+  });
+}
+
 export function useSetCampaignAccount() {
   const qc = useQueryClient();
   return useMutation({

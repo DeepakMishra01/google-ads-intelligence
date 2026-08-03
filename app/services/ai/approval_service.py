@@ -91,11 +91,8 @@ def kpi_status(gen: AdCopyGeneration) -> dict[str, Any]:
     """KPIs required before a budget can be sent for approval."""
     fs = build_final_strategy(gen)
     budget = next((f["value"] for f in fs.get("fields", []) if f["key"] == "budget"), None)
-    checks = {
-        "budget": budget,
-        "target leads": fs.get("target_leads"),
-        "target CPL": fs.get("est_cpl"),
-    }
+    # Target CPL derives from budget / target leads, so those two are the KPIs.
+    checks = {"budget": budget, "target leads": fs.get("target_leads")}
     missing = [label for label, val in checks.items() if not val]
     return {"complete": not missing, "missing": missing}
 

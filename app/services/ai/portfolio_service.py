@@ -95,7 +95,8 @@ def _campaign_row(db: Session, gen: Any, today: date) -> dict[str, Any]:
         (f["value"] for f in fs["fields"] if f["key"] == "budget"), None
     )
     target_leads = fs.get("target_leads")
-    plan_cpl = fs.get("est_cpl")
+    # Target CPL is the plan's own promise: budget spread across the target leads.
+    plan_cpl = round(budget / target_leads) if (budget and target_leads) else None
 
     achieved = _achieved(db, brief, plan_date, today)
     tracking_pending = not achieved["leads"]  # no tracked conversions yet
@@ -108,11 +109,10 @@ def _campaign_row(db: Session, gen: Any, today: date) -> dict[str, Any]:
     )
     status = "tracking_pending" if tracking_pending else _status_from_pace(pace_pct)
 
-    # KPIs must be defined before a budget is approved.
+    # KPIs required before a budget is approved (target CPL derives from these two).
     missing_kpis = [
         label
-        for label, val in (("budget", budget), ("target leads", target_leads),
-                           ("target CPL", plan_cpl))
+        for label, val in (("budget", budget), ("target leads", target_leads))
         if not val
     ]
 
