@@ -32,10 +32,14 @@ def _auto_values(gen: AdCopyGeneration) -> dict[str, Any]:
     plan = (gen.scores or {}).get("campaign_plan") or {}
     forecast = plan.get("forecast") or {}
     bidding = plan.get("bidding") or {}
+    # Use the plan's own conversion rate so the Final Strategy projection matches the
+    # Budget forecast (a hardcoded 15% here contradicted the forecast's assumed_cvr).
+    cvr = forecast.get("assumed_cvr")
+    target_cvr_pct = round(float(cvr) * 100, 1) if cvr else _DEFAULT_TARGET_CVR_PCT
     return {
         "budget": forecast.get("budget"),
         "target_leads": _DEFAULT_TARGET_LEADS,
-        "target_cvr_pct": _DEFAULT_TARGET_CVR_PCT,
+        "target_cvr_pct": target_cvr_pct,
         "bidding": bidding.get("recommended") or bidding.get("primary"),
         "_est_clicks": forecast.get("est_clicks"),
     }

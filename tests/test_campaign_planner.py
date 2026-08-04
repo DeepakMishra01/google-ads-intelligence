@@ -108,6 +108,38 @@ def test_forecast_math_is_consistent():
     assert f["cpl_is_estimated"] is True  # no conversions
 
 
+def test_cpc_is_click_weighted_and_anchored_not_collapsed():
+    """Regression: many cheap long-tail keywords must NOT collapse the plan CPC.
+
+    A plain unweighted mean of per-keyword CPC produced an unrealistically low CPC
+    (e.g. ₹1.85 vs a real ₹40), which inflated clicks/leads ~25× and crushed CPL.
+    The plan must anchor to the real click-weighted account CPC.
+    """
+    # 20 cheap long-tail terms (₹1.5, 2 clicks) + one real head term (₹80, 1000 clicks).
+    insights = [
+        {"keyword": f"long tail {i}", "intent": "admission",
+         "historical_cpc": 1.5, "historical_ctr": 0.05, "historical_clicks": 2}
+        for i in range(20)
+    ] + [
+        {"keyword": "mba admission", "intent": "admission",
+         "historical_cpc": 80.0, "historical_ctr": 0.08, "historical_clicks": 1000},
+    ]
+    groups = [{"name": "Admission", "intent": "admission", "recommended_match_types": ["PHRASE"]}]
+    plan = build_plan(
+        budget=1_000_000, timeframe_months=12, goal="traffic", assumed_cvr=0.12,
+        keyword_groups=groups, keyword_insights=insights,
+        seasonality={"available": False, "monthly_weights": {}, "months": []},
+        hist_stats={"cpc": 40.0, "ctr": 0.08, "spend_per_year": 120_000, "clicks_per_year": 3000},
+    )
+    f = plan["forecast"]
+    # Blended CPC must be realistic (click-weighted toward the ₹80 head + ₹40 anchor),
+    # NOT the collapsed ~₹1.5 plain mean.
+    assert f["blended_cpc"] >= 20, f"CPC collapsed to {f['blended_cpc']}"
+    # Clicks and CPL must therefore be sane, not fantasy.
+    assert f["est_clicks"] < 60_000  # ~budget/CPC, not budget/1.5 = 666k
+    assert f["est_cpl"] and f["est_cpl"] > 100  # real education CPL, not ₹15
+
+
 def test_brand_ranks_and_is_phase1():
     plan = build_plan(
         budget=500_000, timeframe_months=12, goal="traffic", assumed_cvr=0.03,

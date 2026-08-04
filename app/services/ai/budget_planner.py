@@ -147,14 +147,44 @@ _DEFAULT_CTR = 0.08  # fallback click-through rate for impression estimates
 _PHASE1 = {"brand", "application", "admission", "registration", "deadline"}
 
 
-def _group_cpc_ctr(intent: str, insights: list[dict[str, Any]]) -> tuple[float, float]:
-    """Average CPC and CTR for a group's keywords (from history where available)."""
+def _group_cpc_ctr(
+    intent: str, insights: list[dict[str, Any]], anchor_cpc: float
+) -> tuple[float, float]:
+    """Realistic CPC and CTR for a group's keywords.
+
+    CPC is **click-weighted** (a ₹100 keyword with 500 clicks must outweigh a ₹1
+    long-tail keyword with 2 clicks) — a plain mean of per-keyword CPC collapses to
+    an unrealistically low number on accounts with many cheap long-tail terms, which
+    then inflates clicks/leads and crushes CPL. We also clamp each group's CPC to a
+    sane band around the account's real blended CPC (``anchor_cpc``): brand can be
+    cheaper, but not 20× cheaper, and no group can run away above it.
+    """
     grp = [i for i in insights if i.get("intent") == intent]
-    cpcs = [i["historical_cpc"] for i in grp if i.get("historical_cpc")]
+    wnum = wden = 0.0
+    simple: list[float] = []
+    for i in grp:
+        cpc = i.get("historical_cpc")
+        if not cpc:
+            continue
+        cpc = float(cpc)
+        simple.append(cpc)
+        clk = float(i.get("historical_clicks") or 0)
+        if clk > 0:
+            wnum += cpc * clk
+            wden += clk
+    if wden > 0:
+        cpc = wnum / wden          # click-weighted (the correct statistic)
+    elif simple:
+        simple.sort()
+        cpc = simple[len(simple) // 2]  # median — robust to cheap-keyword outliers
+    else:
+        cpc = anchor_cpc or _DEFAULT_CPC
+    if anchor_cpc:                  # keep every group within a realistic band
+        cpc = max(cpc, anchor_cpc * 0.35)
+        cpc = min(cpc, anchor_cpc * 3.0)
     ctrs = [i["historical_ctr"] for i in grp if i.get("historical_ctr")]
-    cpc = round(sum(cpcs) / len(cpcs), 2) if cpcs else _DEFAULT_CPC
     ctr = (sum(ctrs) / len(ctrs)) if ctrs else _DEFAULT_CTR
-    return cpc, ctr
+    return round(cpc, 2), ctr
 
 
 def _bidding_for(intent: str, goal: str, has_conversions: bool) -> str:
@@ -185,6 +215,11 @@ def build_plan(
         return {"available": False}
 
     # ---- allocation across ad groups ----
+    # The account's real, click-weighted CPC anchors every group's CPC so the plan
+    # can't drift into fantasy click volumes (see _group_cpc_ctr).
+    anchor_cpc = (
+        float(hist_stats["cpc"]) if (hist_stats and hist_stats.get("cpc")) else _DEFAULT_CPC
+    )
     present = [g["intent"] for g in keyword_groups]
     total_w = sum(_INTENT_WEIGHT.get(i, 0.02) for i in present) or 1.0
     rows: list[dict[str, Any]] = []
@@ -192,7 +227,7 @@ def build_plan(
         intent = g["intent"]
         w = _INTENT_WEIGHT.get(intent, 0.02) / total_w
         grp_budget = round(budget * w)
-        cpc, ctr = _group_cpc_ctr(intent, keyword_insights)
+        cpc, ctr = _group_cpc_ctr(intent, keyword_insights, anchor_cpc)
         clicks = int(grp_budget / cpc) if cpc else 0
         impressions = int(clicks / ctr) if ctr else 0
         leads = round(clicks * assumed_cvr, 1)
