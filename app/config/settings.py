@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     scorecard_weekly_day: str = "mon"  # cron day-of-week for the weekly snapshot
     sync_max_retries: int = 3
     sync_retry_backoff_seconds: int = 30
-    sync_default_lookback_days: int = 7
+    sync_default_lookback_days: int = 30  # rolling refresh window (env: SYNC_DEFAULT_LOOKBACK_DAYS; 60 for wider)
 
     # --- Email (approval emails via SMTP, e.g. a team Gmail app password) ---
     smtp_host: str = "smtp.gmail.com"
