@@ -834,6 +834,65 @@ export interface Portfolio {
   as_of: string;
 }
 
+export interface ManagerAuditRow {
+  gen_id: number;
+  campus: string;
+  kw_adoption_pct: number | null;
+  match_type_adherence_pct: number | null;
+  copy_adoption_pct: number | null;
+  clicks: number;
+  cost: number;
+  conversions: number;
+}
+export interface ManagerAudit {
+  ad_manager: string;
+  campaigns: number;
+  kw_adoption_pct: number | null;
+  copy_adoption_pct: number | null;
+  match_type_adherence_pct: number | null;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  campaign_rows: ManagerAuditRow[];
+}
+export interface ExecutionAudit {
+  managers: ManagerAudit[];
+  assigned_campaigns: number;
+}
+export interface KwUsed {
+  keyword: string;
+  recommended_match_type: string | null;
+  live_match_type: string;
+  match_type_ok: boolean;
+}
+interface CopyAudit {
+  recommended: number;
+  used: number;
+  adoption_pct: number | null;
+  used_list: string[];
+  unused_list: string[];
+  their_own: string[];
+}
+export interface CampaignAuditDetail {
+  available: boolean;
+  gen_id: number;
+  campus: string;
+  ad_manager: string;
+  keywords: {
+    recommended: number;
+    used: number;
+    adoption_pct: number | null;
+    match_type_adherence_pct: number | null;
+    used_list: KwUsed[];
+    missing: string[];
+    off_plan: { text: string; match_type: string }[];
+    live_total: number;
+  };
+  ad_copy: { headlines: CopyAudit; descriptions: CopyAudit };
+  strategy: { recommended_bidding: string | null; budget: number | null };
+  performance: { clicks: number; cost: number; conversions: number };
+}
+
 export interface ReversePlan {
   target_leads: number;
   target_cpl: number;

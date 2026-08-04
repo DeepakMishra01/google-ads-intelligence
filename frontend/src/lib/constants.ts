@@ -9,6 +9,7 @@ import {
   Search,
   SearchCode,
   Sparkles,
+  ClipboardCheck,
   Target,
   Type,
   Wallet,
@@ -36,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/ai/ad-copy", label: "AI Ad Copy Generator", icon: Sparkles, group: "AI Tools" },
   { to: "/accountability", label: "Campaign Accountability", icon: Target, group: "AI Tools" },
   { to: "/account-budgets", label: "Account Budgets", icon: Wallet, group: "AI Tools" },
+  { to: "/execution-audit", label: "Execution Audit", icon: ClipboardCheck, group: "AI Tools" },
 ];
 
 export const APP_ICON = Target;

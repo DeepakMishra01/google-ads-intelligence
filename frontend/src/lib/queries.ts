@@ -5,6 +5,8 @@ import type {
   AccountAlert,
   AccountBudget,
   AdCopyGenerateResponse,
+  CampaignAuditDetail,
+  ExecutionAudit,
   Alert,
   AlertEvaluateResult,
   AlertSummary,
@@ -386,6 +388,22 @@ export function usePortfolio() {
   return useQuery({
     queryKey: ["ad-copy-portfolio"],
     queryFn: () => api.get("/ai/ad-copy/portfolio").then((r) => r.data as Portfolio),
+  });
+}
+
+export function useExecutionAudit() {
+  return useQuery({
+    queryKey: ["execution-audit"],
+    queryFn: () => api.get("/ai/ad-copy/execution-audit").then((r) => r.data as ExecutionAudit),
+  });
+}
+
+export function useCampaignAudit(genId: number | null) {
+  return useQuery({
+    queryKey: ["campaign-audit", genId],
+    enabled: genId != null,
+    queryFn: () =>
+      api.get(`/ai/ad-copy/execution-audit/${genId}`).then((r) => r.data as CampaignAuditDetail),
   });
 }
 

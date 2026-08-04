@@ -160,6 +160,21 @@ def account_budgets(db: Session = Depends(get_db)) -> dict:
     }
 
 
+@router.get("/execution-audit", response_model=None, summary="Plan-vs-reality per ad manager")
+def execution_audit(db: Session = Depends(get_db)) -> dict:
+    from app.services.ai.execution_audit_service import build_manager_audit
+
+    return build_manager_audit(db)
+
+
+@router.get("/execution-audit/{gen_id}", response_model=None, summary="Given-vs-used detail")
+def execution_audit_detail(gen_id: int, db: Session = Depends(get_db)) -> dict:
+    from app.repositories.ad_copy import AdCopyRepository
+    from app.services.ai.execution_audit_service import build_campaign_audit
+
+    return build_campaign_audit(db, AdCopyRepository(db).get(gen_id))
+
+
 @router.post("/{gen_id}/request-changes", response_model=None, summary="Ask for changes")
 def approval_request_changes(
     gen_id: int,
