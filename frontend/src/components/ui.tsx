@@ -5,7 +5,7 @@ import { apiErrorMessage } from "@/lib/api";
 import { healthColor } from "@/lib/ui";
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={clsx("card p-4", className)}>{children}</div>;
+  return <div className={clsx("card p-5", className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -18,10 +18,12 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+        <h1 className="font-display text-[26px] font-bold leading-tight tracking-tight text-slate-900">
+          {title}
+        </h1>
+        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -32,7 +34,7 @@ export function Badge({ children, className }: { children: ReactNode; className?
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize",
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold capitalize ring-1 ring-inset ring-current/10",
         className
       )}
     >
@@ -44,7 +46,7 @@ export function Badge({ children, className }: { children: ReactNode; className?
 export function Spinner({ label }: { label?: string }) {
   return (
     <div className="flex items-center justify-center gap-2 py-16 text-slate-400">
-      <Loader2 className="animate-spin" size={20} />
+      <Loader2 className="animate-spin text-brand-500" size={20} />
       {label && <span className="text-sm">{label}</span>}
     </div>
   );
@@ -119,7 +121,7 @@ export function Meter({ value, color }: { value: number; color?: string }) {
     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
       <div
         className="h-full rounded-full"
-        style={{ width: `${pctWidth}%`, background: color ?? "#2563eb" }}
+        style={{ width: `${pctWidth}%`, background: color ?? "#4f46e5" }}
       />
     </div>
   );

@@ -13,7 +13,18 @@ body,
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+  @apply text-slate-700 antialiased;
+  /* Soft, indigo-tinted canvas with a whisper of depth at the top. */
+  background:
+    radial-gradient(1200px 400px at 100% -10%, rgba(99, 102, 241, 0.06), transparent 60%),
+    #f5f6fb;
+  font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+}
+
+/* Display face for headings; utility class applied by shared components. */
+.font-display {
+  font-family: theme("fontFamily.display");
+  letter-spacing: -0.015em;
 }
 
 /* Thin, unobtrusive scrollbars for dense data tables. */
@@ -22,36 +33,63 @@ body {
   scrollbar-color: #cbd5e1 transparent;
 }
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 *::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: content-box;
+}
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 @layer components {
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-card;
+    @apply rounded-2xl border border-slate-200/70 bg-white shadow-card;
+  }
+  /* Interactive cards gently lift on hover. */
+  .card-hover {
+    @apply transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/80 hover:shadow-cardhover;
   }
   .input {
-    @apply h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none
-      focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+    @apply h-9 rounded-lg border border-slate-300/90 bg-white px-3 text-sm text-slate-800 outline-none
+      transition placeholder:text-slate-400
+      focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70;
   }
   .btn {
-    @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-sm
-      font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm
+      font-medium transition duration-150 focus-visible:outline-none focus-visible:ring-4
+      focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+    @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800;
   }
   .btn-ghost {
-    @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+    @apply btn border border-slate-200 bg-white text-slate-700 shadow-sm
+      hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900;
   }
   .th {
-    @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
+    @apply px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500;
   }
   .td {
     @apply whitespace-nowrap px-3 py-2.5 text-sm text-slate-700;
+  }
+  /* Unified status pill — form encodes state at a glance. */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
 }
