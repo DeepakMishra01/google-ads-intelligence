@@ -52,6 +52,48 @@ export function Spinner({ label }: { label?: string }) {
   );
 }
 
+/** A single shimmering placeholder block. */
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={clsx("animate-pulse rounded-md bg-slate-200/70", className)} />;
+}
+
+/** A tidy loading placeholder for a data table (header + rows). */
+export function SkeletonTable({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
+  return (
+    <Card>
+      <div className="mb-4 flex gap-4 border-b border-slate-100 pb-3">
+        {Array.from({ length: cols }).map((_, i) => (
+          <Skeleton key={i} className="h-3 flex-1" />
+        ))}
+      </div>
+      <div className="space-y-3.5">
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="flex items-center gap-4">
+            {Array.from({ length: cols }).map((_, c) => (
+              <Skeleton key={c} className={clsx("h-4 flex-1", c === 0 && "max-w-[40%]")} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** A row of KPI-tile placeholders. */
+export function SkeletonTiles({ count = 4 }: { count?: number }) {
+  return (
+    <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <Card key={i}>
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="mt-2.5 h-7 w-28" />
+          <Skeleton className="mt-2 h-2.5 w-16" />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 /** Renders loading / error / empty states, otherwise the children. */
 export function StateBlock({
   isLoading,

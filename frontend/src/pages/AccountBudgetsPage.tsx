@@ -1,5 +1,5 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Card, PageHeader, SkeletonTable, SkeletonTiles } from "@/components/ui";
 import { money, num } from "@/lib/format";
 import { useAccountBudgets } from "@/lib/queries";
 
@@ -29,7 +29,14 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub?:
 export default function AccountBudgetsPage() {
   const { data, isLoading, isError, refetch, isFetching } = useAccountBudgets();
 
-  if (isLoading) return <Spinner label="Loading account budgets…" />;
+  if (isLoading)
+    return (
+      <div>
+        <PageHeader title="Account Budgets" subtitle="Allotted vs spent, remaining, and overspend alerts" />
+        <SkeletonTiles count={4} />
+        <SkeletonTable rows={7} cols={6} />
+      </div>
+    );
   if (isError || !data)
     return (
       <Card>

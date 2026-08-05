@@ -60,9 +60,9 @@ export function statusBadgeClass(status: string): string {
 }
 
 export const CHART_COLORS = {
-  cost: "#2563eb",
-  clicks: "#16a34a",
-  impressions: "#7c3aed",
-  ctr: "#ea580c",
-  conversions: "#0891b2",
+  cost: "#4f46e5", // brand indigo
+  clicks: "#10b981", // emerald
+  impressions: "#8b5cf6", // violet
+  ctr: "#f59e0b", // amber
+  conversions: "#06b6d4", // cyan
 };

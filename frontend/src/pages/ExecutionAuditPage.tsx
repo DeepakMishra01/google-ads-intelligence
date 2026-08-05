@@ -1,6 +1,6 @@
 import { Check, X, Plus, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Card, PageHeader, SkeletonTable, Spinner } from "@/components/ui";
 import { money, num } from "@/lib/format";
 import { useCampaignAudit, useExecutionAudit } from "@/lib/queries";
 import type { CampaignAuditDetail } from "@/lib/types";
@@ -108,7 +108,13 @@ export default function ExecutionAuditPage() {
   const [openMgr, setOpenMgr] = useState<string | null>(null);
   const [openGen, setOpenGen] = useState<number | null>(null);
 
-  if (isLoading) return <Spinner label="Loading execution audit…" />;
+  if (isLoading)
+    return (
+      <div>
+        <PageHeader title="Execution Audit" subtitle="What we gave each ad manager vs what they ran" />
+        <SkeletonTable rows={4} cols={5} />
+      </div>
+    );
   if (isError || !data)
     return <Card><div className="py-8 text-center text-sm text-slate-500">Couldn't load. <button className="text-blue-600" onClick={() => refetch()}>Retry</button></div></Card>;
 

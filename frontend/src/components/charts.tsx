@@ -15,6 +15,15 @@ import { CHART_COLORS } from "@/lib/ui";
 import type { GrowthPoint, TrendPoint } from "@/lib/types";
 
 const axis = { fontSize: 11, stroke: "#94a3b8" } as const;
+const GRID = "#eef1f6";
+const tooltipStyle = {
+  borderRadius: 12,
+  border: "1px solid #e6e9f0",
+  fontSize: 12,
+  boxShadow: "0 10px 28px -6px rgb(16 24 40 / 0.16)",
+  padding: "8px 11px",
+} as const;
+const activeDot = { r: 4, strokeWidth: 2, stroke: "#fff" } as const;
 
 /** Spend-over-time area chart. */
 export function SpendAreaChart({ data, height = 240 }: { data: TrendPoint[]; height?: number }) {
@@ -27,13 +36,13 @@ export function SpendAreaChart({ data, height = 240 }: { data: TrendPoint[]; hei
             <stop offset="100%" stopColor={CHART_COLORS.cost} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
         <XAxis dataKey="date" tickFormatter={shortDate} tick={axis} tickLine={false} />
         <YAxis tickFormatter={(v) => compact(v)} tick={axis} tickLine={false} width={48} />
         <Tooltip
           formatter={(v: number) => money(v)}
           labelFormatter={(l) => shortDate(String(l))}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+          contentStyle={tooltipStyle} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }}
         />
         <Area
           type="monotone"
@@ -42,6 +51,7 @@ export function SpendAreaChart({ data, height = 240 }: { data: TrendPoint[]; hei
           stroke={CHART_COLORS.cost}
           strokeWidth={2}
           fill="url(#spend)"
+          activeDot={activeDot}
           isAnimationActive={false}
         />
       </AreaChart>
@@ -54,22 +64,22 @@ export function EngagementChart({ data, height = 240 }: { data: TrendPoint[]; he
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 5, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
         <XAxis dataKey="date" tickFormatter={shortDate} tick={axis} tickLine={false} />
         <YAxis tickFormatter={(v) => compact(v)} tick={axis} tickLine={false} width={48} />
         <Tooltip
           labelFormatter={(l) => shortDate(String(l))}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+          contentStyle={tooltipStyle} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="clicks" name="Clicks" stroke={CHART_COLORS.clicks} strokeWidth={2} dot={false} isAnimationActive={false} />
+        <Line type="monotone" dataKey="clicks" name="Clicks" stroke={CHART_COLORS.clicks} strokeWidth={2} dot={false} activeDot={activeDot} isAnimationActive={false} />
         <Line
           type="monotone"
           dataKey="impressions"
           name="Impressions"
           stroke={CHART_COLORS.impressions}
           strokeWidth={2}
-          dot={false}
+          dot={false} activeDot={activeDot}
         />
       </LineChart>
     </ResponsiveContainer>
@@ -81,23 +91,23 @@ export function GrowthChart({ data, height = 240 }: { data: GrowthPoint[]; heigh
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 5, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
         <XAxis dataKey="date" tickFormatter={shortDate} tick={axis} tickLine={false} />
         <YAxis tickFormatter={(v) => compact(v)} tick={axis} tickLine={false} width={40} />
         <Tooltip
           labelFormatter={(l) => shortDate(String(l))}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+          contentStyle={tooltipStyle} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="campaigns" name="Campaigns" stroke="#2563eb" strokeWidth={2} dot={false} isAnimationActive={false} />
-        <Line type="monotone" dataKey="keywords" name="Keywords" stroke="#16a34a" strokeWidth={2} dot={false} isAnimationActive={false} />
+        <Line type="monotone" dataKey="campaigns" name="Campaigns" stroke={CHART_COLORS.cost} strokeWidth={2} dot={false} activeDot={activeDot} isAnimationActive={false} />
+        <Line type="monotone" dataKey="keywords" name="Keywords" stroke={CHART_COLORS.clicks} strokeWidth={2} dot={false} activeDot={activeDot} isAnimationActive={false} />
         <Line
           type="monotone"
           dataKey="search_terms"
           name="Search terms"
-          stroke="#ea580c"
+          stroke={CHART_COLORS.ctr}
           strokeWidth={2}
-          dot={false}
+          dot={false} activeDot={activeDot}
         />
       </LineChart>
     </ResponsiveContainer>

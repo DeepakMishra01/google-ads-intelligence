@@ -1,6 +1,6 @@
 import { RefreshCw, Pencil } from "lucide-react";
 import { useState } from "react";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Card, PageHeader, SkeletonTable, SkeletonTiles } from "@/components/ui";
 import { money, num } from "@/lib/format";
 import { usePortfolio, useSetAdManager, useSetCampaignAccount, useSetKpis } from "@/lib/queries";
 import type { ManagerRollup, PortfolioCampaign } from "@/lib/types";
@@ -211,7 +211,14 @@ export default function AccountabilityPage() {
   const { data, isLoading, isError, refetch, isFetching } = usePortfolio();
   const [manager, setManager] = useState<string | null>(null);
 
-  if (isLoading) return <Spinner label="Loading portfolio…" />;
+  if (isLoading)
+    return (
+      <div>
+        <PageHeader title="Campaign Accountability" subtitle="Plan vs actual — per campaign and per ad manager" />
+        <SkeletonTiles count={5} />
+        <SkeletonTable rows={8} cols={8} />
+      </div>
+    );
   if (isError || !data)
     return (
       <Card>
