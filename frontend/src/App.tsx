@@ -15,6 +15,7 @@ const AiAdCopyGeneratorPage = lazy(() => import("./pages/AiAdCopyGeneratorPage")
 const AccountabilityPage = lazy(() => import("./pages/AccountabilityPage"));
 const AccountBudgetsPage = lazy(() => import("./pages/AccountBudgetsPage"));
 const ExecutionAuditPage = lazy(() => import("./pages/ExecutionAuditPage"));
+const LandingAuditorPage = lazy(() => import("./pages/LandingAuditorPage"));
 const PriorityQueuePage = lazy(() => import("./pages/PriorityQueuePage"));
 const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const CampaignHealthPage = lazy(() => import("./pages/CampaignHealthPage"));
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/accountability" element={<AccountabilityPage />} />
             <Route path="/account-budgets" element={<AccountBudgetsPage />} />
             <Route path="/execution-audit" element={<ExecutionAuditPage />} />
+            <Route path="/landing-auditor" element={<LandingAuditorPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -160,6 +160,34 @@ def account_budgets(db: Session = Depends(get_db)) -> dict:
     }
 
 
+@router.post("/landing-audit", response_model=None, summary="Audit any landing-page URL")
+def landing_audit(
+    url: str = Query(..., description="Landing page URL to audit."),
+    lp_type: str = Query("auto", description="auto | kapp | client — landing-page ownership."),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.ai.landing_auditor import build_landing_audit
+    from app.services.ai.landing_page_service import LandingPageService
+    from app.services.ai.landing_quality import score_landing_page
+
+    landing = LandingPageService(db).analyze(url)
+    if not landing.get("fetched"):
+        return {
+            "fetched": False,
+            "url": url,
+            "notes": landing.get("notes", "The page could not be fetched."),
+        }
+    quality = score_landing_page(landing)
+    audit = build_landing_audit(landing, quality, lp_type=lp_type)
+    return {
+        "fetched": True,
+        "url": landing.get("url", url),
+        "landing": landing,
+        "landing_quality": quality,
+        "landing_audit": audit,
+    }
+
+
 @router.get("/execution-audit", response_model=None, summary="Plan-vs-reality per ad manager")
 def execution_audit(db: Session = Depends(get_db)) -> dict:
     from app.services.ai.execution_audit_service import build_manager_audit

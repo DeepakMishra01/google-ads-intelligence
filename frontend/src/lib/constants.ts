@@ -10,6 +10,7 @@ import {
   SearchCode,
   Sparkles,
   ClipboardCheck,
+  Globe,
   Target,
   Type,
   Wallet,
@@ -38,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/accountability", label: "Campaign Accountability", icon: Target, group: "AI Tools" },
   { to: "/account-budgets", label: "Account Budgets", icon: Wallet, group: "AI Tools" },
   { to: "/execution-audit", label: "Execution Audit", icon: ClipboardCheck, group: "AI Tools" },
+  { to: "/landing-auditor", label: "Landing Page Auditor", icon: Globe, group: "AI Tools" },
 ];
 
 export const APP_ICON = Target;

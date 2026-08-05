@@ -893,6 +893,14 @@ export interface CampaignAuditDetail {
   performance: { clicks: number; cost: number; conversions: number };
 }
 
+export interface LandingAuditResult {
+  fetched: boolean;
+  url: string;
+  notes?: string;
+  landing_quality?: LandingQuality;
+  landing_audit?: LandingAudit;
+}
+
 export interface ReversePlan {
   target_leads: number;
   target_cpl: number;

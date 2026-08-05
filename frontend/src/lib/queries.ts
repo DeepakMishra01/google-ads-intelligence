@@ -7,6 +7,7 @@ import type {
   AdCopyGenerateResponse,
   CampaignAuditDetail,
   ExecutionAudit,
+  LandingAuditResult,
   Alert,
   AlertEvaluateResult,
   AlertSummary,
@@ -388,6 +389,17 @@ export function usePortfolio() {
   return useQuery({
     queryKey: ["ad-copy-portfolio"],
     queryFn: () => api.get("/ai/ad-copy/portfolio").then((r) => r.data as Portfolio),
+  });
+}
+
+export function useLandingAudit() {
+  return useMutation({
+    mutationFn: (p: { url: string; lp_type?: string }) =>
+      api
+        .post("/ai/ad-copy/landing-audit", null, {
+          params: { url: p.url, lp_type: p.lp_type ?? "auto" },
+        })
+        .then((r) => r.data as LandingAuditResult),
   });
 }
 

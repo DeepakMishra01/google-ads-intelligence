@@ -886,7 +886,7 @@ const VERDICT_COLOR: Record<string, string> = {
   client_lp: "bg-slate-50 text-slate-700 border-slate-200",
 };
 
-function LandingAuditorView({ audit }: { audit: LandingAudit }) {
+export function LandingAuditorView({ audit }: { audit: LandingAudit }) {
   const v = audit.verdict;
   return (
     <Section
@@ -983,7 +983,7 @@ function LandingAuditorView({ audit }: { audit: LandingAudit }) {
   );
 }
 
-function LandingQualityView({ lq }: { lq: LandingQuality }) {
+export function LandingQualityView({ lq }: { lq: LandingQuality }) {
   const gradeColor =
     lq.grade === "A" ? "text-green-600" : lq.grade === "B" ? "text-emerald-600"
     : lq.grade === "C" ? "text-amber-600" : "text-red-600";
