@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Check, LogOut, Menu, RotateCw, X } from "lucide-react";
+import { Check, ChevronsLeft, ChevronsRight, LogOut, Menu, RotateCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -8,7 +8,7 @@ import { useAccounts, useAlertSummary, useSyncNow } from "@/lib/queries";
 import { DATE_PRESETS, useFilters } from "@/state/FiltersContext";
 import { Badge } from "./ui";
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { data: alerts } = useAlertSummary(useFilters().accountId);
   let lastGroup: string | undefined;
   return (
@@ -16,34 +16,41 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       {NAV_ITEMS.map(({ to, label, icon: Icon, group }) => {
         const showHeader = group && group !== lastGroup;
         lastGroup = group;
+        const alertCount = label === "Alerts" ? alerts?.open_total ?? 0 : 0;
         return (
           <div key={to}>
-            {showHeader && (
+            {showHeader && !collapsed && (
               <div className="px-3 pb-1.5 pt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {group}
               </div>
             )}
+            {showHeader && collapsed && <div className="mx-2 my-2 border-t border-white/10" />}
             <NavLink
               to={to}
               end={to === "/"}
               onClick={onNavigate}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 clsx(
-                  "group relative flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition duration-150",
+                  "group relative flex items-center rounded-lg text-sm font-medium transition duration-150",
+                  collapsed ? "justify-center px-0 py-2.5" : "justify-between px-3 py-2",
                   isActive
                     ? "bg-brand-600 text-white shadow-lg shadow-brand-950/40"
                     : "text-slate-400 hover:bg-white/5 hover:text-white"
                 )
               }
             >
-              <span className="flex items-center gap-3">
+              <span className={clsx("flex items-center", !collapsed && "gap-3")}>
                 <Icon size={17} className="shrink-0" />
-                {label}
+                {!collapsed && label}
               </span>
-              {label === "Alerts" && alerts && alerts.open_total > 0 && (
+              {!collapsed && alertCount > 0 && (
                 <span className="rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                  {alerts.open_total}
+                  {alertCount}
                 </span>
+              )}
+              {collapsed && alertCount > 0 && (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-danger ring-2 ring-ink-950" />
               )}
             </NavLink>
           </div>
@@ -53,17 +60,19 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function SidebarBrand() {
+function SidebarBrand({ collapsed }: { collapsed?: boolean }) {
   const Icon = APP_ICON;
   return (
-    <div className="flex items-center gap-2.5 px-1 py-1">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg shadow-brand-950/40 ring-1 ring-white/10">
+    <div className={clsx("flex items-center py-1", collapsed ? "justify-center" : "gap-2.5 px-1")}>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg shadow-brand-950/40 ring-1 ring-white/10">
         <Icon size={18} />
       </div>
-      <div className="leading-tight">
-        <div className="font-display text-sm font-bold tracking-tight text-white">Command Center</div>
-        <div className="text-[11px] font-medium text-slate-400">Google Ads Ops</div>
-      </div>
+      {!collapsed && (
+        <div className="leading-tight">
+          <div className="font-display text-sm font-bold tracking-tight text-white">Command Center</div>
+          <div className="text-[11px] font-medium text-slate-400">Google Ads Ops</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -182,16 +191,52 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
 export default function Layout() {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("sidebar.collapsed") === "1"
+  );
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem("sidebar.collapsed", next ? "1" : "0");
+  };
 
   return (
     <div className="flex h-full">
       {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col gap-3 border-r border-white/5 bg-gradient-to-b from-ink-900 to-ink-950 p-3 lg:flex">
-        <SidebarBrand />
-        <NavLinks />
-        <div className="mt-auto flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2 text-[11px] font-medium text-slate-400">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-healthy" /> Live data · FastAPI
+      <aside
+        style={{
+          width: collapsed ? 76 : 240,
+          minWidth: collapsed ? 76 : 240,
+          maxWidth: collapsed ? 76 : 240,
+          flexBasis: collapsed ? 76 : 240,
+        }}
+        className="hidden shrink-0 flex-col overflow-hidden border-r border-white/5 bg-gradient-to-b from-ink-900 to-ink-950 p-3 transition-all duration-200 lg:flex"
+      >
+        <SidebarBrand collapsed={collapsed} />
+        <div className="-mr-1 mt-2 flex-1 overflow-y-auto pr-1">
+          <NavLinks collapsed={collapsed} />
         </div>
+        {!collapsed && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2 text-[11px] font-medium text-slate-400">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-healthy" /> Live data · FastAPI
+          </div>
+        )}
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={clsx(
+            "mt-2 flex items-center rounded-lg bg-white/5 py-2 text-[11px] font-medium text-slate-400 transition hover:bg-white/10 hover:text-white",
+            collapsed ? "justify-center px-0" : "justify-center gap-1.5 px-2.5"
+          )}
+        >
+          {collapsed ? (
+            <ChevronsRight size={15} />
+          ) : (
+            <>
+              <ChevronsLeft size={15} /> Collapse
+            </>
+          )}
+        </button>
       </aside>
 
       {/* Mobile drawer */}
@@ -205,7 +250,9 @@ export default function Layout() {
                 <X size={20} />
               </button>
             </div>
-            <NavLinks onNavigate={() => setOpen(false)} />
+            <div className="-mr-1 mt-2 flex-1 overflow-y-auto pr-1">
+              <NavLinks onNavigate={() => setOpen(false)} />
+            </div>
           </aside>
         </div>
       )}
