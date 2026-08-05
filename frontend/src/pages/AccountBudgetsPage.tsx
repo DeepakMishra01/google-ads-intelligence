@@ -99,9 +99,9 @@ export default function AccountBudgetsPage() {
         </div>
       )}
 
-      <Card className="overflow-x-auto">
+      <Card className="max-h-[72vh] overflow-auto">
         <table className="w-full min-w-[680px] text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-white">
             <tr className="border-b-2 border-slate-200 text-left text-xs font-medium text-slate-500">
               <th className="py-2 pl-1">Account</th>
               <th className="text-right">Allotted</th>

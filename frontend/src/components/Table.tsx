@@ -21,9 +21,9 @@ export function DataTable<T>({
 }) {
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="max-h-[72vh] overflow-auto">
         <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
+          <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
             <tr>
               {columns.map((c) => (
                 <th

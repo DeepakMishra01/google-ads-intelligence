@@ -277,9 +277,9 @@ export default function AccountabilityPage() {
           </button>
         )}
       </div>
-      <Card className="overflow-x-auto">
+      <Card className="max-h-[74vh] overflow-auto">
         <table className="w-full min-w-[860px] text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-white">
             <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               <th colSpan={3} className="px-1 pt-3 pb-1 text-left">Campaign &amp; ownership</th>
               <th colSpan={2} className="border-l border-slate-100 px-3 pt-3 pb-1 text-right">

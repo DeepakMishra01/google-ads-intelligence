@@ -93,3 +93,80 @@ body {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
 }
+
+/* ===================================================================== */
+/* Dark theme — a scoped override layer (toggled by adding `.dark` to the */
+/* <html> element) so we don't have to add dark: variants to every        */
+/* component. The sidebar is already dark, so it's untouched.             */
+/* ===================================================================== */
+:root.dark {
+  color-scheme: dark;
+}
+:root.dark body {
+  color: #c3cdd9;
+  background:
+    radial-gradient(1200px 420px at 100% -10%, rgba(99, 102, 241, 0.12), transparent 60%),
+    #0d111c;
+}
+:root.dark .card {
+  background: #161e27;
+  border-color: #263039;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+}
+:root.dark .card-hover:hover {
+  border-color: #33414f;
+  box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.5);
+}
+:root.dark .input {
+  background: #111a24;
+  border-color: #2f3d4c;
+  color: #e6edf5;
+}
+:root.dark .btn-ghost {
+  background: #1b2530;
+  border-color: #2c3a49;
+  color: #c7d0da;
+}
+:root.dark .btn-ghost:hover {
+  background: #222f3d;
+  color: #eaf0f6;
+}
+:root.dark *::-webkit-scrollbar-thumb {
+  background: #3a4756;
+  background-clip: content-box;
+}
+
+/* Utility remaps (scoped + !important so they beat Tailwind reliably). */
+:root.dark .bg-white { background-color: #161e27 !important; }
+:root.dark .bg-white\/75,
+:root.dark .bg-white\/80,
+:root.dark .bg-white\/90 { background-color: rgba(18, 24, 33, 0.82) !important; }
+:root.dark .bg-slate-50 { background-color: #1b2530 !important; }
+:root.dark .bg-slate-100 { background-color: #232f3d !important; }
+:root.dark .even\:bg-slate-50\/40:nth-child(even) { background-color: rgba(255, 255, 255, 0.025) !important; }
+:root.dark .hover\:bg-slate-50:hover,
+:root.dark .hover\:bg-slate-50\/60:hover,
+:root.dark .hover\:bg-slate-50\/70:hover,
+:root.dark .hover\:bg-blue-50\/40:hover { background-color: rgba(255, 255, 255, 0.04) !important; }
+
+:root.dark .text-slate-900 { color: #e8eef5 !important; }
+:root.dark .text-slate-800 { color: #dae2eb !important; }
+:root.dark .text-slate-700 { color: #c6d0da !important; }
+:root.dark .text-slate-600 { color: #aab6c2 !important; }
+:root.dark .text-slate-500 { color: #8b98a6 !important; }
+:root.dark .text-slate-400 { color: #71808f !important; }
+
+:root.dark .border-slate-100 { border-color: #222c37 !important; }
+:root.dark .border-slate-200,
+:root.dark .border-slate-200\/70 { border-color: #29333f !important; }
+:root.dark .border-slate-300,
+:root.dark .border-slate-300\/90 { border-color: #35424f !important; }
+:root.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #222c37 !important; }
+:root.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #29333f !important; }
+
+/* Soft alert/callout backgrounds → dark-tinted so they don't glare. */
+:root.dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.12) !important; }
+:root.dark .bg-amber-50 { background-color: rgba(217, 119, 6, 0.12) !important; }
+:root.dark .bg-green-50 { background-color: rgba(21, 163, 74, 0.12) !important; }
+:root.dark .bg-blue-50,
+:root.dark .bg-brand-50 { background-color: rgba(79, 70, 229, 0.15) !important; }

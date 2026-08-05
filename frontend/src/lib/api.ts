@@ -4,7 +4,7 @@ import axios from "axios";
 // VITE_API_BASE for production deployments behind a different origin.
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE ?? "/api/v1",
-  timeout: 30000,
+  timeout: 45000,
 });
 
 // --- Auth header injection --------------------------------------------------

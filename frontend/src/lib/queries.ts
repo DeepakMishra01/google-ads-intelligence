@@ -398,6 +398,7 @@ export function useLandingAudit() {
       api
         .post("/ai/ad-copy/landing-audit", null, {
           params: { url: p.url, lp_type: p.lp_type ?? "auto" },
+          timeout: 90_000,
         })
         .then((r) => r.data as LandingAuditResult),
   });
@@ -484,7 +485,9 @@ export function useGenerateAdCopy() {
       conversion_tracking?: string;
       lp_type?: string;
     }) =>
-      api.post<AdCopyGenerateResponse>("/ai/ad-copy/generate", body).then((r) => r.data),
+      api
+        .post<AdCopyGenerateResponse>("/ai/ad-copy/generate", body, { timeout: 180_000 })
+        .then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-history"] }),
   });
 }

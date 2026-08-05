@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Check, ChevronsLeft, ChevronsRight, LogOut, Menu, RotateCw, X } from "lucide-react";
+import { Check, ChevronsLeft, ChevronsRight, LogOut, Menu, Moon, RotateCw, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -74,6 +74,26 @@ function SidebarBrand({ collapsed }: { collapsed?: boolean }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const toggle = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("theme", next ? "dark" : "light");
+  };
+  return (
+    <button
+      className="btn-ghost h-9 w-9 px-0"
+      onClick={toggle}
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label="Toggle theme"
+    >
+      {dark ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
   );
 }
 
@@ -160,6 +180,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
+        <ThemeToggle />
         {canSync && (
           <button
             className="btn-ghost h-9 px-2"

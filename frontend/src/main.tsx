@@ -7,6 +7,13 @@ import { AuthProvider } from "./auth/AuthContext";
 import { FiltersProvider } from "./state/FiltersContext";
 import "./index.css";
 
+// Apply the saved theme (or OS preference) before first paint.
+(() => {
+  const saved = localStorage.getItem("theme");
+  const dark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.classList.toggle("dark", dark);
+})();
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
