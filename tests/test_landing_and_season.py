@@ -57,3 +57,23 @@ def test_pacing_uses_admission_season():
     assert pacing[5] == round(1_500_000 * 0.20)
     assert pacing[7] == round(1_500_000 * 0.20)
     assert sum(pacing.values()) == 1_500_000  # exact
+
+
+def test_landing_page_type_detection():
+    from app.services.ai.landing_quality import detect_page_type, score_landing_page
+
+    exam = {"fetched": True, "url": "http://lp.kollegeapply.com/NMAT2026/",
+            "h1": ["NMAT 2026 Registration Open"], "cta_buttons": ["Register Now"],
+            "admission_dates": ["Exam on 5 Dec"], "eligibility": ["Graduation required"],
+            "h2": ["Exam Pattern", "Participating Colleges"], "meta_title": "NMAT",
+            "meta_description": "Register for NMAT 2026"}
+    assert detect_page_type(exam) == "exam"
+    q = score_landing_page(exam, mobile_heavy=False)
+    assert q["page_type"] == "exam"
+    labels = [c["item"] for c in q["checks"]]
+    assert any("Exam" in x or "Eligibility" in x for x in labels)
+    assert not any("Placement" in x or "Scholarship" in x for x in labels)
+
+    college = {"fetched": True, "url": "https://indusuni.ac.in/admissions",
+               "h2": ["Placements", "Fee Structure", "Accreditation"], "h1": ["Admissions 2026"]}
+    assert detect_page_type(college) == "college"

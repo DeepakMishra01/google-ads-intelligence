@@ -59,8 +59,21 @@ export default function LandingAuditorPage() {
       {data && !audit.isPending && (
         data.fetched ? (
           <div className="space-y-5">
-            <div className="text-sm text-slate-500">
-              Audited <span className="font-medium text-slate-700">{data.url}</span>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+              <span>
+                Audited <span className="font-medium text-slate-700">{data.url}</span>
+              </span>
+              {data.landing_quality?.page_type && (
+                <span
+                  className={`pill ${
+                    data.landing_quality.page_type === "exam"
+                      ? "bg-violet-100 text-violet-700"
+                      : "bg-brand-100 text-brand-700"
+                  }`}
+                >
+                  Detected: {data.landing_quality.page_type === "exam" ? "Exam page" : "College page"}
+                </span>
+              )}
             </div>
             {data.landing_quality && <LandingQualityView lq={data.landing_quality} />}
             {data.landing_audit && data.landing_audit.available && (

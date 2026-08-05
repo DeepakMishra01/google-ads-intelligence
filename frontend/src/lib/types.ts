@@ -579,6 +579,7 @@ export interface LandingCheck {
 }
 export interface LandingQuality {
   available: boolean;
+  page_type?: string; // "exam" | "college"
   score: number;
   grade: string | null;
   checks: LandingCheck[];
