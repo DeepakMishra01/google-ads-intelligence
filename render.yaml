@@ -37,6 +37,12 @@ services:
         value: "5"
       - key: APP_ENV
         value: production
+      # Render is a READ-ONLY MIRROR: the local machine is the source of truth for
+      # syncs/backfills, and its data is copied to Render. Keep Render's own
+      # scheduler OFF so it can't sync concurrently (which duplicates rows) or grow
+      # the DB toward the free-tier 1 GB cap. Also set this in the dashboard.
+      - key: SCHEDULER_ENABLED
+        value: "false"
       - key: APP_DEBUG
         value: "false"
       - key: APP_LOG_JSON
