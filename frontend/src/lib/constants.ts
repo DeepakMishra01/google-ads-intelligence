@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BarChart3,
+  Building2,
   FileText,
   Gauge,
   LayoutDashboard,
@@ -26,6 +27,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
+  { to: "/accounts", label: "Accounts", icon: Building2 },
   { to: "/explorer", label: "Campaign Explorer", icon: SearchCode },
   { to: "/priorities", label: "Priority Queue", icon: ListChecks },
   { to: "/alerts", label: "Alerts", icon: AlertTriangle },

@@ -835,6 +835,30 @@ export interface Portfolio {
   as_of: string;
 }
 
+export interface AccountRollupRow {
+  account_id: number;
+  account_name: string;
+  customer_id: string | null;
+  campaigns: number;
+  keywords: number;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avg_cpc: number | null;
+  conversions: number;
+  cpl: number | null;
+  health_score: number;
+  health_level: string;
+  status: string; // converting | no_conversions | inactive
+}
+export interface AccountRollup {
+  accounts: AccountRollupRow[];
+  totals: { accounts: number; campaigns: number; spend: number; clicks: number; conversions: number };
+  window_days: number;
+  as_of: string;
+}
+
 export interface ManagerAuditRow {
   gen_id: number;
   campus: string;

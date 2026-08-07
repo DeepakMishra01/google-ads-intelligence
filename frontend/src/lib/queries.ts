@@ -4,6 +4,7 @@ import type {
   Account,
   AccountAlert,
   AccountBudget,
+  AccountRollup,
   AdCopyGenerateResponse,
   CampaignAuditDetail,
   ExecutionAudit,
@@ -48,7 +49,8 @@ async function get<T>(url: string, params?: Record<string, unknown>): Promise<T>
 export function useAccounts() {
   return useQuery({
     queryKey: ["accounts"],
-    queryFn: () => get<Page<Account>>("/accounts", { limit: 500 }),
+    // Only accounts that actually have campaigns — empty shells cluttered the dropdown.
+    queryFn: () => get<Page<Account>>("/accounts", { limit: 500, with_campaigns: true }),
     staleTime: 5 * 60_000,
   });
 }
@@ -401,6 +403,13 @@ export function useLandingAudit() {
           timeout: 90_000,
         })
         .then((r) => r.data as LandingAuditResult),
+  });
+}
+
+export function useAccountRollup(days = 365) {
+  return useQuery({
+    queryKey: ["account-rollup", days],
+    queryFn: () => api.get("/accounts/rollup", { params: { days } }).then((r) => r.data as AccountRollup),
   });
 }
 
