@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { EngagementChart, SpendAreaChart } from "@/components/charts";
 import { Badge, Card, PageHeader, StateBlock } from "@/components/ui";
-import { biddingLabel, channelLabel, money, num, pct, shortDate } from "@/lib/format";
+import { biddingLabel, money, num, pct, shortDate } from "@/lib/format";
 import {
   useCampaign,
   useCampaignMetrics,
@@ -77,10 +77,11 @@ export default function CampaignDetailPage() {
   });
 
   // Aggregate the snapshot time-series into KPI totals + a chart series.
-  const { agg, trend } = useMemo(() => {
+  const { agg, trend, latest } = useMemo(() => {
     const snaps = (metrics.data?.items ?? [])
       .slice()
       .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+    const mostRecent = snaps.length ? snaps[snaps.length - 1] : null;
     let windowed = snaps;
     if (!isCustom && snaps.length) {
       const maxD = new Date(snaps[snaps.length - 1].snapshot_date);
@@ -106,7 +107,7 @@ export default function CampaignDetailPage() {
       ctr: s.ctr ?? (s.impressions ? s.clicks / s.impressions : 0),
       avg_cpc: (s.average_cpc_micros ?? 0) / 1e6,
     }));
-    return { agg: a, trend: series };
+    return { agg: a, trend: series, latest: mostRecent };
   }, [metrics.data, isCustom, effectiveDays]);
 
   const ctr = agg.impressions ? agg.clicks / agg.impressions : null;
@@ -144,15 +145,12 @@ export default function CampaignDetailPage() {
         subtitle={`Campaign detail · ${rangeLabel}`}
         actions={
           <div className="flex items-center gap-2">
-            {statusBadge(clicked.status ?? c?.status)}
-            {c?.bidding_strategy_type && (
+            {statusBadge(clicked.status ?? latest?.status ?? c?.status)}
+            {/* Sourced from the campaign's own snapshots (correctly keyed) rather
+                than the dimension record, which can be out of sync. */}
+            {latest?.bidding_strategy_type && (
               <Badge className="bg-slate-100 text-slate-600">
-                {biddingLabel(c.bidding_strategy_type)}
-              </Badge>
-            )}
-            {c?.advertising_channel_type && (
-              <Badge className="bg-indigo-100 text-indigo-700">
-                {channelLabel(c.advertising_channel_type)}
+                {biddingLabel(latest.bidding_strategy_type)}
               </Badge>
             )}
           </div>

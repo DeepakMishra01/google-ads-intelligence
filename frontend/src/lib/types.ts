@@ -912,6 +912,7 @@ export interface CampaignMetricSnapshot {
   campaign_id: number;
   snapshot_date: string;
   status: string | null;
+  bidding_strategy_type: string | null;
   impressions: number;
   clicks: number;
   cost_micros: number;
