@@ -100,6 +100,7 @@ class AccountRollupService:
             conv = round(float(conv), 1)
             ctr = round(clicks / impr, 4) if impr else 0.0
             cpc = round(cost / clicks, 2) if clicks else None
+            cpm = round(cost / impr * 1000, 2) if impr else None
             cpl = round(cost / conv, 0) if conv else None
             score, level = _health(ctr, conv, clicks)
             status = (
@@ -118,6 +119,7 @@ class AccountRollupService:
                 "impressions": impr,
                 "ctr": ctr,
                 "avg_cpc": cpc,
+                "cpm": cpm,
                 "conversions": conv,
                 "cpl": cpl,
                 "health_score": score,
@@ -189,6 +191,7 @@ class AccountRollupService:
                 "impressions": impr,
                 "ctr": round(clicks / impr, 4) if impr else 0.0,
                 "avg_cpc": round(cost / clicks, 2) if clicks else None,
+                "cpm": round(cost / impr * 1000, 2) if impr else None,
                 "conversions": conv,
                 "cpl": round(cost / conv, 0) if conv else None,
                 "landing_url": lp.get(cid),

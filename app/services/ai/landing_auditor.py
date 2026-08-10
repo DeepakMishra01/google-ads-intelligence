@@ -103,6 +103,45 @@ def _technical_checks(landing: dict[str, Any], brand: str | None) -> list[dict[s
         ),
     })
 
+    # Broken links (wasted ad clicks + trust hit).
+    broken = landing.get("broken_links") or []
+    checked = landing.get("links_checked") or 0
+    if checked:
+        if broken:
+            preview = ", ".join(str(b.get("url", "")) for b in broken[:3])
+            checks.append({
+                "item": "Broken links",
+                "status": "fail",
+                "guidance": f"{len(broken)} broken link(s) out of {checked} checked — each wastes "
+                            f"a click and erodes trust. Fix or remove: {preview}"
+                            f"{'…' if len(broken) > 3 else ''}",
+            })
+        else:
+            checks.append({
+                "item": "Broken links",
+                "status": "pass",
+                "guidance": f"No broken links among the {checked} checked — good.",
+            })
+
+    # External links (paid LP should keep the visitor on-page until they convert).
+    ext = landing.get("external_links") or []
+    ext_n = landing.get("external_link_count") or 0
+    if ext_n:
+        preview = ", ".join(str(u) for u in ext[:3])
+        checks.append({
+            "item": "External links",
+            "status": "warn",
+            "guidance": f"{ext_n} link(s) leave this page ({preview}{'…' if ext_n > 3 else ''}). A "
+                        "paid landing page should keep the visitor here until they convert — "
+                        "remove off-site links or open essential ones (privacy) in a new tab.",
+        })
+    else:
+        checks.append({
+            "item": "External links",
+            "status": "pass",
+            "guidance": "No visitor-leaking external links — the page keeps focus on the offer.",
+        })
+
     # Privacy policy (Google Ads policy requires it).
     checks.append({
         "item": "Privacy policy link",

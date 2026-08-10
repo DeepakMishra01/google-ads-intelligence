@@ -149,6 +149,52 @@ _TRACKING_FIX = {
 }
 
 # --------------------------------------------------------------------------- #
+# Link hygiene is part of the score: broken links waste ad clicks, and external
+# links leak the paid visitor off the page before they convert.
+# --------------------------------------------------------------------------- #
+_LINK_CHECKS = [
+    ("no_broken", "No broken links", 6),
+    ("no_external", "No external links leaking visitors away", 4),
+]
+
+
+def _links_present(landing: dict[str, Any]) -> dict[str, bool]:
+    return {
+        "no_broken": not landing.get("broken_links"),
+        "no_external": not landing.get("external_link_count"),
+    }
+
+
+def _links_fix(landing: dict[str, Any]) -> dict[str, str]:
+    broken = landing.get("broken_links") or []
+    ext = landing.get("external_link_count") or 0
+    broken_urls = ", ".join(b.get("url", "") for b in broken[:3])
+    return {
+        "no_broken": (
+            f"{len(broken)} broken link(s) found — every one wastes an ad click and hurts trust. "
+            f"Fix or remove: {broken_urls}{'…' if len(broken) > 3 else ''}"
+        ),
+        "no_external": (
+            f"{ext} external link(s) point off this page — a paid landing page should keep the "
+            "visitor here until they convert. Remove off-site links (or open the few essential "
+            "ones, like the privacy policy, in a new tab)."
+        ),
+    }
+
+
+# Each scored check maps to a category so the audit reads as a detailed
+# measurement (Content / Tracking / Links), not a single opaque number.
+_CATEGORY_OF = {
+    **{k: "Tracking" for k, _, _ in _TRACKING_CHECKS},
+    **{k: "Links" for k, _, _ in _LINK_CHECKS},
+}
+_CATEGORY_ORDER = ["Content", "Tracking", "Links"]
+
+
+def _category(key: str) -> str:
+    return _CATEGORY_OF.get(key, "Content")
+
+# --------------------------------------------------------------------------- #
 # EXAM landing-page checks (applied when detect_page_type == "exam").
 # --------------------------------------------------------------------------- #
 _EXAM_CHECKS = [
@@ -214,13 +260,13 @@ def score_landing_page(landing: dict[str, Any], *, mobile_heavy: bool = True) ->
     # ALWAYS include tracking/tags, so the score can't reach 100% without them.
     page_type = detect_page_type(landing)
     if page_type == "exam":
-        checks_def = _EXAM_CHECKS + _TRACKING_CHECKS
-        present = {**_present_exam(landing), **_tracking_present(landing)}
-        fixes = {**_EXAM_FIX, **_TRACKING_FIX}
+        checks_def = _EXAM_CHECKS + _TRACKING_CHECKS + _LINK_CHECKS
+        present = {**_present_exam(landing), **_tracking_present(landing), **_links_present(landing)}
+        fixes = {**_EXAM_FIX, **_TRACKING_FIX, **_links_fix(landing)}
     else:
-        checks_def = _CHECKS + _TRACKING_CHECKS
-        present = {**_present(landing), **_tracking_present(landing)}
-        fixes = {**_FIX, **_TRACKING_FIX}
+        checks_def = _CHECKS + _TRACKING_CHECKS + _LINK_CHECKS
+        present = {**_present(landing), **_tracking_present(landing), **_links_present(landing)}
+        fixes = {**_FIX, **_TRACKING_FIX, **_links_fix(landing)}
 
     total_w = sum(w for _, _, w in checks_def)
     got = sum(w for key, _, w in checks_def if present[key])
@@ -228,9 +274,30 @@ def score_landing_page(landing: dict[str, Any], *, mobile_heavy: bool = True) ->
     grade = "A" if score >= 85 else "B" if score >= 70 else "C" if score >= 50 else "D"
 
     checks = [
-        {"item": label, "ok": present[key], "weight": w}
+        {"item": label, "ok": present[key], "weight": w, "category": _category(key)}
         for key, label, w in checks_def
     ]
+
+    # Category breakdown — a per-dimension sub-score so the number is auditable.
+    cats: dict[str, dict[str, Any]] = {c: {"got": 0, "max": 0, "items": []} for c in _CATEGORY_ORDER}
+    for key, label, w in checks_def:
+        c = _category(key)
+        cats[c]["max"] += w
+        if present[key]:
+            cats[c]["got"] += w
+        cats[c]["items"].append({"item": label, "ok": present[key], "weight": w})
+    categories = [
+        {
+            "name": c,
+            "passed": cats[c]["got"],
+            "max": cats[c]["max"],
+            "score": round(cats[c]["got"] / cats[c]["max"] * 100) if cats[c]["max"] else 0,
+            "items": cats[c]["items"],
+        }
+        for c in _CATEGORY_ORDER
+        if cats[c]["max"] > 0
+    ]
+
     # Suggestions only for what's missing, heaviest lever first.
     missing = sorted(
         [(key, w) for key, _, w in checks_def if not present[key]],
@@ -247,7 +314,12 @@ def score_landing_page(landing: dict[str, Any], *, mobile_heavy: bool = True) ->
         "score": score,
         "grade": grade,
         "checks": checks,
+        "categories": categories,
         "suggestions": suggestions,
         "passed": got,
         "max": total_w,
+        "external_links": landing.get("external_links") or [],
+        "external_link_count": landing.get("external_link_count") or 0,
+        "broken_links": landing.get("broken_links") or [],
+        "links_checked": landing.get("links_checked") or 0,
     }

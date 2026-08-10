@@ -576,6 +576,18 @@ export interface LandingCheck {
   item: string;
   ok: boolean;
   weight: number;
+  category?: string;
+}
+export interface LandingCategory {
+  name: string;
+  passed: number;
+  max: number;
+  score: number;
+  items: LandingCheck[];
+}
+export interface BrokenLink {
+  url: string;
+  status: number | string;
 }
 export interface LandingQuality {
   available: boolean;
@@ -583,9 +595,14 @@ export interface LandingQuality {
   score: number;
   grade: string | null;
   checks: LandingCheck[];
+  categories?: LandingCategory[];
   suggestions: string[];
   passed: number;
   max: number;
+  external_links?: string[];
+  external_link_count?: number;
+  broken_links?: BrokenLink[];
+  links_checked?: number;
 }
 export interface TrackingCheck {
   item: string;
@@ -846,6 +863,7 @@ export interface AccountRollupRow {
   impressions: number;
   ctr: number;
   avg_cpc: number | null;
+  cpm: number | null;
   conversions: number;
   cpl: number | null;
   health_score: number;
@@ -861,6 +879,7 @@ export interface AccountCampaignRow {
   impressions: number;
   ctr: number;
   avg_cpc: number | null;
+  cpm: number | null;
   conversions: number;
   cpl: number | null;
   landing_url: string | null;

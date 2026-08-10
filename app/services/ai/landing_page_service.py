@@ -13,7 +13,8 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
-from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urljoin, urlparse
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,22 @@ from app.config.logging import get_logger
 from app.config.settings import get_settings
 
 log = get_logger(__name__)
+
+# Third-party hosts that legitimately appear on a landing page (analytics, tag
+# managers, fonts, CDNs, social share/verify). We do NOT count these as
+# "external links leaking the visitor away" — they're infrastructure, not exits.
+_IGNORE_LINK_HOSTS = (
+    "google.com", "googletagmanager.com", "google-analytics.com", "googleadservices.com",
+    "gstatic.com", "googleapis.com", "doubleclick.net", "youtube.com", "youtu.be",
+    "facebook.com", "fb.com", "instagram.com", "twitter.com", "x.com", "linkedin.com",
+    "whatsapp.com", "wa.me", "gstatic.com", "cloudflare.com", "jsdelivr.net", "unpkg.com",
+    "fontawesome.com", "w3.org", "schema.org",
+)
+
+# Broken-link probe budget — bounded so an audit never hangs on a slow page.
+_LINK_CHECK_CAP = 15
+_LINK_CHECK_WORKERS = 8
+_LINK_CHECK_TIMEOUT = 4.0
 
 # Keyword cues used to bucket on-page text into strategist-relevant facts.
 _CUES = {
@@ -101,7 +118,50 @@ class LandingPageService:
         html, load_ms = self._fetch(url)
         if html is None:
             return {**empty, "notes": "Page could not be fetched — using historical data only."}
-        return self._parse(url, html, load_ms=load_ms)
+        parsed = self._parse(url, html, load_ms=load_ms)
+        links = parsed.pop("_all_links", [])
+        broken, checked = self._check_broken_links(links)
+        parsed["broken_links"] = broken
+        parsed["links_checked"] = checked
+        return parsed
+
+    def _check_broken_links(self, links: list[str]) -> tuple[list[dict], int]:
+        """Probe up to _LINK_CHECK_CAP links; return ([{url, status}], checked_count).
+
+        Bounded and best-effort: a link is 'broken' only on a hard 4xx/5xx or a
+        connection failure. Timeouts are treated as inconclusive (not broken) so a
+        slow-but-live page isn't unfairly penalised.
+        """
+        if not links:
+            return [], 0
+        try:
+            import httpx
+        except ImportError:  # pragma: no cover
+            return [], 0
+        targets = links[:_LINK_CHECK_CAP]
+        headers = {"User-Agent": "Mozilla/5.0 (AdCopyBot; +internal-tool)"}
+
+        def probe(u: str) -> dict | None:
+            try:
+                with httpx.Client(timeout=_LINK_CHECK_TIMEOUT, follow_redirects=True,
+                                  headers=headers) as c:
+                    r = c.head(u)
+                    if r.status_code in (405, 501):  # HEAD unsupported — retry GET
+                        r = c.get(u)
+                if r.status_code >= 400:
+                    return {"url": u, "status": r.status_code}
+                return None
+            except httpx.TimeoutException:
+                return None
+            except Exception:
+                return {"url": u, "status": "unreachable"}
+
+        broken: list[dict] = []
+        with ThreadPoolExecutor(max_workers=_LINK_CHECK_WORKERS) as pool:
+            for result in pool.map(probe, targets):
+                if result:
+                    broken.append(result)
+        return broken, len(targets)
 
     # ------------------------------------------------------------------ #
     def _is_safe(self, url: str) -> bool:
@@ -159,14 +219,35 @@ class LandingPageService:
         has_viewport = bool(viewport_el and viewport_el.get("content"))
         has_form = bool(soup.find("form"))
         priv_terms = {"privacy": False, "terms": False}
+
+        def _bare(host: str | None) -> str:
+            h = (host or "").lower()
+            return h[4:] if h.startswith("www.") else h
+
+        page_host = _bare(urlparse(url).hostname)
+        all_links: list[str] = []
+        external: list[str] = []
         for a in soup.select("a"):
-            blob = (
-                (a.get_text(" ", strip=True) or "") + " " + (a.get("href") or "")
-            ).lower()
+            href = (a.get("href") or "").strip()
+            blob = ((a.get_text(" ", strip=True) or "") + " " + href).lower()
             if "privacy" in blob:
                 priv_terms["privacy"] = True
             if "terms" in blob or "t&c" in blob or "conditions" in blob:
                 priv_terms["terms"] = True
+            if not href or href.startswith(("#", "mailto:", "tel:", "sms:", "javascript:")):
+                continue
+            absu = urljoin(url, href)
+            pu = urlparse(absu)
+            if pu.scheme not in ("http", "https"):
+                continue
+            if absu not in all_links:
+                all_links.append(absu)
+            host = _bare(pu.hostname)
+            # External = a different domain (ignore the ad/analytics domains below).
+            if host and host != page_host and not host.endswith("." + page_host) \
+                    and not any(host.endswith(d) for d in _IGNORE_LINK_HOSTS):
+                if absu not in external:
+                    external.append(absu)
 
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()
@@ -243,6 +324,10 @@ class LandingPageService:
             "has_form": has_form,
             "has_privacy": priv_terms["privacy"],
             "has_terms": priv_terms["terms"],
+            "external_links": external[:25],
+            "external_link_count": len(external),
+            "link_count": len(all_links),
+            "_all_links": all_links,  # consumed by the broken-link check, then dropped
             "notes": None,
         }
 

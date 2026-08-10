@@ -1008,6 +1008,30 @@ export function LandingQualityView({ lq }: { lq: LandingQuality }) {
         </div>
       </div>
 
+      {lq.categories && lq.categories.length > 0 && (
+        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {lq.categories.map((cat) => (
+            <div key={cat.name} className="rounded-md border border-slate-100 p-2.5">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-medium text-slate-600">{cat.name}</span>
+                <span
+                  className={`text-sm font-bold ${cat.score >= 70 ? "text-green-600" : cat.score >= 50 ? "text-amber-600" : "text-red-600"}`}
+                >
+                  {cat.score}
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 rounded bg-slate-100">
+                <div
+                  className={`h-1.5 rounded ${cat.score >= 70 ? "bg-green-500" : cat.score >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+                  style={{ width: `${cat.score}%` }}
+                />
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-400">{cat.passed}/{cat.max} pts</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="mb-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
         {lq.checks.map((c) => (
           <div key={c.item} className="flex items-center gap-2 text-sm">
@@ -1020,6 +1044,39 @@ export function LandingQualityView({ lq }: { lq: LandingQuality }) {
           </div>
         ))}
       </div>
+
+      {((lq.broken_links?.length ?? 0) > 0 || (lq.external_link_count ?? 0) > 0) && (
+        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {(lq.broken_links?.length ?? 0) > 0 && (
+            <div className="rounded-md bg-red-50 p-2.5">
+              <div className="mb-1 text-xs font-medium text-red-800">
+                Broken links ({lq.broken_links!.length} of {lq.links_checked} checked)
+              </div>
+              <ul className="space-y-0.5 text-[11px] text-red-700">
+                {lq.broken_links!.slice(0, 8).map((b, i) => (
+                  <li key={i} className="truncate" title={b.url}>
+                    <span className="font-mono">{String(b.status)}</span> · {b.url}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(lq.external_link_count ?? 0) > 0 && (
+            <div className="rounded-md bg-amber-50 p-2.5">
+              <div className="mb-1 text-xs font-medium text-amber-800">
+                External links leaking visitors ({lq.external_link_count})
+              </div>
+              <ul className="space-y-0.5 text-[11px] text-amber-700">
+                {(lq.external_links ?? []).slice(0, 8).map((u, i) => (
+                  <li key={i} className="truncate" title={u}>
+                    {u.replace(/^https?:\/\//, "")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {lq.suggestions.length > 0 && (
         <div className="rounded-md bg-amber-50 p-2.5">
