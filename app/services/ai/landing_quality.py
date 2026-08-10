@@ -120,6 +120,35 @@ _MOBILE_NOTE = (
 )
 
 # --------------------------------------------------------------------------- #
+# Tracking/measurement is part of the score too — a page can't be "100%" if it
+# can't even measure conversions. Applied on top of exam OR college checks.
+# --------------------------------------------------------------------------- #
+_TRACKING_CHECKS = [
+    ("track_conv", "Conversion tracking live (Google Ads / GA4)", 12),
+    ("track_gtm", "Tag Manager (GTM) installed", 5),
+    ("track_retarget", "Retargeting / audience pixel", 5),
+]
+
+
+def _tracking_present(landing: dict[str, Any]) -> dict[str, bool]:
+    tr = landing.get("tracking") or {}
+    return {
+        "track_conv": bool(tr.get("google_ads_conversion") or tr.get("ga4")),
+        "track_gtm": bool(tr.get("gtm")),
+        "track_retarget": bool(tr.get("remarketing") or tr.get("meta_pixel")),
+    }
+
+
+_TRACKING_FIX = {
+    "track_conv": "No conversion tracking found (Google Ads tag / GA4) — without it you can't "
+                  "measure leads or let Google optimize bids. Add it before scaling spend.",
+    "track_gtm": "No Google Tag Manager detected — install GTM so tags & retargeting can be "
+                 "managed without touching code.",
+    "track_retarget": "No retargeting/audience pixel — add Google Ads remarketing or the Meta "
+                      "Pixel to re-engage visitors who didn't convert the first time.",
+}
+
+# --------------------------------------------------------------------------- #
 # EXAM landing-page checks (applied when detect_page_type == "exam").
 # --------------------------------------------------------------------------- #
 _EXAM_CHECKS = [
@@ -181,12 +210,17 @@ def score_landing_page(landing: dict[str, Any], *, mobile_heavy: bool = True) ->
     if not landing or not landing.get("fetched"):
         return {"available": False}
 
-    # Judge an exam page on exam signals, a college page on college signals.
+    # Judge an exam page on exam signals, a college page on college signals — and
+    # ALWAYS include tracking/tags, so the score can't reach 100% without them.
     page_type = detect_page_type(landing)
     if page_type == "exam":
-        checks_def, present, fixes = _EXAM_CHECKS, _present_exam(landing), _EXAM_FIX
+        checks_def = _EXAM_CHECKS + _TRACKING_CHECKS
+        present = {**_present_exam(landing), **_tracking_present(landing)}
+        fixes = {**_EXAM_FIX, **_TRACKING_FIX}
     else:
-        checks_def, present, fixes = _CHECKS, _present(landing), _FIX
+        checks_def = _CHECKS + _TRACKING_CHECKS
+        present = {**_present(landing), **_tracking_present(landing)}
+        fixes = {**_FIX, **_TRACKING_FIX}
 
     total_w = sum(w for _, _, w in checks_def)
     got = sum(w for key, _, w in checks_def if present[key])

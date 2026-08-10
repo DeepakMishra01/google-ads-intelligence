@@ -26,10 +26,8 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  // Home
-  { to: "/", label: "Command Center", icon: LayoutDashboard },
+  { to: "/", label: "Overview", icon: LayoutDashboard },
   // Performance
-  { to: "/overview", label: "Overview", icon: BarChart3, group: "Performance" },
   { to: "/accounts", label: "Accounts", icon: Building2, group: "Performance" },
   { to: "/campaigns", label: "Campaign Health", icon: Gauge, group: "Performance" },
   { to: "/explorer", label: "Campaign Explorer", icon: SearchCode, group: "Performance" },
