@@ -854,7 +854,7 @@ export interface AccountRollupRow {
 }
 export interface AccountRollup {
   accounts: AccountRollupRow[];
-  totals: { accounts: number; campaigns: number; spend: number; clicks: number; conversions: number };
+  totals: { accounts: number; campaigns: number; spend: number; clicks: number; impressions: number; conversions: number };
   window_days: number;
   as_of: string;
 }

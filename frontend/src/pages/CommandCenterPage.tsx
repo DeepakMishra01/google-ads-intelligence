@@ -2,7 +2,7 @@ import { AlertTriangle, ChevronRight, ClipboardCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { SpendAreaChart } from "@/components/charts";
 import { Card, PageHeader, SkeletonTable, SkeletonTiles } from "@/components/ui";
-import { money, num, pct } from "@/lib/format";
+import { compact, money, num, pct } from "@/lib/format";
 import {
   useAccountBudgets,
   useAccountRollup,
@@ -31,9 +31,11 @@ const SEV_DOT: Record<string, string> = {
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
   return (
     <Card className="min-w-0">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${tone ?? "text-slate-900"}`}>{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-slate-500">{sub}</div>}
+      <div className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`mt-1 truncate text-2xl font-semibold tabular-nums ${tone ?? "text-slate-900"}`} title={value}>
+        {value}
+      </div>
+      {sub && <div className="truncate text-xs text-slate-500">{sub}</div>}
     </Card>
   );
 }
@@ -55,7 +57,9 @@ export default function CommandCenterPage() {
   const { accountId, days, setAccountId } = useFilters();
   // The Command Center is a 12-month overview (conversions are seasonal, so a short
   // window makes CPL look wildly high). Detail pages still honor the top date filter.
-  const window = days >= 180 ? days : 365;
+  // Clamp to 1000 — the rollup endpoint's max — so "All time" (a huge day count)
+  // doesn't 422 and blank the tiles.
+  const window = Math.min(days >= 180 ? days : 365, 1000);
   const rollup = useAccountRollup(window);
   const budgets = useAccountBudgets();
   const trend = useTrendMetrics({ accountId, days: window });
@@ -99,10 +103,11 @@ export default function CommandCenterPage() {
       />
 
       {/* KPI tiles */}
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Tile label="Total spend" value={money(t?.spend ?? 0)} sub="in window" />
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-7">
+        <Tile label="Total spend" value={`₹${compact(t?.spend ?? 0)}`} sub="in window" />
+        <Tile label="Impressions" value={compact(t?.impressions ?? 0)} sub="ad views" />
         <Tile label="Leads" value={num(t?.conversions ?? 0)} sub="tracked conversions" />
-        <Tile label="CPL" value={cpl != null ? money(cpl) : "—"} sub="cost per lead" />
+        <Tile label="CPL" value={cpl != null ? `₹${num(cpl)}` : "—"} sub="cost per lead" />
         <Tile label="Active accounts" value={num(t?.accounts ?? 0)} sub={`${num(t?.campaigns ?? 0)} campaigns`} />
         <Tile
           label="Alerts"

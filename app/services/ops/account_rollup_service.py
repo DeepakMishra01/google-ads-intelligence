@@ -117,6 +117,7 @@ class AccountRollupService:
             "campaigns": sum(a["campaigns"] for a in accounts),
             "spend": round(sum(a["spend"] for a in accounts), 2),
             "clicks": sum(a["clicks"] for a in accounts),
+            "impressions": sum(a["impressions"] for a in accounts),
             "conversions": round(sum(a["conversions"] for a in accounts), 1),
         }
         return {"accounts": accounts, "totals": totals,
