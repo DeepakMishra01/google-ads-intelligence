@@ -45,6 +45,47 @@ export function dateTime(iso: string | null | undefined): string {
   });
 }
 
+// Google Ads API bidding-strategy enums → the names shown in the Ads UI.
+const BIDDING_LABELS: Record<string, string> = {
+  TARGET_SPEND: "Maximize clicks",
+  MAXIMIZE_CONVERSIONS: "Maximize conversions",
+  MAXIMIZE_CONVERSION_VALUE: "Maximize conversion value",
+  TARGET_CPA: "Target CPA",
+  TARGET_ROAS: "Target ROAS",
+  TARGET_IMPRESSION_SHARE: "Target impression share",
+  MANUAL_CPC: "Manual CPC",
+  ENHANCED_CPC: "Enhanced CPC",
+  PERCENT_CPC: "Percent CPC",
+  MANUAL_CPM: "Manual CPM",
+  MANUAL_CPV: "Manual CPV",
+  COMMISSION: "Commission",
+  PAGE_ONE_PROMOTED: "Target search page location",
+};
+
+export function biddingLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  return BIDDING_LABELS[value] ?? value.replace(/_/g, " ").toLowerCase();
+}
+
+// Advertising-channel enums → Ads UI campaign-type names.
+const CHANNEL_LABELS: Record<string, string> = {
+  SEARCH: "Search",
+  DISPLAY: "Display",
+  SHOPPING: "Shopping",
+  VIDEO: "Video",
+  MULTI_CHANNEL: "App",
+  PERFORMANCE_MAX: "Performance Max",
+  DEMAND_GEN: "Demand Gen",
+  DISCOVERY: "Demand Gen",
+  LOCAL: "Local",
+  SMART: "Smart",
+};
+
+export function channelLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  return CHANNEL_LABELS[value] ?? value.replace(/_/g, " ");
+}
+
 export function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "never";
   const diff = Date.now() - new Date(iso).getTime();

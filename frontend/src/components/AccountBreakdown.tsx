@@ -56,7 +56,11 @@ function CampaignRows({ accountId, win }: { accountId: number; win: { days: numb
           {rows.map((c) => (
             <tr key={c.campaign_id} className="border-t border-slate-50">
               <td className="py-1.5 pr-2 font-medium">
-                <Link to={`/campaigns/${c.campaign_id}`} className="text-brand-600 hover:underline">
+                <Link
+                  to={`/campaigns/${c.campaign_id}`}
+                  state={{ name: c.name, status: c.status }}
+                  className="text-brand-600 hover:underline"
+                >
                   {c.name}
                 </Link>
                 <StatusBadge status={c.status} />

@@ -1,9 +1,9 @@
 import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { EngagementChart, SpendAreaChart } from "@/components/charts";
 import { Badge, Card, PageHeader, StateBlock } from "@/components/ui";
-import { money, num, pct, shortDate } from "@/lib/format";
+import { biddingLabel, channelLabel, money, num, pct, shortDate } from "@/lib/format";
 import {
   useCampaign,
   useCampaignMetrics,
@@ -41,6 +41,10 @@ export default function CampaignDetailPage() {
   const { campaignId } = useParams();
   const id = Number(campaignId);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Name/status passed from the row the user clicked — matches the metrics shown
+  // even where the campaign dimension table is out of sync (see data caveat).
+  const clicked = (location.state ?? {}) as { name?: string; status?: string };
   const { days, start, end, isCustom } = useFilters();
 
   const effectiveDays =
@@ -136,16 +140,20 @@ export default function CampaignDetailPage() {
       </button>
 
       <PageHeader
-        title={c?.name || (campaign.isLoading ? "Loading…" : `Campaign #${id}`)}
+        title={clicked.name || c?.name || (campaign.isLoading ? "Loading…" : `Campaign #${id}`)}
         subtitle={`Campaign detail · ${rangeLabel}`}
         actions={
           <div className="flex items-center gap-2">
-            {statusBadge(c?.status)}
+            {statusBadge(clicked.status ?? c?.status)}
             {c?.bidding_strategy_type && (
-              <Badge className="bg-slate-100 text-slate-600">{c.bidding_strategy_type}</Badge>
+              <Badge className="bg-slate-100 text-slate-600">
+                {biddingLabel(c.bidding_strategy_type)}
+              </Badge>
             )}
             {c?.advertising_channel_type && (
-              <Badge className="bg-indigo-100 text-indigo-700">{c.advertising_channel_type}</Badge>
+              <Badge className="bg-indigo-100 text-indigo-700">
+                {channelLabel(c.advertising_channel_type)}
+              </Badge>
             )}
           </div>
         }
