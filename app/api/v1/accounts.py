@@ -51,14 +51,39 @@ def list_accounts(
     )
 
 
+def _parse_date(s: str | None):
+    from datetime import date
+
+    return date.fromisoformat(s) if s else None
+
+
 @router.get("/rollup", response_model=None, summary="Account-level metrics rollup")
 def account_rollup(
     days: int = Query(365, ge=1, le=1000),
+    start: str | None = Query(None, description="YYYY-MM-DD (overrides days)."),
+    end: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> dict:
     from app.services.ops.account_rollup_service import AccountRollupService
 
-    return AccountRollupService(db).rollup(days=days)
+    return AccountRollupService(db).rollup(
+        days=days, start=_parse_date(start), end=_parse_date(end)
+    )
+
+
+@router.get("/{account_id}/campaigns", response_model=None, summary="Account's campaign breakdown")
+def account_campaigns(
+    account_id: int,
+    days: int = Query(365, ge=1, le=1000),
+    start: str | None = Query(None),
+    end: str | None = Query(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.ops.account_rollup_service import AccountRollupService
+
+    return AccountRollupService(db).campaigns(
+        account_id, days=days, start=_parse_date(start), end=_parse_date(end)
+    )
 
 
 @router.get("/{account_id}", response_model=AccountRead, summary="Get one account")

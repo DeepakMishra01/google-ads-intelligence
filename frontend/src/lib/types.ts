@@ -852,6 +852,24 @@ export interface AccountRollupRow {
   health_level: string;
   status: string; // converting | no_conversions | inactive
 }
+export interface AccountCampaignRow {
+  campaign_id: number;
+  name: string;
+  status: string | null;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avg_cpc: number | null;
+  conversions: number;
+  cpl: number | null;
+  landing_url: string | null;
+}
+export interface AccountCampaigns {
+  account_id: number;
+  campaigns: AccountCampaignRow[];
+  as_of: string;
+}
 export interface AccountRollup {
   accounts: AccountRollupRow[];
   totals: { accounts: number; campaigns: number; spend: number; clicks: number; impressions: number; conversions: number };

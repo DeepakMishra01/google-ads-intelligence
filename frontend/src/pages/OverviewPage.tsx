@@ -12,6 +12,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SpendAreaChart } from "@/components/charts";
+import AccountBreakdown from "@/components/AccountBreakdown";
 import { Badge, Card, PageHeader, StateBlock } from "@/components/ui";
 import { money, num, pct, relativeTime } from "@/lib/format";
 import {
@@ -228,6 +229,7 @@ export default function OverviewPage() {
           </>
         )}
       </StateBlock>
+      <AccountBreakdown />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type {
   Account,
   AccountAlert,
   AccountBudget,
+  AccountCampaigns,
   AccountRollup,
   AdCopyGenerateResponse,
   CampaignAuditDetail,
@@ -410,6 +411,28 @@ export function useAccountRollup(days = 365) {
   return useQuery({
     queryKey: ["account-rollup", days],
     queryFn: () => api.get("/accounts/rollup", { params: { days } }).then((r) => r.data as AccountRollup),
+  });
+}
+
+export function useAccountRollupWindow(p: { days: number; start?: string; end?: string }) {
+  return useQuery({
+    queryKey: ["account-rollup-window", p],
+    queryFn: () =>
+      api.get("/accounts/rollup", { params: p }).then((r) => r.data as AccountRollup),
+  });
+}
+
+export function useAccountCampaigns(
+  accountId: number | null,
+  p: { days: number; start?: string; end?: string }
+) {
+  return useQuery({
+    queryKey: ["account-campaigns", accountId, p],
+    enabled: accountId != null,
+    queryFn: () =>
+      api
+        .get(`/accounts/${accountId}/campaigns`, { params: p })
+        .then((r) => r.data as AccountCampaigns),
   });
 }
 
