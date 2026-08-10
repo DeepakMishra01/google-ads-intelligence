@@ -59,7 +59,7 @@ def _parse_date(s: str | None):
 
 @router.get("/rollup", response_model=None, summary="Account-level metrics rollup")
 def account_rollup(
-    days: int = Query(365, ge=1, le=1000),
+    days: int = Query(365, ge=1, le=3650),
     start: str | None = Query(None, description="YYYY-MM-DD (overrides days)."),
     end: str | None = Query(None),
     account_id: int | None = Query(None, description="Limit to one account."),
@@ -74,7 +74,7 @@ def account_rollup(
 
 @router.get("/rollup/export", response_model=None, summary="Account breakdown as Excel")
 def account_rollup_export(
-    days: int = Query(365, ge=1, le=1000),
+    days: int = Query(365, ge=1, le=3650),
     start: str | None = Query(None),
     end: str | None = Query(None),
     account_id: int | None = Query(None, description="Limit to one account."),
@@ -98,7 +98,7 @@ def account_rollup_export(
 @router.get("/{account_id}/campaigns", response_model=None, summary="Account's campaign breakdown")
 def account_campaigns(
     account_id: int,
-    days: int = Query(365, ge=1, le=1000),
+    days: int = Query(365, ge=1, le=3650),
     start: str | None = Query(None),
     end: str | None = Query(None),
     db: Session = Depends(get_db),
