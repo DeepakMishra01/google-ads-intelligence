@@ -1,6 +1,7 @@
-import { ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronRight, Download, ExternalLink } from "lucide-react";
 import { Fragment, useState } from "react";
 import { Card, Spinner } from "@/components/ui";
+import { api } from "@/lib/api";
 import { money, num, pct } from "@/lib/format";
 import { useAccountCampaigns, useAccountRollupWindow } from "@/lib/queries";
 import { useFilters } from "@/state/FiltersContext";
@@ -11,6 +12,22 @@ const HEALTH_DOT: Record<string, string> = {
   high: "bg-orange-500",
   critical: "bg-red-500",
 };
+
+function StatusBadge({ status }: { status: string | null }) {
+  const s = (status ?? "").toUpperCase();
+  const cls =
+    s === "ENABLED"
+      ? "bg-green-100 text-green-700"
+      : s === "PAUSED"
+        ? "bg-amber-100 text-amber-700"
+        : s === "REMOVED"
+          ? "bg-red-100 text-red-600"
+          : "bg-slate-100 text-slate-500";
+  const label = s === "ENABLED" ? "Active" : s ? s.charAt(0) + s.slice(1).toLowerCase() : "—";
+  return (
+    <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>
+  );
+}
 
 function CampaignRows({ accountId, win }: { accountId: number; win: { days: number; start?: string; end?: string } }) {
   const { data, isLoading } = useAccountCampaigns(accountId, win);
@@ -37,7 +54,10 @@ function CampaignRows({ accountId, win }: { accountId: number; win: { days: numb
         <tbody>
           {rows.map((c) => (
             <tr key={c.campaign_id} className="border-t border-slate-50">
-              <td className="py-1.5 pr-2 font-medium text-slate-700">{c.name}</td>
+              <td className="py-1.5 pr-2 font-medium text-slate-700">
+                {c.name}
+                <StatusBadge status={c.status} />
+              </td>
               <td className="max-w-[240px] pr-2">
                 {c.landing_url ? (
                   <a
@@ -75,16 +95,53 @@ export default function AccountBreakdown() {
   const win = { days, start: isCustom ? start : undefined, end: isCustom ? end : undefined };
   const { data, isLoading, error } = useAccountRollupWindow(win);
   const [open, setOpen] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const accounts = data?.accounts ?? [];
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const res = await api.get("/accounts/rollup/export", {
+        params: win,
+        responseType: "blob",
+      });
+      const disp = String(res.headers["content-disposition"] ?? "");
+      const match = disp.match(/filename="?([^"]+)"?/);
+      const fname = match?.[1] ?? "account-breakdown.xlsx";
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <Card className="mt-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-slate-700">
           Account breakdown — where the spend went
         </h2>
-        <span className="text-xs text-slate-400">click a row to see its campaigns &amp; landing pages</span>
+        <div className="flex items-center gap-3">
+          <span className="hidden text-xs text-slate-400 sm:inline">
+            click a row to see its campaigns &amp; landing pages
+          </span>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting || accounts.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            <Download size={13} />
+            {exporting ? "Preparing…" : "Download Excel"}
+          </button>
+        </div>
       </div>
       {isLoading ? (
         <Spinner label="Loading accounts…" />

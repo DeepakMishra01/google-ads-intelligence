@@ -71,6 +71,28 @@ def account_rollup(
     )
 
 
+@router.get("/rollup/export", response_model=None, summary="Account breakdown as Excel")
+def account_rollup_export(
+    days: int = Query(365, ge=1, le=1000),
+    start: str | None = Query(None),
+    end: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    from fastapi.responses import StreamingResponse
+
+    from app.services.ops.account_rollup_service import AccountRollupService
+
+    s, e = _parse_date(start), _parse_date(end)
+    data = AccountRollupService(db).export_bytes(days=days, start=s, end=e)
+    label = f"{s}_{e}" if s and e else f"last-{days}d"
+    fname = f"account-breakdown_{label}.xlsx"
+    return StreamingResponse(
+        iter([data]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/{account_id}/campaigns", response_model=None, summary="Account's campaign breakdown")
 def account_campaigns(
     account_id: int,

@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.account import Account
@@ -164,18 +164,9 @@ class AccountRollupService:
             .group_by(Campaign.id, Campaign.name, Campaign.status)
         ).all()
 
-        # Landing page (first final URL) per campaign, from the live ads.
+        # Landing page per campaign — the URL live traffic actually goes to.
         cids = [r[0] for r in rows]
-        lp: dict[int, str] = {}
-        if cids:
-            for cid, urls in self.db.execute(
-                select(AdGroup.campaign_id, Ad.final_urls)
-                .select_from(Ad)
-                .join(AdGroup, Ad.ad_group_id == AdGroup.id)
-                .where(AdGroup.campaign_id.in_(cids), Ad.final_urls.isnot(None))
-            ).all():
-                if cid not in lp and urls:
-                    lp[cid] = urls.split("\n")[0].strip()
+        lp = self._landing_urls(cids)
 
         out: list[dict[str, Any]] = []
         for cid, name, status, clicks, impr, cost_micros, conv in rows:
@@ -198,6 +189,98 @@ class AccountRollupService:
             })
         out.sort(key=lambda c: -c["spend"])
         return {"account_id": account_id, "campaigns": out, "as_of": end.isoformat()}
+
+    def _landing_urls(self, cids: list[int]) -> dict[int, str]:
+        """First final URL per campaign, preferring the LIVE ad.
+
+        Without ordering, an arbitrary ad wins — often a paused/removed one — so
+        the landing link looks wrong. We rank ENABLED ad groups and ENABLED ads
+        first, then take the first URL per campaign deterministically (by ad id).
+        """
+        if not cids:
+            return {}
+        ag_rank = case((AdGroup.status == "ENABLED", 0), else_=1)
+        ad_rank = case((Ad.status == "ENABLED", 0), else_=1)
+        lp: dict[int, str] = {}
+        for cid, urls in self.db.execute(
+            select(AdGroup.campaign_id, Ad.final_urls)
+            .select_from(Ad)
+            .join(AdGroup, Ad.ad_group_id == AdGroup.id)
+            .where(
+                AdGroup.campaign_id.in_(cids),
+                Ad.final_urls.isnot(None),
+                Ad.final_urls != "",
+            )
+            .order_by(AdGroup.campaign_id, ag_rank, ad_rank, Ad.id)
+        ).all():
+            if cid not in lp and urls and urls.strip():
+                lp[cid] = urls.split("\n")[0].strip()
+        return lp
+
+    def export_bytes(
+        self,
+        *,
+        days: int = 365,
+        start: date | None = None,
+        end: date | None = None,
+        today: date | None = None,
+    ) -> bytes:
+        """Build the whole breakdown (accounts + every campaign) as an .xlsx."""
+        import io
+
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+
+        start, end = _window(days, start, end, today)
+        roll = self.rollup(days=days, start=start, end=end, today=today)
+
+        wb = Workbook()
+        bold = Font(bold=True)
+
+        ws_a = wb.active
+        ws_a.title = "Accounts"
+        a_cols = [
+            ("Account", "account_name"), ("Customer ID", "customer_id"),
+            ("Spend", "spend"), ("Impressions", "impressions"), ("Clicks", "clicks"),
+            ("CTR", "ctr"), ("CPC", "avg_cpc"), ("CPM", "cpm"),
+            ("Conversions", "conversions"), ("CPL", "cpl"),
+            ("Campaigns", "campaigns"), ("Status", "status"),
+        ]
+        ws_a.append([h for h, _ in a_cols])
+        for c in ws_a[1]:
+            c.font = bold
+        for a in roll["accounts"]:
+            ws_a.append([a.get(k) for _, k in a_cols])
+
+        ws_c = wb.create_sheet("Campaigns")
+        c_cols = [
+            ("Account", "_account"), ("Campaign", "name"), ("Status", "status"),
+            ("Landing page", "landing_url"), ("Spend", "spend"),
+            ("Impressions", "impressions"), ("Clicks", "clicks"), ("CTR", "ctr"),
+            ("CPC", "avg_cpc"), ("CPM", "cpm"), ("Conversions", "conversions"),
+            ("CPL", "cpl"),
+        ]
+        ws_c.append([h for h, _ in c_cols])
+        for c in ws_c[1]:
+            c.font = bold
+        for a in roll["accounts"]:
+            camps = self.campaigns(
+                a["account_id"], days=days, start=start, end=end, today=today
+            )["campaigns"]
+            for c in camps:
+                row = {**c, "_account": a["account_name"]}
+                ws_c.append([row.get(k) for _, k in c_cols])
+
+        # Reasonable column widths.
+        for ws in (ws_a, ws_c):
+            for col in ws.columns:
+                width = max((len(str(cell.value)) if cell.value is not None else 0)
+                            for cell in col)
+                ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 10), 60)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
 
     def _finish(self, accounts: list[dict[str, Any]], days: int, end: date) -> dict[str, Any]:
         totals = {
