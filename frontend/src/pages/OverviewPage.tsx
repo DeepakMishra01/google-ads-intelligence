@@ -109,6 +109,7 @@ export default function OverviewPage() {
           {[
             ["Clicks", num(t?.clicks)],
             ["Impressions", num(t?.impressions)],
+            ["CPM", t?.impressions ? money((t.spend / t.impressions) * 1000) : "—"],
             ["Conversions", num(t?.conversions)],
             ["Campaigns", num(t?.campaigns)],
           ].map(([label, value]) => (
