@@ -1,5 +1,5 @@
 import { ChevronRight, Download, ExternalLink } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Card, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { money, num, pct } from "@/lib/format";
@@ -91,11 +91,16 @@ function CampaignRows({ accountId, win }: { accountId: number; win: { days: numb
 }
 
 export default function AccountBreakdown() {
-  const { days, start, end, isCustom } = useFilters();
+  const { accountId, days, start, end, isCustom } = useFilters();
   const win = { days, start: isCustom ? start : undefined, end: isCustom ? end : undefined };
-  const { data, isLoading, error } = useAccountRollupWindow(win);
+  const { data, isLoading, error } = useAccountRollupWindow({ ...win, accountId });
   const [open, setOpen] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  // When an account is picked in the top filter, focus it (and open its campaigns).
+  useEffect(() => {
+    setOpen(accountId ?? null);
+  }, [accountId]);
 
   const accounts = data?.accounts ?? [];
 
@@ -103,7 +108,7 @@ export default function AccountBreakdown() {
     setExporting(true);
     try {
       const res = await api.get("/accounts/rollup/export", {
-        params: win,
+        params: { ...win, account_id: accountId },
         responseType: "blob",
       });
       const disp = String(res.headers["content-disposition"] ?? "");

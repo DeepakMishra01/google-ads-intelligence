@@ -414,11 +414,17 @@ export function useAccountRollup(days = 365) {
   });
 }
 
-export function useAccountRollupWindow(p: { days: number; start?: string; end?: string }) {
+export function useAccountRollupWindow(p: {
+  days: number;
+  start?: string;
+  end?: string;
+  accountId?: number;
+}) {
+  const params = { days: p.days, start: p.start, end: p.end, account_id: p.accountId };
   return useQuery({
-    queryKey: ["account-rollup-window", p],
+    queryKey: ["account-rollup-window", params],
     queryFn: () =>
-      api.get("/accounts/rollup", { params: p }).then((r) => r.data as AccountRollup),
+      api.get("/accounts/rollup", { params }).then((r) => r.data as AccountRollup),
   });
 }
 

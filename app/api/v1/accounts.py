@@ -62,12 +62,13 @@ def account_rollup(
     days: int = Query(365, ge=1, le=1000),
     start: str | None = Query(None, description="YYYY-MM-DD (overrides days)."),
     end: str | None = Query(None),
+    account_id: int | None = Query(None, description="Limit to one account."),
     db: Session = Depends(get_db),
 ) -> dict:
     from app.services.ops.account_rollup_service import AccountRollupService
 
     return AccountRollupService(db).rollup(
-        days=days, start=_parse_date(start), end=_parse_date(end)
+        days=days, start=_parse_date(start), end=_parse_date(end), account_id=account_id
     )
 
 
@@ -76,6 +77,7 @@ def account_rollup_export(
     days: int = Query(365, ge=1, le=1000),
     start: str | None = Query(None),
     end: str | None = Query(None),
+    account_id: int | None = Query(None, description="Limit to one account."),
     db: Session = Depends(get_db),
 ):
     from fastapi.responses import StreamingResponse
@@ -83,7 +85,7 @@ def account_rollup_export(
     from app.services.ops.account_rollup_service import AccountRollupService
 
     s, e = _parse_date(start), _parse_date(end)
-    data = AccountRollupService(db).export_bytes(days=days, start=s, end=e)
+    data = AccountRollupService(db).export_bytes(days=days, start=s, end=e, account_id=account_id)
     label = f"{s}_{e}" if s and e else f"last-{days}d"
     fname = f"account-breakdown_{label}.xlsx"
     return StreamingResponse(

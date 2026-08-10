@@ -57,6 +57,7 @@ class AccountRollupService:
         start: date | None = None,
         end: date | None = None,
         today: date | None = None,
+        account_id: int | None = None,
     ) -> dict[str, Any]:
         start, end = _window(days, start, end, today)
 
@@ -89,7 +90,10 @@ class AccountRollupService:
                     CampaignSnapshot.snapshot_date <= end,
                 ),
             )
-            .where(Account.is_manager.isnot(True))
+            .where(
+                Account.is_manager.isnot(True),
+                *( [Account.id == account_id] if account_id is not None else [] ),
+            )
             .group_by(Account.id, Account.descriptive_name, Account.customer_id)
         ).all()
 
@@ -224,6 +228,7 @@ class AccountRollupService:
         start: date | None = None,
         end: date | None = None,
         today: date | None = None,
+        account_id: int | None = None,
     ) -> bytes:
         """Build the whole breakdown (accounts + every campaign) as an .xlsx."""
         import io
@@ -232,7 +237,7 @@ class AccountRollupService:
         from openpyxl.styles import Font
 
         start, end = _window(days, start, end, today)
-        roll = self.rollup(days=days, start=start, end=end, today=today)
+        roll = self.rollup(days=days, start=start, end=end, today=today, account_id=account_id)
 
         wb = Workbook()
         bold = Font(bold=True)
