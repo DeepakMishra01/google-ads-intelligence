@@ -31,6 +31,7 @@ class KeywordHealthService:
         self,
         *,
         account_id: int | None = None,
+        campaign_id: int | None = None,
         days: int = 30,
         sort: str = "worst",
         limit: int = 50,
@@ -39,6 +40,8 @@ class KeywordHealthService:
         start, end = refs.window(days)
         rows: list[dict[str, Any]] = []
         for k in self.repo.keyword_metrics(start, end, account_id):
+            if campaign_id is not None and k["campaign_id"] != campaign_id:
+                continue
             metrics = DayMetrics(
                 impressions=k["impressions"],
                 clicks=k["clicks"],

@@ -889,6 +889,37 @@ export interface AccountCampaigns {
   campaigns: AccountCampaignRow[];
   as_of: string;
 }
+export interface CampaignDetail {
+  id: number;
+  account_id: number;
+  campaign_id: number; // Google id
+  name: string | null;
+  status: string | null;
+  serving_status: string | null;
+  advertising_channel_type: string | null;
+  advertising_channel_sub_type: string | null;
+  bidding_strategy_type: string | null;
+  networks: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  optimization_score: number | null;
+  budget_id: number | null;
+  updated_at: string;
+}
+export interface CampaignMetricSnapshot {
+  id: number;
+  account_id: number;
+  campaign_id: number;
+  snapshot_date: string;
+  status: string | null;
+  impressions: number;
+  clicks: number;
+  cost_micros: number;
+  ctr: number | null;
+  average_cpc_micros: number | null;
+  average_cpm_micros: number | null;
+  conversions: number;
+}
 export interface AccountRollup {
   accounts: AccountRollupRow[];
   totals: { accounts: number; campaigns: number; spend: number; clicks: number; impressions: number; conversions: number };

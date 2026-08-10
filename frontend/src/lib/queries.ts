@@ -14,7 +14,9 @@ import type {
   AlertEvaluateResult,
   AlertSummary,
   BudgetMonitorRow,
+  CampaignDetail,
   CampaignHealthRow,
+  CampaignMetricSnapshot,
   CampaignPerformanceRow,
   CampaignSearchResponse,
   CampusSearchResponse,
@@ -82,15 +84,47 @@ export function useCampaignHealth(p: {
   });
 }
 
-export function useKeywordHealth(p: { accountId?: number; days: number; sort: string; limit: number }) {
+export function useKeywordHealth(p: {
+  accountId?: number;
+  campaignId?: number;
+  days: number;
+  sort: string;
+  limit: number;
+}) {
   return useQuery({
     queryKey: ["keyword-health", p],
     queryFn: () =>
       get<KeywordHealthRow[]>("/keywords/health", {
         account_id: p.accountId,
+        campaign_id: p.campaignId,
         days: p.days,
         sort: p.sort,
         limit: p.limit,
+      }),
+  });
+}
+
+export function useCampaign(campaignId?: number) {
+  return useQuery({
+    queryKey: ["campaign", campaignId],
+    enabled: campaignId != null,
+    queryFn: () => get<CampaignDetail>(`/campaigns/${campaignId}`),
+  });
+}
+
+export function useCampaignMetrics(
+  campaignId: number | undefined,
+  p: { start?: string; end?: string } = {}
+) {
+  return useQuery({
+    queryKey: ["campaign-metrics", campaignId, p],
+    enabled: campaignId != null,
+    queryFn: () =>
+      get<Page<CampaignMetricSnapshot>>("/metrics", {
+        campaign_id: campaignId,
+        start: p.start,
+        end: p.end,
+        limit: 400,
       }),
   });
 }
@@ -111,6 +145,7 @@ export function usePriorities(p: { accountId?: number; limit: number }) {
 
 export function useSearchTerms(p: {
   accountId?: number;
+  campaignId?: number;
   days: number;
   minClicks: number;
   minCost: number;
@@ -124,6 +159,7 @@ export function useSearchTerms(p: {
     queryFn: () =>
       get<Page<SearchTermRow>>("/searchterms/explore", {
         account_id: p.accountId,
+        campaign_id: p.campaignId,
         days: p.days,
         min_clicks: p.minClicks,
         min_cost: p.minCost,

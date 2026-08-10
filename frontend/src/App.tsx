@@ -20,6 +20,7 @@ const LandingAuditorPage = lazy(() => import("./pages/LandingAuditorPage"));
 const PriorityQueuePage = lazy(() => import("./pages/PriorityQueuePage"));
 const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const CampaignHealthPage = lazy(() => import("./pages/CampaignHealthPage"));
+const CampaignDetailPage = lazy(() => import("./pages/CampaignDetailPage"));
 const KeywordHealthPage = lazy(() => import("./pages/KeywordHealthPage"));
 const SearchTermsPage = lazy(() => import("./pages/SearchTermsPage"));
 const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/priorities" element={<PriorityQueuePage />} />
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/campaigns" element={<CampaignHealthPage />} />
+            <Route path="/campaigns/:campaignId" element={<CampaignDetailPage />} />
             <Route path="/keywords" element={<KeywordHealthPage />} />
             <Route path="/search-terms" element={<SearchTermsPage />} />
             <Route path="/budgets" element={<BudgetsPage />} />

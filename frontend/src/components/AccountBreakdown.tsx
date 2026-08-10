@@ -1,5 +1,6 @@
 import { ChevronRight, Download, ExternalLink } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { money, num, pct } from "@/lib/format";
@@ -54,8 +55,10 @@ function CampaignRows({ accountId, win }: { accountId: number; win: { days: numb
         <tbody>
           {rows.map((c) => (
             <tr key={c.campaign_id} className="border-t border-slate-50">
-              <td className="py-1.5 pr-2 font-medium text-slate-700">
-                {c.name}
+              <td className="py-1.5 pr-2 font-medium">
+                <Link to={`/campaigns/${c.campaign_id}`} className="text-brand-600 hover:underline">
+                  {c.name}
+                </Link>
                 <StatusBadge status={c.status} />
               </td>
               <td className="max-w-[240px] pr-2">
