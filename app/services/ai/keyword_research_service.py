@@ -30,13 +30,15 @@ _MICROS = 1_000_000
 # show up when an institution's name is also a place/brand (e.g. "Great Lakes" the
 # lakes → cruises/apparel; "Indus" → the river/bank). Matched on word boundaries so
 # harmless substrings (e.g. "map" inside "sample") aren't caught.
+# Kept deliberately narrow — only clearly non-education travel/retail/brand words.
+# Excludes ambiguous-but-legit education verticals (hotel/hospitality, banking,
+# insurance, restaurant/culinary management) so those colleges aren't over-filtered.
 _OFF_TOPIC = {
     "cruise", "cruises", "cruising", "apparel", "clothing", "viking", "voyage",
-    "voyages", "boat", "boats", "ship", "shipping", "freighter", "fishing", "resort",
-    "hotel", "hotels", "aquarium", "dredging", "weather", "brewing", "brewery", "beer",
-    "yacht", "marina", "ferry", "seaway", "shipwreck", "lighthouse", "vacation",
-    "vacations", "airline", "airlines", "bank", "insurance", "mall", "restaurant",
-    "casino", "spa", "cosmetics", "pizza", "wine", "winery", "charter",
+    "voyages", "boat", "boats", "shipping", "freighter", "fishing", "aquarium",
+    "dredging", "weather", "brewing", "brewery", "beer", "yacht", "marina", "ferry",
+    "seaway", "shipwreck", "lighthouse", "vacation", "vacations", "airline",
+    "airlines", "casino", "cosmetics", "pizza", "winery",
 }
 
 
