@@ -296,12 +296,16 @@ def approval_override(
 def approval_email(
     gen_id: int,
     request: Request,
-    to: str = Query(..., description="Reviewer email address."),
+    to: str | None = Query(None, description="Override recipient; default = platform admins."),
     x_actor: str | None = Header(None, alias="X-Actor"),
     db: Session = Depends(get_db),
 ) -> dict:
-    return ApprovalService(db).send_approval(
-        gen_id, to=to, actor=x_actor, base_url=_request_base_url(request)
+    svc = ApprovalService(db)
+    recipients = to or svc._approver_recipients()
+    if not recipients:
+        return {"sent": False, "reason": "No admin recipients configured."}
+    return svc.send_approval(
+        gen_id, to=recipients, actor=x_actor, base_url=_request_base_url(request)
     )
 
 

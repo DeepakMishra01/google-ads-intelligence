@@ -1300,8 +1300,9 @@ function ScorecardTab({ campus, accountId }: { campus: string; accountId?: numbe
   );
 }
 
-// Fixed reviewer inbox (mirrors settings.approval_reviewer_email on the backend).
-const REVIEWER_EMAIL = "Operations@kollegeapply.com";
+// Approval emails go to every platform admin (resolved server-side from the users
+// table + the configured admin list).
+const REVIEWER_LABEL = "platform admins";
 
 const APPROVAL_STYLE: Record<string, string> = {
   approved: "bg-green-50 text-green-800 border-green-200",
@@ -1359,7 +1360,7 @@ function ApprovalTab({ genId }: { genId: number }) {
             title={!name ? "Enter your name first" : ""}
             onClick={() => submit.mutate({ by: name })}
           >
-            {submit.isPending ? "Submitting…" : `Submit → email ${REVIEWER_EMAIL}`}
+            {submit.isPending ? "Submitting…" : `Submit → email ${REVIEWER_LABEL}`}
           </button>
           <button
             className="btn-ghost h-9 px-3"
@@ -1386,8 +1387,8 @@ function ApprovalTab({ genId }: { genId: number }) {
           </button>
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          Enter your name and click <b>Submit</b> — the full plan is emailed to{" "}
-          <b>{REVIEWER_EMAIL}</b> automatically, with one-click <b>Approve</b> / <b>Reject</b>{" "}
+          Enter your name and click <b>Submit</b> — the full plan is emailed to the{" "}
+          <b>{REVIEWER_LABEL}</b> automatically, with one-click <b>Approve</b> / <b>Reject</b>{" "}
           buttons. You don't need to type their address. (The “Approve/Reject here” buttons are for
           reviewing inside the app.)
         </p>
@@ -1450,14 +1451,14 @@ function ApprovalTab({ genId }: { genId: number }) {
         </Section>
       )}
 
-      <Section title="Approval email" hint={`goes to ${REVIEWER_EMAIL}`}>
+      <Section title="Approval email" hint={`goes to ${REVIEWER_LABEL}`}>
         <div className="flex flex-wrap items-center gap-2">
           <button
             className="btn-ghost h-9 px-3"
             disabled={email.isPending}
-            onClick={() => email.mutate({ to: REVIEWER_EMAIL })}
+            onClick={() => email.mutate({})}
           >
-            {email.isPending ? "Sending…" : `Resend to ${REVIEWER_EMAIL}`}
+            {email.isPending ? "Sending…" : `Resend to ${REVIEWER_LABEL}`}
           </button>
           {isAdmin && (
             <button className="btn-ghost h-9 px-3" onClick={() => downloadAdCopy(genId, "excel")}>

@@ -279,13 +279,37 @@ class ApprovalService:
         self.db.commit()
         email = None
         if auto_send:
-            reviewer = get_settings().approval_reviewer_email
+            reviewer = self._approver_recipients()
             if reviewer:
                 email = self.send_approval(
                     gen_id, to=reviewer, actor=actor, base_url=base_url,
                     requested_by=actor,
                 )
         return {"ok": True, **self.state(gen_id), "email": email}
+
+    def _approver_recipients(self) -> str:
+        """Comma-joined emails the approval mail goes to: every platform ADMIN — the
+        union of active admin users AND the configured AUTH_ADMIN_EMAILS list (so a
+        designated admin is covered even before their first sign-in). Falls back to
+        the reviewer inbox only when no admins exist, so approvals are never lost."""
+        from sqlalchemy import select
+
+        from app.models.user import User, UserRole
+
+        settings = get_settings()
+        emails = {
+            e.strip().lower()
+            for e in self.db.execute(
+                select(User.email).where(
+                    User.role == UserRole.ADMIN.value, User.is_active.is_(True)
+                )
+            ).scalars().all()
+            if e and e.strip()
+        }
+        emails |= set(settings.admin_emails_list)
+        if emails:
+            return ", ".join(sorted(emails))
+        return settings.approval_reviewer_email or ""
 
     def request_changes(
         self, gen_id: int, *, reviewer_name: str, note: str | None

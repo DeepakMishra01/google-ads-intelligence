@@ -414,7 +414,7 @@ export function useApprovalActions(genId: number | null | undefined) {
     onSuccess: invalidate,
   });
   const email = useMutation({
-    mutationFn: (p: { to: string }) =>
+    mutationFn: (p: { to?: string } = {}) =>
       api.post(`/ai/ad-copy/${genId}/send-approval`, null, { params: p }).then((r) => r.data),
   });
   const requestChanges = useMutation({
