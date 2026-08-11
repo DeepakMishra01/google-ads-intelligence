@@ -66,7 +66,14 @@ export default function App() {
             <Route path="/search-terms" element={<SearchTermsPage />} />
             <Route path="/budgets" element={<BudgetsPage />} />
             <Route path="/trends" element={<TrendsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
+            <Route
+              path="/reports"
+              element={
+                <RequireAdmin>
+                  <ReportsPage />
+                </RequireAdmin>
+              }
+            />
             <Route path="/ai/ad-copy" element={<AiAdCopyGeneratorPage />} />
             <Route path="/accountability" element={<AccountabilityPage />} />
             <Route path="/account-budgets" element={<AccountBudgetsPage />} />

@@ -9,6 +9,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/auth/AuthContext";
 import { Badge, Card, PageHeader, StateBlock } from "@/components/ui";
 import { apiErrorMessage } from "@/lib/api";
 import { money, num, pct } from "@/lib/format";
@@ -1310,6 +1311,7 @@ const APPROVAL_STYLE: Record<string, string> = {
 };
 
 function ApprovalTab({ genId }: { genId: number }) {
+  const { isAdmin } = useAuth();
   const { data, isLoading } = useApproval(genId);
   const { submit, decide, override, email, requestChanges } = useApprovalActions(genId);
   const [name, setName] = useState("");
@@ -1457,9 +1459,11 @@ function ApprovalTab({ genId }: { genId: number }) {
           >
             {email.isPending ? "Sending…" : `Resend to ${REVIEWER_EMAIL}`}
           </button>
-          <button className="btn-ghost h-9 px-3" onClick={() => downloadAdCopy(genId, "excel")}>
-            <Download size={15} /> Approval sheet
-          </button>
+          {isAdmin && (
+            <button className="btn-ghost h-9 px-3" onClick={() => downloadAdCopy(genId, "excel")}>
+              <Download size={15} /> Approval sheet
+            </button>
+          )}
         </div>
         <p className="mt-2 text-xs text-slate-500">
           Sent automatically on Submit — this only re-sends if needed. The reviewer approves with the
@@ -1555,6 +1559,7 @@ function AssetList({ assets, limit }: { assets: GeneratedAsset[]; limit: number 
 }
 
 export default function AiAdCopyGeneratorPage() {
+  const { isAdmin } = useAuth();
   const { accountId } = useFilters();
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -1826,15 +1831,19 @@ export default function AiAdCopyGeneratorPage() {
                 <Badge className={STRENGTH_CLASS[result.quality.expected_ad_strength] ?? "bg-slate-100"}>
                   Ad Strength: {result.quality.expected_ad_strength}
                 </Badge>
-                <button className="btn btn-primary h-9 px-3" onClick={() => doDownload("excel")} disabled={downloading}>
-                  <FileSpreadsheet size={15} /> Excel
-                </button>
-                <button className="btn-ghost h-9 px-3" onClick={() => doDownload("csv")} disabled={downloading}>
-                  <Download size={15} /> CSV
-                </button>
-                <button className="btn-ghost h-9 px-3" onClick={() => doDownload("json")} disabled={downloading}>
-                  <Download size={15} /> JSON
-                </button>
+                {isAdmin && (
+                  <>
+                    <button className="btn btn-primary h-9 px-3" onClick={() => doDownload("excel")} disabled={downloading}>
+                      <FileSpreadsheet size={15} /> Excel
+                    </button>
+                    <button className="btn-ghost h-9 px-3" onClick={() => doDownload("csv")} disabled={downloading}>
+                      <Download size={15} /> CSV
+                    </button>
+                    <button className="btn-ghost h-9 px-3" onClick={() => doDownload("json")} disabled={downloading}>
+                      <Download size={15} /> JSON
+                    </button>
+                  </>
+                )}
               </div>
             </Card>
             {downloadErr && <div className="mb-4 text-sm text-red-600">{downloadErr}</div>}

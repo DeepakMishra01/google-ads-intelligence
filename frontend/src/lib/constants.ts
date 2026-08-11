@@ -46,8 +46,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/execution-audit", label: "Execution Audit", icon: ClipboardCheck, group: "Accountability" },
   { to: "/priorities", label: "Priority Queue", icon: ListChecks, group: "Accountability" },
   { to: "/alerts", label: "Alerts", icon: AlertTriangle, group: "Accountability" },
-  // Reports
-  { to: "/reports", label: "Reports", icon: FileText, group: "Reports" },
+  // Reports (downloads — admin only)
+  { to: "/reports", label: "Reports", icon: FileText, group: "Reports", adminOnly: true },
   // Admin (only rendered for admins)
   { to: "/admin/users", label: "Users & Access", icon: Users, group: "Admin", adminOnly: true },
 ];

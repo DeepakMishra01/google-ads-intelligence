@@ -1,6 +1,7 @@
 import { ChevronRight, Download, ExternalLink } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
 import { Card, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { money, num, pct } from "@/lib/format";
@@ -98,6 +99,7 @@ function CampaignRows({ accountId, win }: { accountId: number; win: { days: numb
 }
 
 export default function AccountBreakdown() {
+  const { isAdmin } = useAuth();
   const { accountId, days, start, end, isCustom } = useFilters();
   const win = { days, start: isCustom ? start : undefined, end: isCustom ? end : undefined };
   const { data, isLoading, error } = useAccountRollupWindow({ ...win, accountId });
@@ -144,15 +146,17 @@ export default function AccountBreakdown() {
           <span className="hidden text-xs text-slate-400 sm:inline">
             click a row to see its campaigns &amp; landing pages
           </span>
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={exporting || accounts.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            <Download size={13} />
-            {exporting ? "Preparing…" : "Download Excel"}
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || accounts.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              <Download size={13} />
+              {exporting ? "Preparing…" : "Download Excel"}
+            </button>
+          )}
         </div>
       </div>
       {isLoading ? (

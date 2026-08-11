@@ -363,8 +363,11 @@ def history(
 def export(
     gen_id: int,
     fmt: Literal["excel", "csv", "json"] = Query("excel", alias="format"),
+    user: CurrentUser = Depends(get_current_user),
     svc: AdCopyService = Depends(get_ad_copy_service),
 ) -> Response:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Downloads are admin-only.")
     gen = svc.get_generation(gen_id)
     if gen is None:
         raise HTTPException(status_code=404, detail="Generation not found.")

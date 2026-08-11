@@ -12,6 +12,7 @@ from app.api.deps import (
     get_current_user,
     get_page_params,
     get_query_service,
+    require_admin,
     verify_account_access,
     verify_path_account_access,
 )
@@ -91,7 +92,7 @@ def account_rollup_export(
     start: str | None = Query(None),
     end: str | None = Query(None),
     account_id: int | None = Query(None, description="Limit to one account."),
-    user: CurrentUser = Depends(verify_account_access),
+    user: CurrentUser = Depends(require_admin),  # downloads are admin-only
     db: Session = Depends(get_db),
 ):
     from fastapi.responses import StreamingResponse

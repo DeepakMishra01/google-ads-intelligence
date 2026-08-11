@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import get_reporting_service
+from app.api.deps import CurrentUser, get_current_user, get_reporting_service
 from app.schemas.ops import ReportResponse
 from app.services.ops.reporting_service import ReportingService
 
@@ -25,8 +25,14 @@ def report(
     period: Literal["daily", "weekly", "monthly"],
     fmt: Literal["json", "csv", "excel"] = Query("json", alias="format"),
     account_id: int | None = Query(None),
+    user: CurrentUser = Depends(get_current_user),
     svc: ReportingService = Depends(get_reporting_service),
 ) -> Response:
+    # File downloads (CSV/Excel) are admin-only; managers can still view (JSON).
+    if fmt in ("csv", "excel") and not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Downloads are admin-only."
+        )
     data = svc.build_report(period=period, account_id=account_id)
     stem = f"{period}_report_{data['end_date']}"
 
