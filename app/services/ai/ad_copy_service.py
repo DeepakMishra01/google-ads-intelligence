@@ -196,6 +196,7 @@ class AdCopyService:
         target_leads: int = 2000,  # goal for the reverse planner
         conversion_tracking: str = "auto",  # auto | yes | no — this year's tracking status
         lp_type: str = "auto",  # auto | kapp | client — landing-page ownership
+        manual_cpc: float | None = None,  # cold-start CPC override (else peer benchmark)
     ) -> dict[str, Any]:
         brief = find_brief(campus) or generic_brief(campus)
 
@@ -267,6 +268,15 @@ class AdCopyService:
         base = (brief.short if len(brief.brand.split()) >= 3 else brief.brand).lower()
         campus_kw = [k for k in raw_kw if base in k["keyword"].lower()]
         seasonality = build_seasonality(campus_kw, has_exam=bool(brief.exam))
+        # Cold-start: when this campus has no CPC history of its own, anchor the plan
+        # to the median across your existing colleges instead of a flat constant.
+        hist_stats = self._history_stats(brief)
+        peer = None
+        if not (hist_stats and hist_stats.get("cpc")):
+            from app.services.ai.peer_benchmarks import peer_benchmarks
+
+            peer = peer_benchmarks(self.db)
+
         campaign_plan = None
         if budget and budget > 0:
             campaign_plan = build_plan(
@@ -281,8 +291,10 @@ class AdCopyService:
                 mobile_clicks=(dstats or {}).get("mobile"),
                 total_device_clicks=(dstats or {}).get("total"),
                 has_conversions=has_conversions,
-                hist_stats=self._history_stats(brief),
+                hist_stats=hist_stats,
                 annual_search_demand=self._annual_demand(campus_kw),
+                benchmark_cpc=(peer or {}).get("cpc"),
+                manual_cpc=manual_cpc,
             )
             # CPL target optimizer — required conversion rate + gap + playbook.
             if campaign_plan and campaign_plan.get("available"):

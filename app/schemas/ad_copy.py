@@ -515,6 +515,7 @@ class AdCopyGenerateRequest(BaseModel):
     target_leads: int = 2000  # goal for the reverse planner
     conversion_tracking: str = "auto"  # auto | yes | no
     lp_type: str = "auto"  # auto | kapp | client
+    manual_cpc: float | None = None  # cold-start CPC override (else peer benchmark)
 
 
 class BidFinding(BaseModel):

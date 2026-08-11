@@ -9,6 +9,7 @@ added without touching callers.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Protocol
 
 from sqlalchemy import func, select
@@ -24,6 +25,47 @@ from app.services.ai.campus_service import campus_campaign_filter
 
 log = get_logger(__name__)
 _MICROS = 1_000_000
+
+# Whole-word tokens that mark a Keyword Planner idea as NOT about a college — they
+# show up when an institution's name is also a place/brand (e.g. "Great Lakes" the
+# lakes → cruises/apparel; "Indus" → the river/bank). Matched on word boundaries so
+# harmless substrings (e.g. "map" inside "sample") aren't caught.
+_OFF_TOPIC = {
+    "cruise", "cruises", "cruising", "apparel", "clothing", "viking", "voyage",
+    "voyages", "boat", "boats", "ship", "shipping", "freighter", "fishing", "resort",
+    "hotel", "hotels", "aquarium", "dredging", "weather", "brewing", "brewery", "beer",
+    "yacht", "marina", "ferry", "seaway", "shipwreck", "lighthouse", "vacation",
+    "vacations", "airline", "airlines", "bank", "insurance", "mall", "restaurant",
+    "casino", "spa", "cosmetics", "pizza", "wine", "winery", "charter",
+}
+
+
+def _off_topic(text: str) -> bool:
+    words = set(re.findall(r"[a-z]+", (text or "").lower()))
+    return bool(words & _OFF_TOPIC)
+
+
+def _seed_terms(brief: CampusBrief) -> list[str]:
+    """Education-qualified seeds so the Planner returns college ideas, not the
+    place/brand the name collides with. We qualify the brand with college context
+    rather than sending the bare (ambiguous) brand token alone."""
+    brand = (brief.brand or "").strip()
+    seeds: list[str] = []
+    if brand:
+        for q in ("college", "admission", "courses"):
+            seeds.append(f"{brand} {q}")
+    for p in brief.programs:
+        if p.lower() not in ("admissions", "admission") and brand:
+            seeds.append(f"{brand} {p}")
+    seeds.extend(brief.aliases[:3])
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for s in seeds:
+        k = s.lower().strip()
+        if k and k not in seen:
+            seen.add(k)
+            uniq.append(s)
+    return uniq[:10]
 
 
 class KeywordProvider(Protocol):
@@ -149,9 +191,7 @@ class GoogleKeywordPlannerProvider:
         request.customer_id = customer_id
         request.language = "languageConstants/1000"  # English
         request.geo_target_constants.append("geoTargetConstants/2356")  # India
-        request.keyword_seed.keywords.extend(
-            [brief.brand, *brief.programs, *(brief.aliases[:3])]
-        )
+        request.keyword_seed.keywords.extend(_seed_terms(brief))
         comp_enum = client.enums.KeywordPlanCompetitionLevelEnum
         comp_name = {
             comp_enum.LOW: "LOW",
@@ -160,6 +200,10 @@ class GoogleKeywordPlannerProvider:
         }
         out: list[dict[str, Any]] = []
         for idea in svc.generate_keyword_ideas(request=request):
+            # Ambiguous brands ("Great Lakes", "Indus") pull in travel/retail ideas;
+            # drop anything that isn't plausibly about the college.
+            if _off_topic(idea.text):
+                continue
             m = idea.keyword_idea_metrics
             # 12-month seasonality: [{"year","month","searches"}, ...] (chronological).
             monthly = [

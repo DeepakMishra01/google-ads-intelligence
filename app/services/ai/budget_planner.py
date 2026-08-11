@@ -210,15 +210,31 @@ def build_plan(
     annual_search_demand: int | None = None,
     mobile_clicks: int | None = None,
     total_device_clicks: int | None = None,
+    benchmark_cpc: float | None = None,
+    manual_cpc: float | None = None,
 ) -> dict[str, Any]:
     if not budget or budget <= 0 or not keyword_groups:
         return {"available": False}
 
     # ---- allocation across ad groups ----
-    # The account's real, click-weighted CPC anchors every group's CPC so the plan
-    # can't drift into fantasy click volumes (see _group_cpc_ctr).
-    anchor_cpc = (
-        float(hist_stats["cpc"]) if (hist_stats and hist_stats.get("cpc")) else _DEFAULT_CPC
+    # CPC anchor priority: an explicit manual override → the account's own real,
+    # click-weighted CPC → the peer median across your colleges (cold-start) → a
+    # last-resort constant. This anchors every group's CPC so the plan can't drift
+    # into fantasy click volumes (see _group_cpc_ctr).
+    if manual_cpc and manual_cpc > 0:
+        anchor_cpc = float(manual_cpc)
+    elif hist_stats and hist_stats.get("cpc"):
+        anchor_cpc = float(hist_stats["cpc"])
+    elif benchmark_cpc and benchmark_cpc > 0:
+        anchor_cpc = float(benchmark_cpc)
+    else:
+        anchor_cpc = _DEFAULT_CPC
+    # Where the anchor came from — surfaced so the UI can label ESTIMATE vs REAL.
+    cpc_basis = (
+        "manual" if (manual_cpc and manual_cpc > 0)
+        else "account_history" if (hist_stats and hist_stats.get("cpc"))
+        else "peer_benchmark" if (benchmark_cpc and benchmark_cpc > 0)
+        else "default"
     )
     present = [g["intent"] for g in keyword_groups]
     total_w = sum(_INTENT_WEIGHT.get(i, 0.02) for i in present) or 1.0
@@ -267,6 +283,9 @@ def build_plan(
         "est_cpl": round(budget / tot_leads, 0) if tot_leads else None,
         "cpl_is_estimated": not has_conversions,
         "assumed_cvr": assumed_cvr,
+        "anchor_cpc": round(anchor_cpc, 2),
+        # manual | account_history | peer_benchmark | default — for honest labeling.
+        "cpc_basis": cpc_basis,
     }
 
     # ---- month-wise pacing ----
