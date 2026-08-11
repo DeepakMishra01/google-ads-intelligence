@@ -38,6 +38,35 @@ _IGNORE_LINK_HOSTS = (
 _LINK_CHECK_CAP = 15
 _LINK_CHECK_WORKERS = 8
 _LINK_CHECK_TIMEOUT = 4.0
+# Only these HTTP statuses mean a link is genuinely dead. 401/403/405/429/503 are
+# bots being blocked/rate-limited, NOT broken pages — flagging them wrongly marks
+# a site's own privacy/terms/apply links as broken.
+_BROKEN_STATUSES = {404, 410}
+
+# Country-code second-level suffixes where the registrable domain is the last 3
+# labels (e.g. greatlakes.edu.in, foo.co.uk), so subdomains resolve to the org.
+_MULTI_TLDS = {
+    "co.in", "edu.in", "ac.in", "org.in", "gov.in", "net.in", "res.in", "gen.in",
+    "firm.in", "ind.in", "nic.in", "co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk",
+    "com.au", "edu.au", "gov.au", "org.au", "net.au", "co.nz", "com.sg", "edu.sg",
+    "com.my", "edu.my",
+}
+
+
+def _registrable_domain(host: str | None) -> str:
+    """The org-owning domain (eTLD+1). ``lp.kollegeapply.com`` and
+    ``apply.kollegeapply.com`` both → ``kollegeapply.com`` so a page's links to its
+    own sibling/parent subdomains are treated as INTERNAL, not external leaks."""
+    h = (host or "").lower().strip().strip(".")
+    if not h:
+        return ""
+    labels = h.split(".")
+    if len(labels) <= 2:
+        return h
+    last2 = ".".join(labels[-2:])
+    if last2 in _MULTI_TLDS:
+        return ".".join(labels[-3:])
+    return last2
 
 # Keyword cues used to bucket on-page text into strategist-relevant facts.
 _CUES = {
@@ -146,9 +175,13 @@ class LandingPageService:
                 with httpx.Client(timeout=_LINK_CHECK_TIMEOUT, follow_redirects=True,
                                   headers=headers) as c:
                     r = c.head(u)
-                    if r.status_code in (405, 501):  # HEAD unsupported — retry GET
+                    # Many servers reject/limit HEAD from bots — confirm with GET
+                    # before ever calling a link broken.
+                    if r.status_code in (401, 403, 405, 429, 501) or r.status_code >= 500:
                         r = c.get(u)
-                if r.status_code >= 400:
+                # Only true "not found / gone / server error" counts as broken;
+                # 401/403/429 etc. are bot-blocks, not dead links.
+                if r.status_code in _BROKEN_STATUSES or r.status_code >= 500:
                     return {"url": u, "status": r.status_code}
                 return None
             except httpx.TimeoutException:
@@ -220,11 +253,7 @@ class LandingPageService:
         has_form = bool(soup.find("form"))
         priv_terms = {"privacy": False, "terms": False}
 
-        def _bare(host: str | None) -> str:
-            h = (host or "").lower()
-            return h[4:] if h.startswith("www.") else h
-
-        page_host = _bare(urlparse(url).hostname)
+        page_dom = _registrable_domain(urlparse(url).hostname)
         all_links: list[str] = []
         external: list[str] = []
         for a in soup.select("a"):
@@ -242,12 +271,14 @@ class LandingPageService:
                 continue
             if absu not in all_links:
                 all_links.append(absu)
-            host = _bare(pu.hostname)
-            # External = a different domain (ignore the ad/analytics domains below).
-            if host and host != page_host and not host.endswith("." + page_host) \
-                    and not any(host.endswith(d) for d in _IGNORE_LINK_HOSTS):
-                if absu not in external:
-                    external.append(absu)
+            link_dom = _registrable_domain(pu.hostname)
+            # External = a DIFFERENT organisation's domain. Same registrable domain
+            # (own subdomains/parent — privacy/terms/apply pages) is internal, and
+            # analytics/social infra is ignored, so neither counts as a leak.
+            is_own = not link_dom or link_dom == page_dom
+            is_infra = any(link_dom == d or link_dom.endswith("." + d) for d in _IGNORE_LINK_HOSTS)
+            if not is_own and not is_infra and absu not in external:
+                external.append(absu)
 
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()
