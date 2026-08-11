@@ -516,6 +516,19 @@ export function useSetAdManager() {
   });
 }
 
+export function useSetOwner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { id: number; userId: number | null }) =>
+      api
+        .post(`/ai/ad-copy/${p.id}/owner`, null, {
+          params: p.userId ? { user_id: p.userId } : {},
+        })
+        .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-portfolio"] }),
+  });
+}
+
 export function useSetKpis() {
   const qc = useQueryClient();
   return useMutation({

@@ -311,6 +311,31 @@ class ApprovalService:
         self.db.commit()
         return {"ok": True, **self.state(gen_id)}
 
+    def set_owner(self, gen_id: int, *, user_id: int | None) -> dict[str, Any]:
+        """Assign (or clear) the signed-in owner of this campaign/campus.
+
+        The owner's account scope automatically includes this generation's account
+        (see AuthUserService.allowed_account_ids), so assigning here grants access.
+        Also mirrors the owner's name into ``ad_manager`` for the existing rollups.
+        """
+        from app.models.user import User
+
+        gen = self._get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        if user_id:
+            owner = self.db.get(User, user_id)
+            if owner is None:
+                return {"ok": False, "reason": "user not found"}
+            gen.owner_user_id = owner.id
+            gen.ad_manager = owner.full_name or owner.email
+            self.events.add_event(gen_id, "owner_set", owner.email, None)
+        else:
+            gen.owner_user_id = None
+            self.events.add_event(gen_id, "owner_cleared", None, None)
+        self.db.commit()
+        return {"ok": True, **self.state(gen_id)}
+
     def set_account(self, gen_id: int, *, customer_id: str) -> dict[str, Any]:
         """Assign the Google Ads account (by customer ID) to build this campaign in."""
         from app.models.account import Account

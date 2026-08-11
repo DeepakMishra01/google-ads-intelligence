@@ -114,14 +114,9 @@ def get_current_user(
 
     allowed: set[int] | None = None
     if user.role != "admin":
-        from app.models.user import UserAccount
-        from sqlalchemy import select as _select
+        from app.services.auth.users import AuthUserService
 
-        allowed = set(
-            db.execute(
-                _select(UserAccount.account_id).where(UserAccount.user_id == user.id)
-            ).scalars()
-        )
+        allowed = AuthUserService(db).allowed_account_ids(user)
     return CurrentUser(
         id=user.id, email=user.email, role=user.role, allowed_account_ids=allowed,
         full_name=user.full_name, picture=user.picture,

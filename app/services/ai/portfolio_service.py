@@ -121,6 +121,7 @@ def _campaign_row(db: Session, gen: Any, today: date) -> dict[str, Any]:
         "id": gen.id,
         "campus": gen.campus,
         "ad_manager": gen.ad_manager or _UNASSIGNED,
+        "owner_user_id": gen.owner_user_id,
         "account_id": account["account_id"],
         "account_name": account["account_name"],
         "customer_id": account["customer_id"],
@@ -261,11 +262,22 @@ def _account_budgets(
     return accounts, alerts
 
 
-def build_portfolio(db: Session, *, today: date | None = None) -> dict[str, Any]:
-    """One row per campaign + a rollup per ad manager, newest plan per campus."""
+def build_portfolio(
+    db: Session,
+    *,
+    today: date | None = None,
+    allowed_account_ids: set[int] | None = None,
+) -> dict[str, Any]:
+    """One row per campaign + a rollup per ad manager, newest plan per campus.
+
+    ``allowed_account_ids`` (None = admin/all) scopes the portfolio to a manager's
+    accounts — they see only campuses whose account is assigned to them.
+    """
     ref = today or date.today()
     gens = AdCopyRepository(db).latest_per_campus()
     rows = [_campaign_row(db, g, ref) for g in gens]
+    if allowed_account_ids is not None:
+        rows = [r for r in rows if r.get("account_id") in allowed_account_ids]
     rows.sort(key=lambda r: (r["ad_manager"].lower(), r["campus"].lower()))
 
     by_manager: dict[str, list[dict[str, Any]]] = {}

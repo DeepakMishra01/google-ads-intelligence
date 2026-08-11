@@ -66,6 +66,11 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     approval_token: Mapped[str | None] = mapped_column(String(64), index=True)
     # The ad manager who owns this campaign (for per-manager performance rollups).
     ad_manager: Mapped[str | None] = mapped_column(String(160), index=True)
+    # Signed-in owner (drives access control): the AM assigned this campaign in the
+    # Accountability tab. Their account scope includes this generation's account_id.
+    owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
 
 
 class ApprovalEvent(IntPKMixin, TimestampMixin, Base):

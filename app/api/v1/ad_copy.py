@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_ad_copy_service, require_api_key
+from app.api.deps import (
+    CurrentUser,
+    get_ad_copy_service,
+    get_current_user,
+    require_admin,
+    require_api_key,
+)
 from app.database.session import get_db
 from app.schemas.ad_copy import (
     AdCopyGenerateRequest,
@@ -142,17 +148,23 @@ def approval_submit(
 
 
 @router.get("/portfolio", response_model=None, summary="Campaign + ad-manager accountability")
-def portfolio(db: Session = Depends(get_db)) -> dict:
+def portfolio(
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     from app.services.ai.portfolio_service import build_portfolio
 
-    return build_portfolio(db)
+    return build_portfolio(db, allowed_account_ids=user.allowed_account_ids)
 
 
 @router.get("/account-budgets", response_model=None, summary="Account budgets: allotted vs spent")
-def account_budgets(db: Session = Depends(get_db)) -> dict:
+def account_budgets(
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     from app.services.ai.portfolio_service import build_portfolio
 
-    p = build_portfolio(db)
+    p = build_portfolio(db, allowed_account_ids=user.allowed_account_ids)
     return {
         "accounts": p["accounts"],
         "alerts": p["account_alerts"],
@@ -189,10 +201,13 @@ def landing_audit(
 
 
 @router.get("/execution-audit", response_model=None, summary="Plan-vs-reality per ad manager")
-def execution_audit(db: Session = Depends(get_db)) -> dict:
+def execution_audit(
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     from app.services.ai.execution_audit_service import build_manager_audit
 
-    return build_manager_audit(db)
+    return build_manager_audit(db, allowed_account_ids=user.allowed_account_ids)
 
 
 @router.get("/execution-audit/{gen_id}", response_model=None, summary="Given-vs-used detail")
@@ -222,6 +237,16 @@ def approval_set_ad_manager(
     db: Session = Depends(get_db),
 ) -> dict:
     return ApprovalService(db).set_ad_manager(gen_id, name=name)
+
+
+@router.post("/{gen_id}/owner", response_model=None, summary="Assign the owning user (access)")
+def approval_set_owner(
+    gen_id: int,
+    user_id: int | None = Query(None, description="User id to own this campaign; omit to clear."),
+    _: CurrentUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).set_owner(gen_id, user_id=user_id)
 
 
 @router.post("/{gen_id}/account", response_model=None, summary="Assign the target ad account")

@@ -778,6 +778,7 @@ export interface PortfolioCampaign {
   id: number;
   campus: string;
   ad_manager: string;
+  owner_user_id: number | null;
   account_id: number | null;
   account_name: string | null;
   customer_id: string | null;

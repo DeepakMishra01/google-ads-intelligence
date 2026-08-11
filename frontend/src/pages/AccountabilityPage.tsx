@@ -1,9 +1,42 @@
 import { RefreshCw, Pencil } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/auth/AuthContext";
 import { Badge, Card, PageHeader, SkeletonTable, SkeletonTiles } from "@/components/ui";
 import { money, num } from "@/lib/format";
-import { usePortfolio, useSetAdManager, useSetCampaignAccount, useSetKpis } from "@/lib/queries";
+import {
+  useAdminUsers,
+  usePortfolio,
+  useSetAdManager,
+  useSetCampaignAccount,
+  useSetKpis,
+  useSetOwner,
+} from "@/lib/queries";
 import type { ManagerRollup, PortfolioCampaign } from "@/lib/types";
+
+// Admin-only: assign the signed-in owner (AM) of a campaign — this is what grants
+// that AM access to the campaign's account across the whole tool.
+function OwnerPicker({ c }: { c: PortfolioCampaign }) {
+  const { data: users } = useAdminUsers();
+  const setOwner = useSetOwner();
+  return (
+    <select
+      className="mt-0.5 max-w-[150px] rounded border border-slate-200 bg-white px-1 py-0.5 text-xs text-slate-600"
+      value={c.owner_user_id ?? ""}
+      disabled={setOwner.isPending}
+      title="Assign owner (grants this AM access to the account)"
+      onChange={(e) =>
+        setOwner.mutate({ id: c.id, userId: e.target.value ? Number(e.target.value) : null })
+      }
+    >
+      <option value="">Unassigned</option>
+      {users?.map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.full_name || u.email}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 const STATUS_STYLE: Record<string, string> = {
   on_track: "bg-green-100 text-green-700",
@@ -97,6 +130,7 @@ function ManagerCard({
 }
 
 function CampaignRow({ c }: { c: PortfolioCampaign }) {
+  const { isAdmin } = useAuth();
   const setManager = useSetAdManager();
   const setAccount = useSetCampaignAccount();
   const setKpis = useSetKpis();
@@ -123,17 +157,21 @@ function CampaignRow({ c }: { c: PortfolioCampaign }) {
   const div = "border-l border-slate-100";
   return (
     <tr className="border-b border-slate-100 align-top even:bg-slate-50/40 hover:bg-blue-50/40">
-      {/* Campaign + ad manager */}
+      {/* Campaign + owner (owner assignment gates access to the account) */}
       <td className="py-3 pr-3 pl-1">
         <div className="font-medium text-slate-800">{c.campus}</div>
-        <button
-          className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
-          onClick={editManager}
-          title="Change ad manager"
-        >
-          {c.ad_manager}
-          <Pencil size={11} className="opacity-40" />
-        </button>
+        {isAdmin ? (
+          <OwnerPicker c={c} />
+        ) : (
+          <button
+            className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
+            onClick={editManager}
+            title="Change ad manager"
+          >
+            {c.ad_manager}
+            <Pencil size={11} className="opacity-40" />
+          </button>
+        )}
       </td>
       {/* Make live in (account) */}
       <td className={`px-3 ${div}`}>

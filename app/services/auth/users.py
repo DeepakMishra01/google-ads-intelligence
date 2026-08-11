@@ -83,13 +83,31 @@ class AuthUserService:
         return self.db.get(User, user_id)
 
     def allowed_account_ids(self, user: User) -> set[int] | None:
-        """Accounts a user may see. None means 'all' (admins)."""
+        """Accounts a user may see. None means 'all' (admins).
+
+        For a manager this is the UNION of explicit admin grants (``user_accounts``)
+        and the accounts of the campaigns/campuses they OWN in the Accountability
+        tab (``ad_copy_generations.owner_user_id``). So assigning ownership there
+        immediately scopes their access — no separate grant step needed.
+        """
         if user.role == UserRole.ADMIN.value:
             return None
-        rows = self.db.execute(
-            select(UserAccount.account_id).where(UserAccount.user_id == user.id)
-        ).scalars()
-        return set(rows)
+        from app.models.ad_copy import AdCopyGeneration
+
+        granted = set(
+            self.db.execute(
+                select(UserAccount.account_id).where(UserAccount.user_id == user.id)
+            ).scalars()
+        )
+        owned = set(
+            self.db.execute(
+                select(AdCopyGeneration.account_id).where(
+                    AdCopyGeneration.owner_user_id == user.id,
+                    AdCopyGeneration.account_id.isnot(None),
+                )
+            ).scalars()
+        )
+        return granted | owned
 
     def list_users_with_access(self) -> list[dict[str, Any]]:
         users = self.db.execute(select(User).order_by(User.email)).scalars().all()

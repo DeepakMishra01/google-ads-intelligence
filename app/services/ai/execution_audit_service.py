@@ -207,9 +207,16 @@ def _light_audit(db: Session, gen) -> dict[str, Any]:
     }
 
 
-def build_manager_audit(db: Session) -> dict[str, Any]:
-    """Adherence + performance per ad manager (assigned managers only)."""
+def build_manager_audit(
+    db: Session, *, allowed_account_ids: set[int] | None = None
+) -> dict[str, Any]:
+    """Adherence + performance per ad manager (assigned managers only).
+
+    ``allowed_account_ids`` (None = admin/all) scopes to a manager's own accounts.
+    """
     gens = [g for g in AdCopyRepository(db).latest_per_campus() if g.ad_manager]
+    if allowed_account_ids is not None:
+        gens = [g for g in gens if g.account_id in allowed_account_ids]
     by_mgr: dict[str, list[dict[str, Any]]] = {}
     for g in gens:
         by_mgr.setdefault(g.ad_manager, []).append(_light_audit(db, g))
