@@ -89,6 +89,25 @@ class Settings(BaseSettings):
     audit_enabled: bool = True  # write an audit row for mutating requests
     db_connect_timeout: int = 10  # seconds; bounds hangs to an unreachable DB
 
+    # --- Authentication (Google OAuth + role-based access) ---
+    # Master switch. While False the app stays login-free (every request is a
+    # synthetic admin) so nothing breaks before OAuth is configured. Flip to True
+    # only after the OAuth client is created and the settings below are filled in.
+    auth_enabled: bool = False
+    google_oauth_client_id: str = ""       # from Google Cloud Console (Web app)
+    google_oauth_client_secret: str = ""   # paste into .env only, never commit
+    # Comma-separated Workspace domains allowed to sign in (e.g. "gromo.in").
+    auth_allowed_domains: str = ""
+    # Comma-separated emails that get full ADMIN access (everyone else = manager).
+    auth_admin_emails: str = ""
+    # HMAC key that signs the session cookie. Generate a long random string.
+    session_secret: str = ""
+    session_ttl_hours: int = 12
+    session_cookie_name: str = "gads_session"
+    # Optional explicit OAuth redirect base (scheme+host). Blank => derived from
+    # the incoming request (honours X-Forwarded-* behind Render's proxy).
+    auth_redirect_base: str = ""
+
     # --- AI Ad Copy Generator ---
     # LLM phrasing is optional: when no key is set the generator falls back to the
     # deterministic (data-driven) backend, so the module always works.
@@ -149,6 +168,18 @@ class Settings(BaseSettings):
         """Parsed, normalized list of client customer ids to sync (may be empty)."""
         raw = self.google_ads_client_customer_ids or ""
         return [cid.replace("-", "").strip() for cid in raw.split(",") if cid.strip()]
+
+    @property
+    def allowed_domains_list(self) -> list[str]:
+        """Lower-cased Workspace domains permitted to sign in (may be empty)."""
+        raw = self.auth_allowed_domains or ""
+        return [d.strip().lower().lstrip("@") for d in raw.split(",") if d.strip()]
+
+    @property
+    def admin_emails_list(self) -> list[str]:
+        """Lower-cased emails that receive admin role on sign-in (may be empty)."""
+        raw = self.auth_admin_emails or ""
+        return [e.strip().lower() for e in raw.split(",") if e.strip()]
 
 
 @lru_cache

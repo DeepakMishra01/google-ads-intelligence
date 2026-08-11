@@ -13,8 +13,8 @@ const LIMIT = 20;
 
 export default function AlertsPage() {
   const { accountId } = useFilters();
-  const { session } = useAuth();
-  const canManage = session?.role === "manager" || session?.role === "admin";
+  const { user } = useAuth();
+  const canManage = user?.role === "manager" || user?.role === "admin";
 
   const [status, setStatus] = useState("open");
   const [severity, setSeverity] = useState("");

@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import PageParams, get_page_params, get_search_explorer_service
+from app.api.deps import (
+    CurrentUser,
+    PageParams,
+    get_page_params,
+    get_search_explorer_service,
+    verify_campaign_access,
+)
 from app.schemas.common import Page
 from app.schemas.ops import SearchTermRow
 from app.services.ops.search_explorer_service import SearchExplorerService
@@ -15,6 +21,7 @@ router = APIRouter(prefix="/searchterms", tags=["command-center"])
 @router.get("/explore", response_model=Page[SearchTermRow], summary="Explore search terms")
 def explore(
     page: PageParams = Depends(get_page_params),
+    _: CurrentUser = Depends(verify_campaign_access),
     account_id: int | None = Query(None),
     campaign_id: int | None = Query(None, description="Internal campaign id."),
     ad_group_id: int | None = Query(None, description="Internal ad group id."),

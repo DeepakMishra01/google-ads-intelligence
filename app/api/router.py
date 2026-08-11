@@ -8,9 +8,11 @@ from app.api.v1 import (
     accounts,
     ad_copy,
     ad_groups,
+    admin_users,
     ads,
     alerts,
     audit,
+    auth,
     budget_monitor,
     budgets,
     campaign_explorer,
@@ -32,6 +34,10 @@ from app.api.v1 import (
 )
 
 api_router = APIRouter()
+
+# --- Auth + access control ---
+api_router.include_router(auth.router)
+api_router.include_router(admin_users.router)
 
 # --- Phase 1 ---
 api_router.include_router(health.router)

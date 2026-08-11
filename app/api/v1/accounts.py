@@ -6,7 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import PageParams, get_page_params, get_query_service
+from app.api.deps import (
+    CurrentUser,
+    PageParams,
+    get_current_user,
+    get_page_params,
+    get_query_service,
+    verify_account_access,
+    verify_path_account_access,
+)
 from app.database.session import get_db
 from app.models.account import Account
 from app.models.campaign import Campaign
@@ -22,20 +30,23 @@ def list_accounts(
     page: PageParams = Depends(get_page_params),
     with_campaigns: bool = Query(False, description="Only accounts that have campaigns."),
     svc: QueryService = Depends(get_query_service),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Page[AccountRead]:
-    # The dropdown uses with_campaigns=true so empty shell accounts don't clutter it.
-    if with_campaigns:
+    # Managers only ever see the accounts assigned to them (the dropdown source).
+    allowed = user.allowed_account_ids  # None => admin/all
+    if with_campaigns or allowed is not None:
         with_camps = select(Campaign.account_id).distinct().scalar_subquery()
-        items = (
-            db.execute(
-                select(Account)
-                .where(Account.id.in_(with_camps), Account.is_manager.isnot(True))
-                .order_by(Account.descriptive_name.nulls_last(), Account.customer_id)
-            )
-            .scalars()
-            .all()
+        stmt = (
+            select(Account)
+            .where(Account.is_manager.isnot(True))
+            .order_by(Account.descriptive_name.nulls_last(), Account.customer_id)
         )
+        if with_campaigns:
+            stmt = stmt.where(Account.id.in_(with_camps))
+        if allowed is not None:
+            stmt = stmt.where(Account.id.in_(allowed))
+        items = db.execute(stmt).scalars().all()
         return Page(
             items=[AccountRead.model_validate(i) for i in items],
             total=len(items),
@@ -63,12 +74,14 @@ def account_rollup(
     start: str | None = Query(None, description="YYYY-MM-DD (overrides days)."),
     end: str | None = Query(None),
     account_id: int | None = Query(None, description="Limit to one account."),
+    user: CurrentUser = Depends(verify_account_access),
     db: Session = Depends(get_db),
 ) -> dict:
     from app.services.ops.account_rollup_service import AccountRollupService
 
     return AccountRollupService(db).rollup(
-        days=days, start=_parse_date(start), end=_parse_date(end), account_id=account_id
+        days=days, start=_parse_date(start), end=_parse_date(end), account_id=account_id,
+        allowed_account_ids=user.allowed_account_ids,
     )
 
 
@@ -78,6 +91,7 @@ def account_rollup_export(
     start: str | None = Query(None),
     end: str | None = Query(None),
     account_id: int | None = Query(None, description="Limit to one account."),
+    user: CurrentUser = Depends(verify_account_access),
     db: Session = Depends(get_db),
 ):
     from fastapi.responses import StreamingResponse
@@ -85,7 +99,10 @@ def account_rollup_export(
     from app.services.ops.account_rollup_service import AccountRollupService
 
     s, e = _parse_date(start), _parse_date(end)
-    data = AccountRollupService(db).export_bytes(days=days, start=s, end=e, account_id=account_id)
+    data = AccountRollupService(db).export_bytes(
+        days=days, start=s, end=e, account_id=account_id,
+        allowed_account_ids=user.allowed_account_ids,
+    )
     label = f"{s}_{e}" if s and e else f"last-{days}d"
     fname = f"account-breakdown_{label}.xlsx"
     return StreamingResponse(
@@ -101,6 +118,7 @@ def account_campaigns(
     days: int = Query(365, ge=1, le=3650),
     start: str | None = Query(None),
     end: str | None = Query(None),
+    _: CurrentUser = Depends(verify_path_account_access),
     db: Session = Depends(get_db),
 ) -> dict:
     from app.services.ops.account_rollup_service import AccountRollupService
@@ -111,7 +129,11 @@ def account_campaigns(
 
 
 @router.get("/{account_id}", response_model=AccountRead, summary="Get one account")
-def get_account(account_id: int, svc: QueryService = Depends(get_query_service)) -> AccountRead:
+def get_account(
+    account_id: int,
+    _: CurrentUser = Depends(verify_path_account_access),
+    svc: QueryService = Depends(get_query_service),
+) -> AccountRead:
     account = svc.get_account(account_id)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")

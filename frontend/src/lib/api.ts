@@ -2,9 +2,12 @@ import axios from "axios";
 
 // Single axios instance. Base defaults to the dev proxy (/api/v1); override with
 // VITE_API_BASE for production deployments behind a different origin.
+export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "/api/v1";
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE ?? "/api/v1",
+  baseURL: API_BASE,
   timeout: 45000,
+  withCredentials: true, // send the httpOnly session cookie on same-origin calls
 });
 
 // --- Auth header injection --------------------------------------------------
@@ -37,6 +40,20 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// When the session cookie is missing/expired the backend returns 401. Bounce to
+// the login screen (unless we're already there or just probing /auth/me).
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const status = err?.response?.status;
+    const url: string = err?.config?.url ?? "";
+    if (status === 401 && !url.includes("/auth/me") && !location.pathname.startsWith("/login")) {
+      location.assign("/login");
+    }
+    return Promise.reject(err);
+  }
+);
 
 /** Extract a human-readable message from an axios error. */
 export function apiErrorMessage(err: unknown): string {

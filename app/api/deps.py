@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from fastapi import Depends, Header, HTTPException, Query, status
+from fastapi import Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings, get_settings
@@ -56,13 +56,175 @@ class OpsFilters:
     end: date | None = None
 
 
+# --------------------------------------------------------------------------- #
+# Authentication / authorization
+# --------------------------------------------------------------------------- #
+@dataclass
+class CurrentUser:
+    """The authenticated principal for a request.
+
+    ``allowed_account_ids`` is None for admins (all accounts) or a set of internal
+    account ids a manager may access. ``is_synthetic`` marks the login-free admin
+    used when ``auth_enabled`` is False (so nothing breaks before OAuth is set up).
+    """
+
+    id: int
+    email: str
+    role: str
+    allowed_account_ids: set[int] | None = None
+    is_synthetic: bool = False
+    full_name: str | None = None
+    picture: str | None = None
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == "admin"
+
+
+_SYNTHETIC_ADMIN = CurrentUser(
+    id=0, email="team@local", role="admin", allowed_account_ids=None, is_synthetic=True,
+    full_name="Team",
+)
+
+
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> CurrentUser:
+    """Resolve the signed session cookie into a CurrentUser.
+
+    When ``auth_enabled`` is False the app is intentionally login-free and every
+    request is a synthetic admin. When enabled, a valid session cookie is required
+    (401 otherwise) and the user's account scope is loaded.
+    """
+    if not settings.auth_enabled:
+        return _SYNTHETIC_ADMIN
+
+    from app.models.user import User
+    from app.services.auth.tokens import verify
+
+    token = request.cookies.get(settings.session_cookie_name)
+    payload = verify(token or "", settings.session_secret)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in.")
+    user = db.get(User, int(payload.get("uid", 0)))
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session invalid.")
+
+    allowed: set[int] | None = None
+    if user.role != "admin":
+        from app.models.user import UserAccount
+        from sqlalchemy import select as _select
+
+        allowed = set(
+            db.execute(
+                _select(UserAccount.account_id).where(UserAccount.user_id == user.id)
+            ).scalars()
+        )
+    return CurrentUser(
+        id=user.id, email=user.email, role=user.role, allowed_account_ids=allowed,
+        full_name=user.full_name, picture=user.picture,
+    )
+
+
+def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required."
+        )
+    return user
+
+
+def _assert_account_allowed(account_id: int | None, user: CurrentUser) -> None:
+    """403 if a manager references an account outside their grants.
+
+    ``account_id`` None means 'all accounts' — allowed for admins; for managers the
+    caller (get_ops_filters / accounts scoping) narrows it to their grant set.
+    """
+    if user.is_admin or user.allowed_account_ids is None:
+        return
+    if account_id is not None and account_id not in user.allowed_account_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not permitted.")
+
+
 def get_ops_filters(
     account_id: int | None = Query(None, description="Filter by internal account id."),
     days: int = Query(30, ge=1, le=3650, description="Lookback window in days (up to 10y / 'All')."),
     start: date | None = Query(None, description="Custom range start (overrides days)."),
     end: date | None = Query(None, description="Custom range end (overrides days)."),
+    user: CurrentUser = Depends(get_current_user),
 ) -> OpsFilters:
+    # Managers are always scoped to a specific account they own; 'all' is refused
+    # so no cross-account aggregate can leak through any Ops endpoint.
+    if not user.is_admin and user.allowed_account_ids is not None:
+        if account_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select one of your assigned accounts.",
+            )
+        _assert_account_allowed(account_id, user)
     return OpsFilters(account_id=account_id, days=days, start=start, end=end)
+
+
+def verify_account_access(
+    account_id: int | None = Query(None),
+    user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Guard for account-scoped endpoints that don't use OpsFilters."""
+    if not user.is_admin and user.allowed_account_ids is not None:
+        if account_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select one of your assigned accounts.",
+            )
+        _assert_account_allowed(account_id, user)
+    return user
+
+
+def verify_path_account_access(
+    account_id: int,
+    user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Guard for endpoints with the account id in the PATH (e.g. /accounts/{id}/…)."""
+    _assert_account_allowed(account_id, user)
+    return user
+
+
+def verify_campaign_access(
+    campaign_id: int | None = Query(None),
+    account_id: int | None = Query(None),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CurrentUser:
+    """Scoped-read guard for campaign_id/account_id endpoints (metrics, search terms).
+
+    A manager may read a campaign only if it belongs to one of their accounts, or
+    an account only if it's assigned to them. With neither id, a manager must
+    narrow the query (400) so no cross-account read slips through.
+    """
+    if user.is_admin or user.allowed_account_ids is None:
+        return user
+    if campaign_id is not None:
+        from sqlalchemy import select
+
+        from app.models.campaign import Campaign
+
+        owner = db.execute(
+            select(Campaign.account_id).where(Campaign.id == campaign_id)
+        ).scalar_one_or_none()
+        if owner is None or owner not in user.allowed_account_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Campaign not permitted."
+            )
+        return user
+    if account_id is not None:
+        _assert_account_allowed(account_id, user)
+        return user
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Select one of your assigned accounts.",
+    )
 
 
 def get_query_service(db: Session = Depends(get_db)) -> QueryService:

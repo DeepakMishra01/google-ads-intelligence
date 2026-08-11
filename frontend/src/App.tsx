@@ -26,10 +26,19 @@ const SearchTermsPage = lazy(() => import("./pages/SearchTermsPage"));
 const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
 const TrendsPage = lazy(() => import("./pages/TrendsPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
-  if (!session) return <Navigate to="/login" replace />;
+  const { loading, authEnabled, user } = useAuth();
+  if (loading) return <Spinner label="Loading…" />;
+  if (authEnabled && !user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { loading, isAdmin } = useAuth();
+  if (loading) return <Spinner label="Loading…" />;
+  if (!isAdmin) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -63,6 +72,14 @@ export default function App() {
             <Route path="/account-budgets" element={<AccountBudgetsPage />} />
             <Route path="/execution-audit" element={<ExecutionAuditPage />} />
             <Route path="/landing-auditor" element={<LandingAuditorPage />} />
+            <Route
+              path="/admin/users"
+              element={
+                <RequireAdmin>
+                  <AdminUsersPage />
+                </RequireAdmin>
+              }
+            />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

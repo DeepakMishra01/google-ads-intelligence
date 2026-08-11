@@ -14,6 +14,7 @@ import {
   Globe,
   Target,
   Type,
+  Users,
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -23,6 +24,7 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   group?: string;
+  adminOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -46,6 +48,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/alerts", label: "Alerts", icon: AlertTriangle, group: "Accountability" },
   // Reports
   { to: "/reports", label: "Reports", icon: FileText, group: "Reports" },
+  // Admin (only rendered for admins)
+  { to: "/admin/users", label: "Users & Access", icon: Users, group: "Admin", adminOnly: true },
 ];
 
 export const APP_ICON = Target;

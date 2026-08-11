@@ -1,24 +1,26 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Gauge, ShieldCheck } from "lucide-react";
 import { useAuth } from "./AuthContext";
 
-// The backend uses header-based RBAC (no password auth in Phase 1/2). This gate
-// captures the operator's identity + role, which are sent as X-Actor / X-Role on
-// every request; the optional API key guards mutating endpoints when the backend
-// has one configured.
-export default function LoginPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [actor, setActor] = useState("");
-  const [role, setRole] = useState<"viewer" | "manager" | "admin">("manager");
-  const [apiKey, setApiKey] = useState("");
+const ERROR_TEXT: Record<string, string> = {
+  denied: "This Google account isn't allowed to sign in. Ask an admin for access.",
+  bad_state: "Sign-in expired or was tampered with. Please try again.",
+  oauth_failed: "Google sign-in failed. Please try again.",
+  access_denied: "You cancelled the Google sign-in.",
+};
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    login({ actor: actor.trim() || "operator", role, apiKey: apiKey.trim() });
-    navigate("/", { replace: true });
-  };
+export default function LoginPage() {
+  const { loading, authEnabled, user, login } = useAuth();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const error = params.get("error");
+  const msg = params.get("msg");
+
+  // Login-free mode (auth disabled) or already signed in → go straight in.
+  useEffect(() => {
+    if (!loading && (!authEnabled || user)) navigate("/", { replace: true });
+  }, [loading, authEnabled, user, navigate]);
 
   return (
     <div className="flex min-h-full items-center justify-center bg-gradient-to-br from-slate-100 to-brand-50 p-4">
@@ -33,51 +35,33 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Your name</label>
-            <input
-              className="input w-full"
-              placeholder="e.g. Deepak"
-              value={actor}
-              onChange={(e) => setActor(e.target.value)}
-              autoFocus
-            />
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {ERROR_TEXT[error] ?? msg ?? "Sign-in failed. Please try again."}
           </div>
+        )}
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Role</label>
-            <select
-              className="input w-full"
-              value={role}
-              onChange={(e) => setRole(e.target.value as typeof role)}
-            >
-              <option value="viewer">Viewer — read only</option>
-              <option value="manager">Manager — can run/resolve alerts</option>
-              <option value="admin">Admin — full access</option>
-            </select>
-          </div>
+        <p className="mb-4 text-sm text-slate-600">
+          Sign in with your work Google account to continue.
+        </p>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              API key <span className="font-normal text-slate-400">(optional)</span>
-            </label>
-            <input
-              className="input w-full"
-              type="password"
-              placeholder="Only if the backend requires one"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-          </div>
-
-          <button type="submit" className="btn-primary w-full">
-            Enter console
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={login}
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+        >
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+          </svg>
+          Sign in with Google
+        </button>
 
         <p className="mt-5 flex items-center gap-1.5 text-xs text-slate-400">
-          <ShieldCheck size={14} /> Sent as X-Role / X-Actor headers to the FastAPI backend.
+          <ShieldCheck size={14} /> Access is limited to approved accounts; managers see only their
+          assigned Google Ads accounts.
         </p>
       </div>
     </div>

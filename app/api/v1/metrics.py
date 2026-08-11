@@ -6,7 +6,13 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import PageParams, get_page_params, get_query_service
+from app.api.deps import (
+    CurrentUser,
+    PageParams,
+    get_page_params,
+    get_query_service,
+    verify_campaign_access,
+)
 from app.schemas.common import Page
 from app.schemas.snapshots import CampaignSnapshotRead
 from app.services.query_service import QueryService
@@ -24,6 +30,7 @@ def list_campaign_metrics(
     account_id: int | None = Query(None, description="Internal account id."),
     start: date | None = Query(None, description="Inclusive start date (YYYY-MM-DD)."),
     end: date | None = Query(None, description="Inclusive end date (YYYY-MM-DD)."),
+    _: CurrentUser = Depends(verify_campaign_access),
     page: PageParams = Depends(get_page_params),
     svc: QueryService = Depends(get_query_service),
 ) -> Page[CampaignSnapshotRead]:

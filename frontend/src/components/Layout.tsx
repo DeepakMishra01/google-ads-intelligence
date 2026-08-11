@@ -10,10 +10,11 @@ import { Badge } from "./ui";
 
 function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { data: alerts } = useAlertSummary(useFilters().accountId);
+  const { isAdmin } = useAuth();
   let lastGroup: string | undefined;
   return (
     <nav className="space-y-1">
-      {NAV_ITEMS.map(({ to, label, icon: Icon, group }) => {
+      {NAV_ITEMS.filter((it) => !it.adminOnly || isAdmin).map(({ to, label, icon: Icon, group }) => {
         const showHeader = group && group !== lastGroup;
         lastGroup = group;
         const alertCount = label === "Alerts" ? alerts?.open_total ?? 0 : 0;
@@ -98,12 +99,14 @@ function ThemeToggle() {
 }
 
 function Topbar({ onMenu }: { onMenu: () => void }) {
-  const { session, logout } = useAuth();
+  const { user, logout, isAdmin, accountIds } = useAuth();
   const { accountId, setAccountId, days, start, end, isCustom, setDays, setCustomRange, clearCustom } =
     useFilters();
   const { data: accounts } = useAccounts();
   const sync = useSyncNow();
-  const canSync = session?.role === "manager" || session?.role === "admin";
+  const canSync = user?.role === "manager" || user?.role === "admin";
+  // Managers are scoped to their accounts — no cross-account "All" view.
+  const scoped = accountIds !== null;
 
   // Local drafts for the custom date pickers; a complete pair activates the range.
   const [from, setFrom] = useState(start ?? "");
@@ -111,6 +114,13 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   useEffect(() => {
     if (from && to) setCustomRange(from, to);
   }, [from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A scoped manager must always have one of their accounts selected.
+  useEffect(() => {
+    if (scoped && accountId == null && accounts?.items.length) {
+      setAccountId(accounts.items[0].id);
+    }
+  }, [scoped, accountId, accounts, setAccountId]);
 
   const resetDates = () => {
     setFrom("");
@@ -129,7 +139,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         value={accountId ?? ""}
         onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : undefined)}
       >
-        <option value="">All accounts</option>
+        {!scoped && <option value="">All accounts</option>}
         {accounts?.items.map((a) => (
           <option key={a.id} value={a.id}>
             {a.descriptive_name ?? a.customer_id}
@@ -199,8 +209,10 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           </button>
         )}
         <div className="hidden text-right sm:block">
-          <div className="text-sm font-medium text-slate-800">{session?.actor}</div>
-          <Badge className="bg-brand-50 text-brand-700">{session?.role}</Badge>
+          <div className="max-w-[160px] truncate text-sm font-medium text-slate-800">
+            {user?.full_name || user?.email || "Guest"}
+          </div>
+          <Badge className="bg-brand-50 text-brand-700">{isAdmin ? "Admin" : user?.role ?? "—"}</Badge>
         </div>
         <button className="btn-ghost h-9 px-2" onClick={logout} title="Log out">
           <LogOut size={16} />

@@ -45,7 +45,7 @@ export default function CampaignDetailPage() {
   // Name/status passed from the row the user clicked — matches the metrics shown
   // even where the campaign dimension table is out of sync (see data caveat).
   const clicked = (location.state ?? {}) as { name?: string; status?: string };
-  const { days, start, end, isCustom } = useFilters();
+  const { accountId, days, start, end, isCustom } = useFilters();
 
   const effectiveDays =
     isCustom && start && end
@@ -61,6 +61,7 @@ export default function CampaignDetailPage() {
     end: isCustom ? end : undefined,
   });
   const keywords = useKeywordHealth({
+    accountId,
     campaignId: id,
     days: effectiveDays,
     sort: "highest_spend",

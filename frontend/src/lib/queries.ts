@@ -6,6 +6,7 @@ import type {
   AccountBudget,
   AccountCampaigns,
   AccountRollup,
+  AdminUser,
   AdCopyGenerateResponse,
   CampaignAuditDetail,
   ExecutionAudit,
@@ -606,4 +607,43 @@ export async function downloadReport(
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// --- Admin: user & access management --------------------------------------- //
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: ["admin-users"],
+    queryFn: () => get<AdminUser[]>("/admin/users"),
+  });
+}
+
+export function useSetUserRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { userId: number; role: string }) =>
+      api.patch(`/admin/users/${p.userId}/role`, { role: p.role }).then((r) => r.data as AdminUser),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
+}
+
+export function useSetUserActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { userId: number; isActive: boolean }) =>
+      api
+        .patch(`/admin/users/${p.userId}/active`, { is_active: p.isActive })
+        .then((r) => r.data as AdminUser),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
+}
+
+export function useSetUserAccounts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { userId: number; accountIds: number[] }) =>
+      api
+        .put(`/admin/users/${p.userId}/accounts`, { account_ids: p.accountIds })
+        .then((r) => r.data as AdminUser),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
 }

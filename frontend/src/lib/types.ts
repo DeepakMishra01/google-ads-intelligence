@@ -889,6 +889,16 @@ export interface AccountCampaigns {
   campaigns: AccountCampaignRow[];
   as_of: string;
 }
+export interface AdminUser {
+  id: number;
+  email: string;
+  full_name: string | null;
+  role: string; // "admin" | "manager"
+  is_active: boolean;
+  picture: string | null;
+  last_login_at: string | null;
+  account_ids: number[];
+}
 export interface CampaignDetail {
   id: number;
   account_id: number;
