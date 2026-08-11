@@ -1641,13 +1641,13 @@ export default function AiAdCopyGeneratorPage() {
 
       {/* Search + generate controls */}
       <Card className="mb-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+          <div className="relative w-full lg:min-w-[320px] lg:flex-1 lg:basis-[320px]">
             <label className="mb-1 block text-xs font-medium text-slate-500">Campus</label>
-            <div className="card flex items-center gap-2 p-2">
-              <Search size={16} className="text-slate-400" />
+            <div className="card flex h-9 items-center gap-2 px-3 py-0">
+              <Search size={16} className="shrink-0 text-slate-400" />
               <input
-                className="input w-full border-0 focus:ring-0"
+                className="input w-full border-0 px-0 focus:ring-0"
                 placeholder="Type a campus — GIBS, XIME, Indus University, MICA…"
                 value={q}
                 onChange={(e) => {
