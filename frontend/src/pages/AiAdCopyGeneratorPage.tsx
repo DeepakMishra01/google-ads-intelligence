@@ -138,7 +138,13 @@ function KeywordEditor({
     "brand", "application", "admission", "registration", "deadline", "fees",
     "courses", "placement", "research", "location", "generic", "custom",
   ];
-  const MATCHES = ["EXACT", "PHRASE", "BROAD"];
+  const MATCHES = ["PHRASE", "EXACT", "BOTH"];
+  const MATCH_LABEL: Record<string, string> = {
+    PHRASE: "Phrase",
+    EXACT: "Exact",
+    BOTH: "Both (Phrase + Exact)",
+    BROAD: "Broad",
+  };
 
   const setField = (kw: string, field: "intent" | "match", val: string, original: string) => {
     setSavedAt(false);
@@ -169,7 +175,7 @@ function KeywordEditor({
         >
           {opts.map((o) => (
             <option key={o} value={o}>
-              {field === "intent" ? o.charAt(0).toUpperCase() + o.slice(1) : o}
+              {field === "intent" ? o.charAt(0).toUpperCase() + o.slice(1) : (MATCH_LABEL[o] ?? o)}
             </option>
           ))}
         </select>

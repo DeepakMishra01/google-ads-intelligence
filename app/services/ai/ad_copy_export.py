@@ -117,24 +117,41 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
     for s in a.get("sitelinks", []):
         es.append(["Sitelink", s.get("text"), s.get("description1"), s.get("description2")])
 
-    # Keywords (scored intelligence)
+    # Keywords (scored intelligence) — reflects the user's edits (added/removed/
+    # intent+match overrides) so the file matches the plan sent for approval.
+    from app.services.ai.approval_service import effective_keywords
+
+    active_kw, removed_kw = effective_keywords(gen)
     ks = wb.create_sheet("Keywords")
-    _header(ks, ["Keyword", "Intent", "Score", "Source", "Clicks", "CTR", "CPC", "QS",
-                 "Match Type", "Why match type",
+    _header(ks, ["Keyword", "User edit", "Intent", "Score", "Source", "Clicks", "CTR",
+                 "CPC", "QS", "Match Type", "Why match type",
                  "Suggested Bid (max CPC)", "Bid Basis", "Why this bid"])
-    for kw in (gen.keyword_snapshot or {}).get("keywords", []):
+    for kw in active_kw:
+        edits = []
+        if kw.get("source") == "user_added":
+            edits.append("Added by user")
+        if kw.get("intent_edited"):
+            edits.append("intent edited")
+        if kw.get("match_edited"):
+            edits.append("match edited")
         ks.append([
-            kw.get("keyword"), kw.get("intent"), kw.get("score"), kw.get("source"),
-            kw.get("historical_clicks"), kw.get("historical_ctr"),
+            kw.get("keyword"), ", ".join(edits), kw.get("intent"), kw.get("score"),
+            kw.get("source"), kw.get("historical_clicks"), kw.get("historical_ctr"),
             kw.get("historical_cpc"), kw.get("quality_score"),
             kw.get("recommended_match_type"), kw.get("match_reason"),
             kw.get("recommended_bid"), kw.get("bid_basis"), kw.get("bid_reason"),
         ])
+    for kw in removed_kw:  # suggested by the system, removed by the user
+        ks.append([kw.get("keyword"), "Removed by user", kw.get("intent"), kw.get("score"),
+                   kw.get("source"), None, None, None, None,
+                   kw.get("recommended_match_type"), None, None, None, None])
 
-    # Campaign Keywords (paste-ready, grouped by ad group + match type)
+    # Campaign Keywords (paste-ready, grouped by ad group + match type) — uses the
+    # effective grouping after edits when present.
+    groups = (gen.keyword_edits or {}).get("groups") or (gen.keyword_snapshot or {}).get("groups", [])
     ck = wb.create_sheet("Campaign Keywords")
     _header(ck, ["Ad Group", "Keyword (paste into Google Ads)", "Match Types", "Suggested Bid"])
-    for grp in (gen.keyword_snapshot or {}).get("groups", []):
+    for grp in groups:
         match_types = ", ".join(grp.get("recommended_match_types", []))
         bid = grp.get("recommended_bid")
         for kw in grp.get("match_keywords", []):

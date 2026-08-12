@@ -79,6 +79,13 @@ def _match_format(keyword: str, match_type: str) -> str:
     return kw  # BROAD
 
 
+def _match_formats(keyword: str, match_type: str) -> list[str]:
+    """Paste-ready forms for a keyword. 'BOTH' → phrase AND exact (two entries)."""
+    if (match_type or "").upper() == "BOTH":
+        return [_match_format(keyword, "PHRASE"), _match_format(keyword, "EXACT")]
+    return [_match_format(keyword, match_type)]
+
+
 class AdCopyService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -748,11 +755,13 @@ class AdCopyService:
             bid = round(median(bids)) if bids else None
             items = items[:12]
             kws = [i["keyword"] for i in items]
-            # Paste-ready keywords, each in ITS OWN recommended match type.
-            match_keywords = [
-                _match_format(i["keyword"], i.get("recommended_match_type", "PHRASE"))
-                for i in items
-            ]
+            # Paste-ready keywords, each in ITS OWN recommended match type
+            # ('BOTH' expands to a phrase AND an exact entry).
+            match_keywords: list[str] = []
+            for i in items:
+                match_keywords.extend(
+                    _match_formats(i["keyword"], i.get("recommended_match_type", "PHRASE"))
+                )
             # Distinct match types actually used in this group (for the header label).
             match_types = list(
                 dict.fromkeys(i.get("recommended_match_type", "PHRASE") for i in items)
