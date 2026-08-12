@@ -70,6 +70,7 @@ _CHECKS = [
     ("fees", "Fees / fee structure shown", 14),
     ("deadline", "Application deadline / urgency", 12),
     ("courses", "Courses / programmes listed", 10),
+    ("course_detail", "Course details shown (duration/curriculum, not just names)", 8),
     ("placements", "Placement proof (packages/recruiters)", 10),
     ("trust", "Accreditation / ranking trust signals", 10),
     ("headline", "Clear H1 headline", 8),
@@ -84,6 +85,7 @@ def _present(landing: dict[str, Any]) -> dict[str, bool]:
         "fees": bool(landing.get("fees")),
         "deadline": bool(landing.get("deadlines") or landing.get("admission_dates")),
         "courses": bool(landing.get("courses")),
+        "course_detail": bool(landing.get("course_detail")),
         "placements": bool(landing.get("placements")),
         "trust": bool(landing.get("accreditations") or landing.get("rankings")),
         "headline": bool(landing.get("h1")),
@@ -102,6 +104,9 @@ _FIX = {
                 "(e.g. 'Applications close 31 July') to push fence-sitters to convert now.",
     "courses": "No course/programme list detected — show the programmes with a one-line hook "
                "each so visitors self-qualify instead of bouncing.",
+    "course_detail": "Courses are named but there's no detail under them — add duration, "
+                     "eligibility, fees, specialisations and curriculum (or a 'course details' "
+                     "link) for each programme so applicants can judge fit before bouncing.",
     "placements": "No placement proof found — add highest/average package and top recruiters. "
                   "Proof of outcomes is a decisive trust lever for admissions.",
     "trust": "No accreditation/ranking badges detected — surface NAAC/AICTE/UGC/NIRF signals "

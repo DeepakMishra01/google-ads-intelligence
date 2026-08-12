@@ -76,6 +76,15 @@ _CUES = {
         r"\bmca\b", r"\bb\.?com\b", r"\bm\.?tech\b", r"\bph\.?d\b", r"\bdiploma\b",
         r"\bcourse\b", r"\bprogramme\b", r"\bspecial[ai]sation\b",
     ],
+    # Signals that a course has DETAIL under it (not just a name): duration,
+    # curriculum, specialisations, or a per-course details/know-more link.
+    "course_detail": [
+        r"\bduration\b", r"\b\d+\s*(years?|yrs?|months?|semesters?)\b", r"\bsemesters?\b",
+        r"\bcurriculum\b", r"\bsyllabus\b", r"\bcourse structure\b", r"\bsubjects?\b",
+        r"\bmodules?\b", r"\belectives?\b", r"\bspecial[ai]s", r"\bstreams?\b",
+        r"\bcredits?\b", r"\bcourse details?\b", r"\bknow more\b", r"\bview details\b",
+        r"\bprogramme? details?\b", r"\bcourse overview\b", r"\bcareer (opportunit|option)",
+    ],
     "fees": [r"\bfees?\b", r"\btuition\b", "₹", r"\blpa\b", r"\bper (year|annum|semester)\b"],
     "eligibility": [r"\beligibility\b", r"\beligible\b", r"\bcriteria\b", r"\bqualification\b"],
     "scholarships": [r"\bscholarship", r"\bfinancial aid\b", r"\bwaiver\b"],
