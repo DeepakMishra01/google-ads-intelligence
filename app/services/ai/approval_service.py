@@ -22,6 +22,28 @@ from app.config.settings import get_settings
 from app.models.ad_copy import AdCopyGeneration
 from app.repositories.ad_copy import AdCopyRepository, ApprovalEventRepository
 
+def effective_keywords(gen: AdCopyGeneration) -> tuple[list[dict], list[dict]]:
+    """Return (active_keywords, removed_keywords) after applying the user's edits.
+
+    active = system suggestions (minus user-removed) + user-added, each carrying a
+    ``source`` ('system' | 'user_added'). removed = the system suggestions the user
+    deleted — shown in the review email so the reviewer sees what was taken out.
+    """
+    ks = (gen.keyword_snapshot or {}).get("keywords", []) or []
+    edits = gen.keyword_edits or {}
+    removed_set = {(r or "").lower() for r in edits.get("removed", [])}
+    active: list[dict] = []
+    for k in ks:
+        if (k.get("keyword") or "").lower() in removed_set:
+            continue
+        src = k.get("source")
+        active.append({**k, "source": "user_added" if src == "user_added" else "system"})
+    for a in edits.get("added", []):
+        active.append({**a, "source": "user_added"})
+    removed = [k for k in ks if (k.get("keyword") or "").lower() in removed_set]
+    return active, removed
+
+
 # Fields the operator may override on the final strategy.
 _EDITABLE = ("budget", "target_leads", "target_cvr_pct", "bidding")
 _DEFAULT_TARGET_LEADS = 2000
@@ -149,15 +171,22 @@ def _approval_html(
 
     headlines = [a.get("text") for a in assets.get("headlines", [])][:15]
     descriptions = [a.get("text") for a in assets.get("descriptions", [])][:4]
-    kws = ks.get("keywords", [])[:15]
+    active_kws, removed_kws = effective_keywords(gen)
+    kws = active_kws[:25]
 
     def _vol(k: dict[str, Any]) -> str:
         v = k.get("search_volume")
         return f"{int(v):,}/mo" if isinstance(v, (int, float)) and v else "—"
 
+    def _kw_cell(k: dict[str, Any]) -> str:
+        tag = ("<span style='margin-left:6px;background:#ede9fe;color:#6d28d9;"
+               "border-radius:4px;padding:1px 6px;font-size:11px;font-weight:bold'>"
+               "Added by user</span>") if k.get("source") == "user_added" else ""
+        return f"{_esc(k.get('keyword'))}{tag}"
+
     kw_rows = "".join(
         f"<tr>"
-        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>{_esc(k.get('keyword'))}</td>"
+        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>{_kw_cell(k)}</td>"
         f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;color:#64748b'>"
         f"{_esc(k.get('intent'))}</td>"
         f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>"
@@ -169,6 +198,18 @@ def _approval_html(
         f"{'₹' + str(k.get('recommended_bid')) if k.get('recommended_bid') else '—'}</td></tr>"
         for k in kws
     )
+    removed_block = ""
+    if removed_kws:
+        items = "".join(
+            f"<li style='margin:2px 0'><s>{_esc(k.get('keyword'))}</s></li>"
+            for k in removed_kws[:20]
+        )
+        removed_block = (
+            f"{_h3('Keywords removed by the user')}"
+            f"<p style='font-size:13px;color:#64748b;margin:0 0 6px'>"
+            f"These were suggested by the system but the submitter removed them:</p>"
+            f"<ul style='font-size:14px;margin:0;padding-left:20px;color:#b91c1c'>{items}</ul>"
+        )
     strat_rows = "".join(
         f"<tr><td style='padding:6px 10px;border-top:1px solid #eef2f7;color:#475569'>"
         f"{_esc(f['label'])}</td>"
@@ -232,6 +273,7 @@ def _approval_html(
         "<th style='padding:7px 10px;text-align:right;font-size:12px;color:#64748b'>Bid</th></tr>"
         + kw_rows
     )}
+    {removed_block}
 
     {_h3("Ad copy — headlines")}
     <ul style="font-size:14px;margin:0;padding-left:20px;color:#334155">{_rows(headlines)}</ul>

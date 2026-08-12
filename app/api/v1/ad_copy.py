@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from html import escape
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -148,6 +149,36 @@ def approval_submit(
     return ApprovalService(db).submit(
         gen_id, actor=x_actor, base_url=_request_base_url(request),
         submitter_user_id=user.id or None,  # 0 => synthetic admin (auth off)
+    )
+
+
+class KeywordLookupRequest(BaseModel):
+    keywords: list[str]
+
+
+class KeywordEditsRequest(BaseModel):
+    added: list[dict[str, Any]] = []
+    removed: list[str] = []
+
+
+@router.post("/keyword-lookup", response_model=None, summary="Keyword Planner metrics for exact keywords")
+def keyword_lookup(
+    body: KeywordLookupRequest,
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    """Fetch search volume / competition / bid for user-typed keywords."""
+    return {"keywords": svc.lookup_keywords(body.keywords)}
+
+
+@router.post("/{gen_id}/keywords", response_model=None, summary="Save user keyword edits (add/remove)")
+def save_keyword_edits(
+    gen_id: int,
+    body: KeywordEditsRequest,
+    x_actor: str | None = Header(None),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.save_keyword_edits(
+        gen_id, added=body.added, removed=body.removed, actor=x_actor
     )
 
 

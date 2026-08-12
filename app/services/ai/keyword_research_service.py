@@ -234,6 +234,53 @@ class GoogleKeywordPlannerProvider:
                 break
         return out
 
+    def metrics_for(self, keywords: list[str]) -> list[dict[str, Any]]:
+        """Keyword Planner metrics for the EXACT keywords given (user-added terms).
+
+        Uses GenerateKeywordHistoricalMetrics so each typed keyword gets real
+        search volume / competition / bid range — the same fields as suggestions.
+        Returns [] on any access/config failure (caller keeps the keyword, sans data).
+        """
+        kws = [k.strip() for k in keywords if k and k.strip()][:20]
+        if not self.settings.keyword_planner_enabled or not kws:
+            return []
+        try:
+            from app.google_ads.client import get_client_factory
+
+            factory = get_client_factory()
+            client = factory.get_client()
+            customer_id = self.settings.google_ads_login_customer_id
+            if not customer_id:
+                return []
+            svc = client.get_service("KeywordPlanIdeaService")
+            request = client.get_type("GenerateKeywordHistoricalMetricsRequest")
+            request.customer_id = customer_id
+            request.language = "languageConstants/1000"
+            request.geo_target_constants.append("geoTargetConstants/2356")
+            request.keywords.extend(kws)
+            comp_enum = client.enums.KeywordPlanCompetitionLevelEnum
+            comp_name = {comp_enum.LOW: "LOW", comp_enum.MEDIUM: "MEDIUM", comp_enum.HIGH: "HIGH"}
+            resp = svc.generate_keyword_historical_metrics(request=request)
+            out: list[dict[str, Any]] = []
+            for r in resp.results:
+                m = getattr(r, "keyword_metrics", None)
+                low = getattr(m, "low_top_of_page_bid_micros", None) if m else None
+                high = getattr(m, "high_top_of_page_bid_micros", None) if m else None
+                out.append({
+                    "keyword": r.text,
+                    "source": "user_added",
+                    "search_volume": int(getattr(m, "avg_monthly_searches", 0) or 0) if m else None,
+                    "competition": comp_name.get(getattr(m, "competition", None)) if m else None,
+                    "historical_cpc": (high / _MICROS) if high else None,
+                    "top_of_page_bid_low": (low / _MICROS) if low else None,
+                    "top_of_page_bid_high": (high / _MICROS) if high else None,
+                    "quality_score": None,
+                })
+            return out
+        except Exception as exc:  # noqa: BLE001 — access/quota/config
+            log.info("keyword_planner.metrics_unavailable", error=str(exc))
+            return []
+
 
 class KeywordResearchService:
     def __init__(self, db: Session) -> None:
@@ -242,6 +289,37 @@ class KeywordResearchService:
             GoogleKeywordPlannerProvider(db),
             HistoricalProvider(db),
         ]
+
+    def lookup_metrics(self, keywords: list[str]) -> list[dict[str, Any]]:
+        """One row per requested keyword with Keyword Planner metrics (or empty
+        metrics when the Planner has no data), tagged source='user_added'."""
+        kp = next(
+            (p for p in self.providers if isinstance(p, GoogleKeywordPlannerProvider)), None
+        )
+        rows = kp.metrics_for(keywords) if kp else []
+        got = {r["keyword"].lower(): r for r in rows}
+        out: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for raw in keywords:
+            k = (raw or "").strip()
+            if not k or k.lower() in seen:
+                continue
+            seen.add(k.lower())
+            r = got.get(k.lower()) or {
+                "keyword": k, "source": "user_added", "search_volume": None,
+                "competition": None, "historical_cpc": None,
+                "top_of_page_bid_low": None, "top_of_page_bid_high": None,
+                "quality_score": None,
+            }
+            r["source"] = "user_added"
+            r.setdefault("intent", "custom")
+            r.setdefault("recommended_match_type", "PHRASE")
+            r["recommended_bid"] = (
+                round(r.get("top_of_page_bid_high"), 2)
+                if r.get("top_of_page_bid_high") else None
+            )
+            out.append(r)
+        return out
 
     def collect(self, brief: CampusBrief) -> tuple[list[dict[str, Any]], list[str]]:
         """Return (merged keyword dicts, provider names that returned data)."""

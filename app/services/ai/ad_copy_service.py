@@ -463,6 +463,63 @@ class AdCopyService:
         return self.repo.get(gen_id)
 
     # ------------------------------------------------------------------ #
+    # User keyword edits (add / remove / overwrite)
+    # ------------------------------------------------------------------ #
+    def lookup_keywords(self, keywords: list[str]) -> list[dict[str, Any]]:
+        """Keyword Planner metrics for exact user-typed keywords."""
+        from app.services.ai.keyword_research_service import KeywordResearchService
+
+        return KeywordResearchService(self.db).lookup_metrics(keywords)
+
+    def save_keyword_edits(
+        self, gen_id: int, *, added: list[dict[str, Any]], removed: list[str],
+        actor: str | None,
+    ) -> dict[str, Any]:
+        """Persist the user's keyword edits on a generation.
+
+        Editing the plan resets approval to draft (it must be re-approved), and the
+        change is logged so the review email can show what was added/removed.
+        """
+        from app.services.ai.approval_service import ApprovalService
+
+        gen = self.repo.get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+
+        # Normalise added keywords to the fields the plan/email use.
+        norm_added: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for a in added or []:
+            kw = (a.get("keyword") or "").strip()
+            if not kw or kw.lower() in seen:
+                continue
+            seen.add(kw.lower())
+            norm_added.append({
+                "keyword": kw,
+                "search_volume": a.get("search_volume"),
+                "competition": a.get("competition"),
+                "recommended_match_type": a.get("recommended_match_type") or "PHRASE",
+                "recommended_bid": a.get("recommended_bid"),
+                "top_of_page_bid_high": a.get("top_of_page_bid_high"),
+                "intent": a.get("intent") or "custom",
+                "source": "user_added",
+            })
+        removed_norm = sorted({(r or "").strip() for r in (removed or []) if (r or "").strip()})
+
+        gen.keyword_edits = {"added": norm_added, "removed": removed_norm}
+        # A changed plan can't keep a stale approval.
+        if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
+            gen.approval_status = "draft"
+        self.db.flush()
+        ApprovalService(self.db).events.add_event(
+            gen_id, "keywords_edited", actor,
+            f"+{len(norm_added)} added, -{len(removed_norm)} removed",
+        )
+        self.db.commit()
+        return {"ok": True, "gen_id": gen_id,
+                "added": len(norm_added), "removed": len(removed_norm)}
+
+    # ------------------------------------------------------------------ #
     # keyword scoring + grouping
     # ------------------------------------------------------------------ #
     def _brand_keywords(self, brief) -> set[str]:

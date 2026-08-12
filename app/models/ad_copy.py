@@ -48,6 +48,9 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     # Variable-shape payloads.
     historical_features_used: Mapped[dict | None] = mapped_column(JSONType)
     keyword_snapshot: Mapped[dict | None] = mapped_column(JSONType)
+    # User edits to the keyword set: {"added": [{keyword, search_volume, ...}],
+    # "removed": ["kw", ...]}. The approval plan/email reflect these with tags.
+    keyword_edits: Mapped[dict | None] = mapped_column(JSONType)
     generated_assets: Mapped[dict | None] = mapped_column(JSONType)
     scores: Mapped[dict | None] = mapped_column(JSONType)
     reasoning: Mapped[dict | None] = mapped_column(JSONType)
