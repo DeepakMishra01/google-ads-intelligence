@@ -159,6 +159,8 @@ class KeywordLookupRequest(BaseModel):
 class KeywordEditsRequest(BaseModel):
     added: list[dict[str, Any]] = []
     removed: list[str] = []
+    # {keyword_text: {"intent": "...", "match_type": "EXACT|PHRASE|BROAD"}}
+    overrides: dict[str, dict[str, Any]] = {}
 
 
 @router.post("/keyword-lookup", response_model=None, summary="Keyword Planner metrics for exact keywords")
@@ -178,7 +180,8 @@ def save_keyword_edits(
     svc: AdCopyService = Depends(get_ad_copy_service),
 ) -> dict:
     return svc.save_keyword_edits(
-        gen_id, added=body.added, removed=body.removed, actor=x_actor
+        gen_id, added=body.added, removed=body.removed,
+        overrides=body.overrides, actor=x_actor,
     )
 
 

@@ -438,8 +438,11 @@ export function useKeywordLookup() {
 export function useSaveKeywordEdits(genId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (p: { added: KeywordInsight[]; removed: string[] }) =>
-      api.post(`/ai/ad-copy/${genId}/keywords`, p).then((r) => r.data),
+    mutationFn: (p: {
+      added: KeywordInsight[];
+      removed: string[];
+      overrides?: Record<string, { intent?: string; match_type?: string }>;
+    }) => api.post(`/ai/ad-copy/${genId}/keywords`, p).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
   });
 }

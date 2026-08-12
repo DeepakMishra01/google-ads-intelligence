@@ -108,12 +108,6 @@ const LEVEL_COLOR: Record<string, string> = {
   low: "bg-slate-200",
 };
 
-const MATCH_STYLE: Record<string, string> = {
-  EXACT: "bg-green-100 text-green-700",
-  PHRASE: "bg-blue-100 text-blue-700",
-  BROAD: "bg-amber-100 text-amber-700",
-};
-
 // Editable keyword table: remove suggested keywords, or add your own (search
 // volume auto-fetched from Keyword Planner). Edits are saved to the plan and
 // shown — tagged — in the approval email.
@@ -131,12 +125,58 @@ function KeywordEditor({
   const [newKw, setNewKw] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
+  // Per-keyword intent/match overrides, keyed by keyword text.
+  const [overrides, setOverrides] = useState<Record<string, { intent?: string; match?: string }>>({});
   const lookup = useKeywordLookup();
   const save = useSaveKeywordEdits(genId ?? 0);
 
   const norm = (s: string) => s.trim().toLowerCase();
   const known = new Set([...keywords.map((k) => norm(k.keyword)), ...added.map((k) => norm(k.keyword))]);
-  const dirty = removed.size > 0 || added.length > 0;
+  const dirty = removed.size > 0 || added.length > 0 || Object.keys(overrides).length > 0;
+
+  const INTENTS = [
+    "brand", "application", "admission", "registration", "deadline", "fees",
+    "courses", "placement", "research", "location", "generic", "custom",
+  ];
+  const MATCHES = ["EXACT", "PHRASE", "BROAD"];
+
+  const setField = (kw: string, field: "intent" | "match", val: string, original: string) => {
+    setSavedAt(false);
+    setOverrides((prev) => {
+      const cur = { ...(prev[kw] || {}) };
+      if (val === original) delete cur[field];
+      else cur[field] = val;
+      const next = { ...prev };
+      if (Object.keys(cur).length) next[kw] = cur;
+      else delete next[kw];
+      return next;
+    });
+  };
+
+  // Small inline <select> that marks itself when the value differs from the system's.
+  const editSelect = (
+    kw: string, field: "intent" | "match", original: string, options: string[]
+  ) => {
+    const val = overrides[kw]?.[field] ?? original;
+    const edited = overrides[kw]?.[field] != null;
+    const opts = Array.from(new Set([original, ...options])).filter(Boolean);
+    return (
+      <span className="inline-flex items-center gap-1">
+        <select
+          value={val}
+          onChange={(e) => setField(kw, field, e.target.value, original)}
+          className={`rounded border px-1.5 py-0.5 text-xs ${edited ? "border-violet-400 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600"}`}
+        >
+          {opts.map((o) => (
+            <option key={o} value={o}>
+              {field === "intent" ? o.charAt(0).toUpperCase() + o.slice(1) : o}
+            </option>
+          ))}
+        </select>
+        {edited && <span className="text-[10px] font-semibold text-violet-600" title="Edited by you">✎</span>}
+      </span>
+    );
+  };
 
   const toggleRemove = (kw: string) =>
     setRemoved((s) => {
@@ -164,8 +204,15 @@ function KeywordEditor({
 
   const doSave = () => {
     if (genId == null) return;
+    const overridesPayload: Record<string, { intent?: string; match_type?: string }> = {};
+    for (const [kw, v] of Object.entries(overrides)) {
+      const o: { intent?: string; match_type?: string } = {};
+      if (v.intent) o.intent = v.intent;
+      if (v.match) o.match_type = v.match;
+      if (Object.keys(o).length) overridesPayload[kw] = o;
+    }
     save.mutate(
-      { added, removed: [...removed] },
+      { added, removed: [...removed], overrides: overridesPayload },
       {
         onSuccess: (data: { keyword_groups?: KeywordGroup[] }) => {
           setSavedAt(true);
@@ -198,11 +245,9 @@ function KeywordEditor({
               return (
                 <tr key={k.keyword} className={`border-b border-slate-50 ${gone ? "opacity-45" : ""}`}>
                   <td className={`${cell} font-medium text-slate-800 ${gone ? "line-through" : ""}`}>{k.keyword}</td>
-                  <td className={cell}><Badge className="bg-slate-100 text-slate-600">{k.intent}</Badge></td>
+                  <td className={cell}>{editSelect(k.keyword, "intent", k.intent, INTENTS)}</td>
                   <td className={`${cell} text-center`}>
-                    <Badge className={MATCH_STYLE[k.recommended_match_type ?? ""] ?? "bg-slate-100 text-slate-600"}>
-                      {k.recommended_match_type ?? "—"}
-                    </Badge>
+                    {editSelect(k.keyword, "match", k.recommended_match_type ?? "PHRASE", MATCHES)}
                   </td>
                   <td className={`${cell} text-right`}>{num(k.search_volume)}</td>
                   <td className={`${cell} text-right`}>{k.recommended_bid != null ? money(k.recommended_bid) : "—"}</td>
@@ -224,11 +269,9 @@ function KeywordEditor({
                   {k.keyword}
                   <Badge className="ml-2 bg-violet-100 text-violet-700">Added by you</Badge>
                 </td>
-                <td className={cell}><Badge className="bg-slate-100 text-slate-600">{k.intent ?? "custom"}</Badge></td>
+                <td className={cell}>{editSelect(k.keyword, "intent", k.intent ?? "custom", INTENTS)}</td>
                 <td className={`${cell} text-center`}>
-                  <Badge className={MATCH_STYLE[k.recommended_match_type ?? ""] ?? "bg-blue-100 text-blue-700"}>
-                    {k.recommended_match_type ?? "PHRASE"}
-                  </Badge>
+                  {editSelect(k.keyword, "match", k.recommended_match_type ?? "PHRASE", MATCHES)}
                 </td>
                 <td className={`${cell} text-right`}>{k.search_volume != null ? num(k.search_volume) : "—"}</td>
                 <td className={`${cell} text-right`}>{k.recommended_bid != null ? money(k.recommended_bid) : "—"}</td>
@@ -2229,6 +2272,7 @@ export default function AiAdCopyGeneratorPage() {
               hint={`${result.keywords.length} suggested · edit, add or remove`}
             >
               <KeywordEditor
+                key={result.id ?? "new"}
                 genId={result.id ?? null}
                 keywords={result.keywords}
                 onGroupsSaved={setGroupsOverride}

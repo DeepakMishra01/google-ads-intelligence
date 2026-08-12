@@ -32,14 +32,26 @@ def effective_keywords(gen: AdCopyGeneration) -> tuple[list[dict], list[dict]]:
     ks = (gen.keyword_snapshot or {}).get("keywords", []) or []
     edits = gen.keyword_edits or {}
     removed_set = {(r or "").lower() for r in edits.get("removed", [])}
+    overrides = {(k or "").lower(): v for k, v in (edits.get("overrides") or {}).items()}
+
+    def _apply(k: dict) -> dict:
+        k = dict(k)
+        o = overrides.get((k.get("keyword") or "").lower())
+        if o:
+            if o.get("intent"):
+                k["intent"], k["intent_edited"] = o["intent"], True
+            if o.get("match_type"):
+                k["recommended_match_type"], k["match_edited"] = o["match_type"], True
+        return k
+
     active: list[dict] = []
     for k in ks:
         if (k.get("keyword") or "").lower() in removed_set:
             continue
         src = k.get("source")
-        active.append({**k, "source": "user_added" if src == "user_added" else "system"})
+        active.append(_apply({**k, "source": "user_added" if src == "user_added" else "system"}))
     for a in edits.get("added", []):
-        active.append({**a, "source": "user_added"})
+        active.append(_apply({**a, "source": "user_added"}))
     removed = [k for k in ks if (k.get("keyword") or "").lower() in removed_set]
     return active, removed
 
@@ -184,13 +196,17 @@ def _approval_html(
                "Added by user</span>") if k.get("source") == "user_added" else ""
         return f"{_esc(k.get('keyword'))}{tag}"
 
+    def _edited(flag: str, k: dict[str, Any]) -> str:
+        return ("<span style='color:#7c3aed;font-size:10px;font-weight:bold'> ✎ edited</span>"
+                if k.get(flag) else "")
+
     kw_rows = "".join(
         f"<tr>"
         f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>{_kw_cell(k)}</td>"
         f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;color:#64748b'>"
-        f"{_esc(k.get('intent'))}</td>"
+        f"{_esc(k.get('intent'))}{_edited('intent_edited', k)}</td>"
         f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>"
-        f"{_esc(k.get('recommended_match_type'))}</td>"
+        f"{_esc(k.get('recommended_match_type'))}{_edited('match_edited', k)}</td>"
         f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"
         f"font-variant-numeric:tabular-nums'>{_esc(_vol(k))}</td>"
         f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"

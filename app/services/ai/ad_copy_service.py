@@ -473,7 +473,7 @@ class AdCopyService:
 
     def save_keyword_edits(
         self, gen_id: int, *, added: list[dict[str, Any]], removed: list[str],
-        actor: str | None,
+        overrides: dict[str, dict[str, Any]] | None = None, actor: str | None,
     ) -> dict[str, Any]:
         """Persist the user's keyword edits on a generation.
 
@@ -500,21 +500,42 @@ class AdCopyService:
             if (k.get("keyword") or "").lower() not in removed_lc
         ]
         effective = system + norm_added
+        # Apply the user's per-keyword intent/match overrides BEFORE grouping so the
+        # keyword lands in the ad group the user chose, and mark what they changed.
+        ov = {(k or "").strip().lower(): v for k, v in (overrides or {}).items()}
+        clean_overrides: dict[str, dict[str, Any]] = {}
+        for kw in effective:
+            o = ov.get((kw.get("keyword") or "").lower())
+            if not o:
+                continue
+            entry: dict[str, Any] = {}
+            if o.get("intent"):
+                kw["intent"] = str(o["intent"]).lower()
+                entry["intent"] = kw["intent"]
+            if o.get("match_type"):
+                kw["recommended_match_type"] = str(o["match_type"]).upper()
+                entry["match_type"] = kw["recommended_match_type"]
+            if entry:
+                clean_overrides[kw["keyword"]] = entry
+
         self._fill_bid_gaps(effective)
         groups = self._group_keywords(effective)
 
-        gen.keyword_edits = {"added": norm_added, "removed": removed_norm, "groups": groups}
+        gen.keyword_edits = {"added": norm_added, "removed": removed_norm,
+                             "overrides": clean_overrides, "groups": groups}
         # A changed plan can't keep a stale approval.
         if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
             gen.approval_status = "draft"
         self.db.flush()
         ApprovalService(self.db).events.add_event(
             gen_id, "keywords_edited", actor,
-            f"+{len(norm_added)} added, -{len(removed_norm)} removed",
+            f"+{len(norm_added)} added, -{len(removed_norm)} removed, "
+            f"{len(clean_overrides)} edited",
         )
         self.db.commit()
         return {"ok": True, "gen_id": gen_id, "added": len(norm_added),
-                "removed": len(removed_norm), "keyword_groups": groups}
+                "removed": len(removed_norm), "edited": len(clean_overrides),
+                "keyword_groups": groups}
 
     def _classify_added(self, brief, added: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Turn user-added keyword dicts into full scored insights (intent/match/bid)."""
