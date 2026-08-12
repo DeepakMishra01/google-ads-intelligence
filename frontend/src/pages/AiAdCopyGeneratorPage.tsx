@@ -20,6 +20,8 @@ import {
   useCampusSearch,
   useFinalUrl,
   useGenerateAdCopy,
+  useKeywordLookup,
+  useSaveKeywordEdits,
   useSaveScorecard,
   useScorecard,
   useScorecardHistory,
@@ -32,6 +34,7 @@ import type {
   CplPlan,
   ReversePlan,
   GeneratedAsset,
+  KeywordInsight,
   KeywordHistoryView as KeywordHistoryData,
   LandingAudit,
   Scorecard,
@@ -109,6 +112,179 @@ const MATCH_STYLE: Record<string, string> = {
   PHRASE: "bg-blue-100 text-blue-700",
   BROAD: "bg-amber-100 text-amber-700",
 };
+
+// Editable keyword table: remove suggested keywords, or add your own (search
+// volume auto-fetched from Keyword Planner). Edits are saved to the plan and
+// shown — tagged — in the approval email.
+function KeywordEditor({ genId, keywords }: { genId: number | null; keywords: KeywordInsight[] }) {
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [added, setAdded] = useState<KeywordInsight[]>([]);
+  const [newKw, setNewKw] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const [savedAt, setSavedAt] = useState(false);
+  const lookup = useKeywordLookup();
+  const save = useSaveKeywordEdits(genId ?? 0);
+
+  const norm = (s: string) => s.trim().toLowerCase();
+  const known = new Set([...keywords.map((k) => norm(k.keyword)), ...added.map((k) => norm(k.keyword))]);
+  const dirty = removed.size > 0 || added.length > 0;
+
+  const toggleRemove = (kw: string) =>
+    setRemoved((s) => {
+      const n = new Set(s);
+      n.has(kw) ? n.delete(kw) : n.add(kw);
+      return n;
+    });
+
+  const addKeyword = async () => {
+    const kw = newKw.trim();
+    if (!kw || known.has(norm(kw))) {
+      setNewKw("");
+      return;
+    }
+    setSavedAt(false);
+    try {
+      const res = await lookup.mutateAsync({ keywords: [kw] });
+      const row = res.keywords?.[0];
+      if (row) setAdded((a) => [...a, row]);
+    } catch {
+      /* backend returns a row even without metrics; ignore transient errors */
+    }
+    setNewKw("");
+  };
+
+  const doSave = () => {
+    if (genId == null) return;
+    save.mutate(
+      { added, removed: [...removed] },
+      { onSuccess: () => setSavedAt(true) }
+    );
+  };
+
+  const visible = showAll ? keywords : keywords.slice(0, 15);
+  const cell = "py-1.5 px-2";
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className={cell}>Keyword</th>
+              <th className={cell}>Intent</th>
+              <th className={`${cell} text-center`}>Match</th>
+              <th className={`${cell} text-right`}>Volume</th>
+              <th className={`${cell} text-right`}>Suggested bid</th>
+              <th className={`${cell} text-right`}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((k) => {
+              const gone = removed.has(k.keyword);
+              return (
+                <tr key={k.keyword} className={`border-b border-slate-50 ${gone ? "opacity-45" : ""}`}>
+                  <td className={`${cell} font-medium text-slate-800 ${gone ? "line-through" : ""}`}>{k.keyword}</td>
+                  <td className={cell}><Badge className="bg-slate-100 text-slate-600">{k.intent}</Badge></td>
+                  <td className={`${cell} text-center`}>
+                    <Badge className={MATCH_STYLE[k.recommended_match_type ?? ""] ?? "bg-slate-100 text-slate-600"}>
+                      {k.recommended_match_type ?? "—"}
+                    </Badge>
+                  </td>
+                  <td className={`${cell} text-right`}>{num(k.search_volume)}</td>
+                  <td className={`${cell} text-right`}>{k.recommended_bid != null ? money(k.recommended_bid) : "—"}</td>
+                  <td className={`${cell} text-right`}>
+                    <button
+                      type="button"
+                      onClick={() => { toggleRemove(k.keyword); setSavedAt(false); }}
+                      className={`text-xs font-medium ${gone ? "text-slate-500 hover:text-slate-700" : "text-red-500 hover:text-red-700"}`}
+                    >
+                      {gone ? "Undo" : "Remove"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {added.map((k) => (
+              <tr key={`added-${k.keyword}`} className="border-b border-slate-50 bg-violet-50/50">
+                <td className={`${cell} font-medium text-slate-800`}>
+                  {k.keyword}
+                  <Badge className="ml-2 bg-violet-100 text-violet-700">Added by you</Badge>
+                </td>
+                <td className={cell}><Badge className="bg-slate-100 text-slate-600">{k.intent ?? "custom"}</Badge></td>
+                <td className={`${cell} text-center`}>
+                  <Badge className={MATCH_STYLE[k.recommended_match_type ?? ""] ?? "bg-blue-100 text-blue-700"}>
+                    {k.recommended_match_type ?? "PHRASE"}
+                  </Badge>
+                </td>
+                <td className={`${cell} text-right`}>{k.search_volume != null ? num(k.search_volume) : "—"}</td>
+                <td className={`${cell} text-right`}>{k.recommended_bid != null ? money(k.recommended_bid) : "—"}</td>
+                <td className={`${cell} text-right`}>
+                  <button
+                    type="button"
+                    onClick={() => { setAdded((a) => a.filter((x) => norm(x.keyword) !== norm(k.keyword))); setSavedAt(false); }}
+                    className="text-xs font-medium text-red-500 hover:text-red-700"
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {keywords.length > 15 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+        >
+          {showAll ? "Show top 15 only" : `Show all ${keywords.length} suggested`}
+        </button>
+      )}
+
+      {/* Add a keyword */}
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+        <input
+          className="input h-9 min-w-[240px] flex-1"
+          placeholder="Add your own keyword — search volume is fetched automatically"
+          value={newKw}
+          onChange={(e) => setNewKw(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && addKeyword()}
+        />
+        <button
+          type="button"
+          className="btn btn-primary h-9 px-4"
+          onClick={addKeyword}
+          disabled={lookup.isPending || !newKw.trim()}
+        >
+          {lookup.isPending ? "Fetching volume…" : "Add keyword"}
+        </button>
+      </div>
+
+      {/* Save edits */}
+      {(dirty || savedAt) && (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-primary h-9 px-4"
+            onClick={doSave}
+            disabled={!dirty || save.isPending || genId == null}
+          >
+            {save.isPending ? "Saving…" : "Save keyword changes"}
+          </button>
+          <span className="text-xs text-slate-500">
+            {genId == null
+              ? "Generate & save the plan first to edit keywords."
+              : savedAt && !save.isPending
+                ? "Saved ✓ — the plan reset to draft; re-submit for approval. Your changes appear in the approval email, tagged."
+                : "Added keywords are tagged “Added by user” and removed ones are listed in the approval email."}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUS_STYLE: Record<string, string> = {
   ready: "bg-green-100 text-green-700",
@@ -1576,7 +1752,6 @@ export default function AiAdCopyGeneratorPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
   const [tab, setTab] = useState("landing");
-  const [showAllKw, setShowAllKw] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 250);
@@ -2029,66 +2204,14 @@ export default function AiAdCopyGeneratorPage() {
             </Section>
             )}
 
-            {/* Keyword intelligence */}
+            {/* Keyword intelligence — editable */}
             {tab === "keywords" && (
             <>
             <Section
               title="Keyword intelligence"
-              hint={`ranked by performance score · ${result.keywords.length} keywords`}
+              hint={`${result.keywords.length} suggested · edit, add or remove`}
             >
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                      <th className="py-2">#</th>
-                      <th>Keyword</th>
-                      <th>Intent</th>
-                      <th className="text-right">Score</th>
-                      <th className="text-right">Clicks</th>
-                      <th className="text-right">CTR</th>
-                      <th className="text-right">CPC</th>
-                      <th className="text-center">Match</th>
-                      <th className="text-right">Suggested bid</th>
-                      <th className="text-right">Vol.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(showAllKw ? result.keywords : result.keywords.slice(0, 15)).map((k, i) => (
-                      <tr key={k.keyword} className="border-b border-slate-50">
-                        <td className="py-1.5 pr-2 text-right font-mono text-xs text-slate-400">{i + 1}</td>
-                        <td className="py-1.5 font-medium text-slate-800">{k.keyword}</td>
-                        <td>
-                          <Badge className="bg-slate-100 text-slate-600">{k.intent}</Badge>
-                        </td>
-                        <td className="text-right font-mono">{k.score}</td>
-                        <td className="text-right">{num(k.historical_clicks)}</td>
-                        <td className="text-right">{pct(k.historical_ctr)}</td>
-                        <td className="text-right">{money(k.historical_cpc)}</td>
-                        <td className="text-center" title={k.match_reason ?? ""}>
-                          <Badge className={MATCH_STYLE[k.recommended_match_type ?? ""] ?? "bg-slate-100 text-slate-600"}>
-                            {k.recommended_match_type ?? "—"}
-                          </Badge>
-                        </td>
-                        <td className="text-right font-medium text-slate-800" title={k.bid_reason ?? ""}>
-                          {k.recommended_bid != null ? money(k.recommended_bid) : "—"}
-                        </td>
-                        <td className="text-right">{num(k.search_volume)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {result.keywords.length > 15 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllKw((v) => !v)}
-                  className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                >
-                  {showAllKw
-                    ? "Show top 15 only"
-                    : `Show all ${result.keywords.length} keywords`}
-                </button>
-              )}
+              <KeywordEditor genId={result.id ?? null} keywords={result.keywords} />
             </Section>
 
             {/* Campaign recommendation */}

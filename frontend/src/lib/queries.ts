@@ -25,6 +25,7 @@ import type {
   FinalUrlResponse,
   GrowthPoint,
   KeywordHealthRow,
+  KeywordInsight,
   Overview,
   Page,
   Portfolio,
@@ -423,6 +424,24 @@ export function useApprovalActions(genId: number | null | undefined) {
     onSuccess: invalidate,
   });
   return { submit, decide, override, email, requestChanges };
+}
+
+export function useKeywordLookup() {
+  return useMutation({
+    mutationFn: (p: { keywords: string[] }) =>
+      api
+        .post("/ai/ad-copy/keyword-lookup", p, { timeout: 30_000 })
+        .then((r) => r.data as { keywords: KeywordInsight[] }),
+  });
+}
+
+export function useSaveKeywordEdits(genId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { added: KeywordInsight[]; removed: string[] }) =>
+      api.post(`/ai/ad-copy/${genId}/keywords`, p).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+  });
 }
 
 export function usePortfolio() {
