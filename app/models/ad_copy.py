@@ -71,6 +71,10 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     owner_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
     )
+    # Who clicked "Submit for approval" — emailed the reviewer's decision.
+    submitter_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
 
 
 class ApprovalEvent(IntPKMixin, TimestampMixin, Base):

@@ -150,72 +150,141 @@ def _approval_html(
     headlines = [a.get("text") for a in assets.get("headlines", [])][:15]
     descriptions = [a.get("text") for a in assets.get("descriptions", [])][:4]
     kws = ks.get("keywords", [])[:15]
+
+    def _vol(k: dict[str, Any]) -> str:
+        v = k.get("search_volume")
+        return f"{int(v):,}/mo" if isinstance(v, (int, float)) and v else "—"
+
     kw_rows = "".join(
-        f"<tr><td style='padding:2px 8px'>{_esc(k.get('keyword'))}</td>"
-        f"<td style='padding:2px 8px'>{_esc(k.get('intent'))}</td>"
-        f"<td style='padding:2px 8px'>{_esc(k.get('recommended_match_type'))}</td>"
-        f"<td style='padding:2px 8px;text-align:right'>"
+        f"<tr>"
+        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>{_esc(k.get('keyword'))}</td>"
+        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;color:#64748b'>"
+        f"{_esc(k.get('intent'))}</td>"
+        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>"
+        f"{_esc(k.get('recommended_match_type'))}</td>"
+        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"
+        f"font-variant-numeric:tabular-nums'>{_esc(_vol(k))}</td>"
+        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"
+        f"font-variant-numeric:tabular-nums'>"
         f"{'₹' + str(k.get('recommended_bid')) if k.get('recommended_bid') else '—'}</td></tr>"
         for k in kws
     )
     strat_rows = "".join(
-        f"<tr><td style='padding:2px 8px'>{_esc(f['label'])}</td>"
-        f"<td style='padding:2px 8px'><b>{_esc(f['value'])}</b>"
-        f"{' (edited)' if f['edited'] else ''}</td></tr>"
+        f"<tr><td style='padding:6px 10px;border-top:1px solid #eef2f7;color:#475569'>"
+        f"{_esc(f['label'])}</td>"
+        f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right'>"
+        f"<b>{_esc(f['value'])}</b>{' <span style=color:#d97706>(edited)</span>' if f['edited'] else ''}"
+        f"</td></tr>"
         for f in fs.get("fields", [])
     )
-    banner_color = "#16a34a" if approved else "#d97706"
+
+    def _h3(t: str) -> str:
+        return (f"<h3 style='margin:22px 0 8px;font-size:15px;color:#0f172a;"
+                f"border-bottom:2px solid #eef2f7;padding-bottom:4px'>{t}</h3>")
+
+    def _card_table(inner: str) -> str:
+        return (f"<table style='width:100%;border-collapse:collapse;font-size:14px;"
+                f"border:1px solid #e2e8f0;border-radius:8px;overflow:hidden'>{inner}</table>")
+
+    banner_color = "#16a34a" if approved else "#4f46e5"
     banner_text = ("✓ APPROVED — cleared to launch" if approved
-                   else f"{gen.approval_status.upper()} — review & approve before launch")
-    banner_css = (
-        f"background:{banner_color};color:#fff;padding:10px 14px;"
-        "border-radius:6px;font-weight:bold"
+                   else "Review needed — approve or request changes below")
+    summary = (
+        f"<table style='width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 4px'>"
+        f"<tr>"
+        f"<td style='padding:4px 0;color:#64748b'>College</td>"
+        f"<td style='padding:4px 0;text-align:right'><b>{_esc(gen.campus)}</b></td></tr>"
+        f"<tr><td style='padding:4px 0;color:#64748b'>Requested by</td>"
+        f"<td style='padding:4px 0;text-align:right'>{_esc(requested_by or '—')}</td></tr>"
+        f"<tr><td style='padding:4px 0;color:#64748b'>Ad manager</td>"
+        f"<td style='padding:4px 0;text-align:right'>{_esc(gen.ad_manager or 'Unassigned')}</td></tr>"
+        f"<tr><td style='padding:4px 0;color:#64748b'>Projected</td>"
+        f"<td style='padding:4px 0;text-align:right'><b>{_esc(fs.get('est_leads'))}</b> leads "
+        f"@ <b>₹{_esc(fs.get('est_cpl'))}</b> CPL</td></tr></table>"
     )
     return f"""\
-<div style="font-family:Arial,sans-serif;max-width:680px;color:#0f172a">
-  <div style="{banner_css}">
-    {banner_text}
+<div style="background:#f1f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">
+ <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;
+      box-shadow:0 1px 4px rgba(15,23,42,.08);overflow:hidden">
+  <div style="background:{banner_color};color:#fff;padding:16px 22px">
+    <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.85">
+      KollegeApply · Ads approval</div>
+    <div style="font-size:18px;font-weight:bold;margin-top:2px">{banner_text}</div>
   </div>
-  {"" if approved else _approval_buttons(approve_url, reject_url)}
-  <h2 style="margin:14px 0 4px">{_esc(gen.campus)} — Campaign strategy for approval</h2>
-  <p style="margin:0 0 8px;font-size:13px;color:#64748b">
-    Requested by <b>{_esc(requested_by or "—")}</b>
-    &nbsp;·&nbsp; Ad manager: <b>{_esc(gen.ad_manager or "Unassigned")}</b>
-  </p>
+  <div style="padding:22px">
+    <div style="font-size:20px;font-weight:bold;color:#0f172a">{_esc(gen.campus)}</div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:6px">Campaign strategy for approval</div>
+    <div style="background:#f8fafc;border:1px solid #eef2f7;border-radius:8px;padding:10px 14px">
+      {summary}
+    </div>
+    {"" if approved else _approval_buttons(approve_url, reject_url)}
 
-  <h3>Final strategy</h3>
-  <table style="border-collapse:collapse;font-size:14px">{strat_rows}
-    <tr><td style="padding:2px 8px">Projected leads</td>
-        <td style="padding:2px 8px"><b>{_esc(fs.get('est_leads'))}</b>
-        (target {_esc(fs.get('target_leads'))})</td></tr>
-    <tr><td style="padding:2px 8px">Projected CPL</td>
-        <td style="padding:2px 8px"><b>₹{_esc(fs.get('est_cpl'))}</b></td></tr>
-  </table>
+    {_h3("Final strategy")}
+    {_card_table(strat_rows)}
 
-  <h3>Ad copy — headlines</h3>
-  <ul style="font-size:14px">{_rows(headlines)}</ul>
-  <h3>Ad copy — descriptions</h3>
-  <ul style="font-size:14px">{_rows(descriptions)}</ul>
+    {_h3("Keywords used (with monthly search volume)")}
+    {_card_table(
+        "<tr style='background:#f8fafc'>"
+        "<th style='padding:7px 10px;text-align:left;font-size:12px;color:#64748b'>Keyword</th>"
+        "<th style='padding:7px 10px;text-align:left;font-size:12px;color:#64748b'>Intent</th>"
+        "<th style='padding:7px 10px;text-align:left;font-size:12px;color:#64748b'>Match</th>"
+        "<th style='padding:7px 10px;text-align:right;font-size:12px;color:#64748b'>Volume</th>"
+        "<th style='padding:7px 10px;text-align:right;font-size:12px;color:#64748b'>Bid</th></tr>"
+        + kw_rows
+    )}
 
-  <h3>Top keywords</h3>
-  <table style="border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0">
-    <tr style="background:#f1f5f9"><th style="padding:2px 8px;text-align:left">Keyword</th>
-      <th style="padding:2px 8px;text-align:left">Intent</th>
-      <th style="padding:2px 8px;text-align:left">Match</th>
-      <th style="padding:2px 8px;text-align:right">Bid</th></tr>
-    {kw_rows}
-  </table>
+    {_h3("Ad copy — headlines")}
+    <ul style="font-size:14px;margin:0;padding-left:20px;color:#334155">{_rows(headlines)}</ul>
+    {_h3("Ad copy — descriptions")}
+    <ul style="font-size:14px;margin:0;padding-left:20px;color:#334155">{_rows(descriptions)}</ul>
 
-  <h3>Landing page</h3>
-  <p style="font-size:14px">Score: <b>{_esc(lq.get('score'))}/100</b>
-  (Grade {_esc(lq.get('grade'))}). {_esc((lq.get('suggestions') or [''])[0])}</p>
+    {_h3("Landing page")}
+    <p style="font-size:14px;margin:0;color:#334155">Score:
+      <b>{_esc(lq.get('score'))}/100</b> (Grade {_esc(lq.get('grade'))}).
+      {_esc((lq.get('suggestions') or [''])[0])}</p>
 
-  <h3>Negative keywords</h3>
-  <p style="font-size:14px">{_esc(len(neg.get('keywords', [])))} negatives prepared
-  ({_esc(neg.get('wasted_spend') or 0)} ₹ wasted on junk queries historically).</p>
+    {_h3("Negative keywords")}
+    <p style="font-size:14px;margin:0;color:#334155">
+      <b>{_esc(len(neg.get('keywords', [])))}</b> negatives prepared
+      (₹{_esc(neg.get('wasted_spend') or 0)} historically wasted on junk queries).</p>
 
-  <p style="font-size:13px;color:#64748b">Full plan (all keywords, negatives, month-wise spend,
-  seasonality, setup guide) is in the attached Excel. Reply to approve, or approve in-app.</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:22px;border-top:1px solid #eef2f7;
+       padding-top:12px">
+      The full plan — all keywords, negatives, month-wise spend, seasonality and setup guide —
+      is attached as Excel. Approving clears this plan to be built in Google Ads.</p>
+  </div>
+ </div>
+</div>"""
+
+
+def _decision_notice_html(
+    campus: str, *, approved: bool, note: str | None, headline: str, message: str
+) -> str:
+    """The email the SUBMITTER receives once a reviewer decides."""
+    color = "#16a34a" if approved else "#d97706"
+    label = "APPROVED" if approved else "CHANGES REQUESTED"
+    note_block = (
+        "" if approved or not note else
+        f"<div style='margin-top:14px'>"
+        f"<div style='font-size:12px;text-transform:uppercase;letter-spacing:.06em;"
+        f"color:#64748b;margin-bottom:4px'>Reviewer's comments</div>"
+        f"<div style='background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;"
+        f"padding:12px 14px;font-size:14px;color:#7c2d12;white-space:pre-wrap'>{_esc(note)}</div>"
+        f"</div>"
+    )
+    return f"""\
+<div style="background:#f1f5f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">
+ <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;
+      box-shadow:0 1px 4px rgba(15,23,42,.08);overflow:hidden">
+  <div style="background:{color};color:#fff;padding:16px 22px;font-weight:bold;font-size:16px">
+    {label} · {_esc(campus)}
+  </div>
+  <div style="padding:22px;color:#334155">
+    <div style="font-size:18px;font-weight:bold;color:#0f172a;margin-bottom:6px">{headline}</div>
+    <p style="font-size:14px;margin:0">{message}</p>
+    {note_block}
+  </div>
+ </div>
 </div>"""
 
 
@@ -258,6 +327,7 @@ class ApprovalService:
         actor: str | None,
         auto_send: bool = True,
         base_url: str | None = None,
+        submitter_user_id: int | None = None,
     ) -> dict[str, Any]:
         gen = self._get(gen_id)
         if gen is None:
@@ -274,6 +344,8 @@ class ApprovalService:
             }
         gen.approval_status = "submitted"
         gen.submitted_at = self._now()
+        if submitter_user_id:
+            gen.submitter_user_id = submitter_user_id
         self._ensure_token(gen)
         self.events.add_event(gen_id, "submitted", actor, None)
         self.db.commit()
@@ -377,28 +449,76 @@ class ApprovalService:
         return {"ok": True, **self.state(gen_id)}
 
     def approve_via_token(
-        self, gen_id: int, *, token: str, reject: bool = False
+        self, gen_id: int, *, token: str, reject: bool = False,
+        note: str | None = None, reviewer: str | None = None,
     ) -> dict[str, Any]:
-        """One-click decision from the email link. Validates the per-plan token."""
+        """One-click decision from the email link. Validates the per-plan token.
+
+        On approve → the submitter is emailed that the plan is cleared to build.
+        On reject  → the reviewer's ``note`` (why) is stored and emailed to them.
+        """
         gen = self._get(gen_id)
         if gen is None:
             return {"ok": False, "reason": "not found"}
         if not gen.approval_token or not token or token != gen.approval_token:
             return {"ok": False, "reason": "invalid or expired link"}
-        reviewer = get_settings().approval_reviewer_email or "Reviewer (email)"
+        reviewer = reviewer or get_settings().approval_reviewer_email or "Reviewer (email)"
         approved = not reject
         gen.approval_status = "approved" if approved else "rejected"
         gen.reviewed_at = self._now()
         gen.reviewer_name = reviewer
-        gen.review_note = "via one-click email link"
+        gen.review_note = (note or "").strip() or (
+            "via one-click email link" if approved else "No reason given."
+        )
         self.events.add_event(
-            gen_id,
-            "approved" if approved else "rejected",
-            reviewer,
-            "one-click email link",
+            gen_id, "approved" if approved else "rejected", reviewer, gen.review_note,
         )
         self.db.commit()
+        self._notify_submitter(gen, approved=approved, note=gen.review_note)
         return {"ok": True, **self.state(gen_id)}
+
+    def _submitter_email(self, gen: AdCopyGeneration) -> str | None:
+        """Email of the person to notify of the decision (submitter, else owner)."""
+        from app.models.user import User
+
+        for uid in (gen.submitter_user_id, gen.owner_user_id):
+            if uid:
+                u = self.db.get(User, uid)
+                if u and u.email:
+                    return u.email
+        return None
+
+    def _notify_submitter(
+        self, gen: AdCopyGeneration, *, approved: bool, note: str | None
+    ) -> None:
+        """Email the submitter the outcome so they act (build) or revise."""
+        to = self._submitter_email(gen)
+        if not to:
+            return
+        from app.services.ai.email_service import send_email
+
+        campus = gen.campus
+        if approved:
+            subject = f"✅ Approved: {campus} — you can build the campaign"
+            html = _decision_notice_html(
+                campus, approved=True, note=None,
+                headline="Your campaign plan is approved",
+                message="This plan is <b>cleared to launch</b>. You can now create the "
+                        "campaign in Google Ads using the approved strategy.",
+            )
+            body = (f"Your campaign plan for {campus} is APPROVED. "
+                    "You can now create the campaign in Google Ads.")
+        else:
+            subject = f"✏️ Changes requested: {campus} — please revise"
+            html = _decision_notice_html(
+                campus, approved=False, note=note,
+                headline="Your campaign plan needs changes",
+                message="The reviewer did not approve this plan. Please make the changes "
+                        "below and resubmit for approval.",
+            )
+            body = (f"Your campaign plan for {campus} was not approved.\n\n"
+                    f"Reviewer's comments:\n{note or '—'}\n\nPlease revise and resubmit.")
+        send_email(to=to, subject=subject, body=body, html=html)
 
     def decide(
         self, gen_id: int, *, approved: bool, reviewer_name: str, note: str | None

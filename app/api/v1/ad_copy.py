@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import escape
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
@@ -141,10 +142,12 @@ def approval_submit(
     gen_id: int,
     request: Request,
     x_actor: str | None = Header(None),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     return ApprovalService(db).submit(
-        gen_id, actor=x_actor, base_url=_request_base_url(request)
+        gen_id, actor=x_actor, base_url=_request_base_url(request),
+        submitter_user_id=user.id or None,  # 0 => synthetic admin (auth off)
     )
 
 
@@ -334,23 +337,66 @@ def approval_approve_link(
         return _decision_page("Link not valid", str(r.get("reason", "")), ok=False)
     return _decision_page(
         "Approved — cleared to launch",
-        f"“{r.get('campus', 'This plan')}” is approved. The ad manager can run it. "
-        "You can close this tab.",
+        f"“{r.get('campus', 'This plan')}” is approved and the submitter has been "
+        "emailed that they can build the campaign in Google Ads. You can close this tab.",
         ok=True,
     )
 
 
-@router.get("/{gen_id}/reject", response_model=None, summary="One-click reject (email link)")
+def _reject_form_page(gen_id: int, token: str, campus: str) -> HTMLResponse:
+    """A page (opened from the email) where the reviewer types WHY they're rejecting."""
+    action = f"/api/v1/ai/ad-copy/{gen_id}/reject/confirm"
+    html = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Request changes</title></head>
+<body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:48px 16px">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;
+       box-shadow:0 1px 3px rgba(0,0,0,.1);padding:28px">
+    <h1 style="margin:0 0 4px;font-size:20px;color:#0f172a">Request changes</h1>
+    <p style="color:#475569;font-size:14px;margin:0 0 16px">
+      Tell the submitter what to change on “<b>{escape(campus)}</b>”. Your comments are
+      emailed to them so they can revise and resubmit.</p>
+    <form method="get" action="{action}">
+      <input type="hidden" name="token" value="{escape(token)}">
+      <textarea name="note" rows="5" required placeholder="e.g. Budget too high for this campus; tighten brand keywords; fix the landing page form…"
+        style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;
+        padding:12px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
+      <button type="submit" style="margin-top:14px;background:#d97706;color:#fff;border:0;
+        border-radius:8px;padding:11px 18px;font-size:14px;font-weight:bold;cursor:pointer">
+        Send back with these comments</button>
+    </form>
+  </div>
+</body></html>"""
+    return HTMLResponse(content=html, status_code=200)
+
+
+@router.get("/{gen_id}/reject", response_model=None, summary="Reject → comment form (email link)")
 def approval_reject_link(
     gen_id: int, token: str = Query(...), db: Session = Depends(get_db)
 ) -> HTMLResponse:
-    r = ApprovalService(db).approve_via_token(gen_id, token=token, reject=True)
+    # Validate the token, then show a comment box (don't reject until they submit it).
+    from app.models.ad_copy import AdCopyGeneration
+
+    gen = db.get(AdCopyGeneration, gen_id)
+    if gen is None or not gen.approval_token or gen.approval_token != token:
+        return _decision_page("Link not valid", "Invalid or expired link.", ok=False)
+    return _reject_form_page(gen_id, token, gen.campus)
+
+
+@router.get("/{gen_id}/reject/confirm", response_model=None, summary="Confirm reject with comments")
+def approval_reject_confirm(
+    gen_id: int,
+    token: str = Query(...),
+    note: str = Query("", description="Reviewer's reason for the changes."),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    r = ApprovalService(db).approve_via_token(gen_id, token=token, reject=True, note=note)
     if not r.get("ok"):
         return _decision_page("Link not valid", str(r.get("reason", "")), ok=False)
     return _decision_page(
-        "Rejected",
-        f"“{r.get('campus', 'This plan')}” was rejected and is not cleared to launch. "
-        "You can close this tab.",
+        "Changes requested",
+        f"Your comments on “{r.get('campus', 'this plan')}” were sent to the submitter so "
+        "they can revise and resubmit. You can close this tab.",
         ok=False,
     )
 
