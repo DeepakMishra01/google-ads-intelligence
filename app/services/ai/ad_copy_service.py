@@ -486,27 +486,24 @@ class AdCopyService:
         if gen is None:
             return {"ok": False, "reason": "not found"}
 
-        # Normalise added keywords to the fields the plan/email use.
-        norm_added: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for a in added or []:
-            kw = (a.get("keyword") or "").strip()
-            if not kw or kw.lower() in seen:
-                continue
-            seen.add(kw.lower())
-            norm_added.append({
-                "keyword": kw,
-                "search_volume": a.get("search_volume"),
-                "competition": a.get("competition"),
-                "recommended_match_type": a.get("recommended_match_type") or "PHRASE",
-                "recommended_bid": a.get("recommended_bid"),
-                "top_of_page_bid_high": a.get("top_of_page_bid_high"),
-                "intent": a.get("intent") or "custom",
-                "source": "user_added",
-            })
+        brief = find_brief(gen.campus) or generic_brief(gen.campus)
+        # Classify each user-added keyword through the SAME pipeline as the system
+        # ones (intent + match type + bid) so it folds into the right ad group.
+        norm_added = self._classify_added(brief, added or [])
         removed_norm = sorted({(r or "").strip() for r in (removed or []) if (r or "").strip()})
+        removed_lc = {r.lower() for r in removed_norm}
 
-        gen.keyword_edits = {"added": norm_added, "removed": removed_norm}
+        # Recompute the effective ad-group structure: system suggestions (minus the
+        # removed) + the classified user-added keywords, re-grouped by intent.
+        system = [
+            k for k in (gen.keyword_snapshot or {}).get("keywords", [])
+            if (k.get("keyword") or "").lower() not in removed_lc
+        ]
+        effective = system + norm_added
+        self._fill_bid_gaps(effective)
+        groups = self._group_keywords(effective)
+
+        gen.keyword_edits = {"added": norm_added, "removed": removed_norm, "groups": groups}
         # A changed plan can't keep a stale approval.
         if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
             gen.approval_status = "draft"
@@ -516,8 +513,48 @@ class AdCopyService:
             f"+{len(norm_added)} added, -{len(removed_norm)} removed",
         )
         self.db.commit()
-        return {"ok": True, "gen_id": gen_id,
-                "added": len(norm_added), "removed": len(removed_norm)}
+        return {"ok": True, "gen_id": gen_id, "added": len(norm_added),
+                "removed": len(removed_norm), "keyword_groups": groups}
+
+    def _classify_added(self, brief, added: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Turn user-added keyword dicts into full scored insights (intent/match/bid)."""
+        brand_terms = brief.patterns()
+        brand_set = self._brand_keywords(brief)
+        out: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for a in added:
+            text = (a.get("keyword") or "").strip()
+            if not text or text.lower() in seen:
+                continue
+            seen.add(text.lower())
+            cls = intent_classifier.classify(text, brand_terms=brand_terms)
+            base = {
+                "keyword": text, "source": "user_added",
+                "search_volume": a.get("search_volume"), "competition": a.get("competition"),
+                "historical_clicks": None, "historical_ctr": None,
+                "historical_cpc": a.get("historical_cpc"),
+                "top_of_page_bid_low": a.get("top_of_page_bid_low"),
+                "top_of_page_bid_high": a.get("top_of_page_bid_high"),
+                "quality_score": None,
+                "commercial_intent": cls["commercial_intent"],
+                "intent_confidence": cls["confidence"],
+            }
+            sc = score_keyword(base)
+            is_brand = text.lower() in brand_set
+            intent = "brand" if is_brand else cls["intent"]
+            score = max(sc["score"], 80.0 if is_brand else 55.0)
+            out.append({
+                **base,
+                "intent": intent,
+                "score": round(score, 1),
+                "reason": f"Added by user. {cls['reason']}",
+                **recommend_bid(base),
+                **recommend_match_type(
+                    {"intent": intent, "historical_clicks": None, "historical_ctr": None},
+                    has_conversions=False,
+                ),
+            })
+        return out
 
     # ------------------------------------------------------------------ #
     # keyword scoring + grouping

@@ -34,6 +34,7 @@ import type {
   CplPlan,
   ReversePlan,
   GeneratedAsset,
+  KeywordGroup,
   KeywordInsight,
   KeywordHistoryView as KeywordHistoryData,
   LandingAudit,
@@ -116,7 +117,15 @@ const MATCH_STYLE: Record<string, string> = {
 // Editable keyword table: remove suggested keywords, or add your own (search
 // volume auto-fetched from Keyword Planner). Edits are saved to the plan and
 // shown — tagged — in the approval email.
-function KeywordEditor({ genId, keywords }: { genId: number | null; keywords: KeywordInsight[] }) {
+function KeywordEditor({
+  genId,
+  keywords,
+  onGroupsSaved,
+}: {
+  genId: number | null;
+  keywords: KeywordInsight[];
+  onGroupsSaved?: (groups: KeywordGroup[]) => void;
+}) {
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [added, setAdded] = useState<KeywordInsight[]>([]);
   const [newKw, setNewKw] = useState("");
@@ -157,7 +166,12 @@ function KeywordEditor({ genId, keywords }: { genId: number | null; keywords: Ke
     if (genId == null) return;
     save.mutate(
       { added, removed: [...removed] },
-      { onSuccess: () => setSavedAt(true) }
+      {
+        onSuccess: (data: { keyword_groups?: KeywordGroup[] }) => {
+          setSavedAt(true);
+          if (data?.keyword_groups) onGroupsSaved?.(data.keyword_groups);
+        },
+      }
     );
   };
 
@@ -1738,6 +1752,8 @@ function AssetList({ assets, limit }: { assets: GeneratedAsset[]; limit: number 
 export default function AiAdCopyGeneratorPage() {
   const { isAdmin } = useAuth();
   const { accountId } = useFilters();
+  // Ad-groups recomputed after the user edits keywords (overrides the generated set).
+  const [groupsOverride, setGroupsOverride] = useState<KeywordGroup[] | null>(null);
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [campus, setCampus] = useState<string | null>(null);
@@ -1766,6 +1782,7 @@ export default function AiAdCopyGeneratorPage() {
     setCampus(name);
     setQ(name);
     setResult(null);
+    setGroupsOverride(null);
   };
 
   const runGenerate = () => {
@@ -1784,7 +1801,7 @@ export default function AiAdCopyGeneratorPage() {
         conversion_tracking: tracking,
         lp_type: lpType,
       },
-      { onSuccess: (data) => setResult(data) }
+      { onSuccess: (data) => { setResult(data); setGroupsOverride(null); } }
     );
   };
 
@@ -2211,13 +2228,17 @@ export default function AiAdCopyGeneratorPage() {
               title="Keyword intelligence"
               hint={`${result.keywords.length} suggested · edit, add or remove`}
             >
-              <KeywordEditor genId={result.id ?? null} keywords={result.keywords} />
+              <KeywordEditor
+                genId={result.id ?? null}
+                keywords={result.keywords}
+                onGroupsSaved={setGroupsOverride}
+              />
             </Section>
 
             {/* Campaign recommendation */}
             {/* Paste-ready campaign keywords */}
             <Section title="Keywords to add to the campaign" hint="match-type formatted, ready to paste">
-              <CampaignKeywords groups={result.keyword_groups} />
+              <CampaignKeywords groups={groupsOverride ?? result.keyword_groups} />
             </Section>
             </>
             )}
