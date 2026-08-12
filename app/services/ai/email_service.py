@@ -26,6 +26,59 @@ def _recipients(to: str) -> list[str]:
     return [a.strip() for a in (to or "").split(",") if a.strip()]
 
 
+def _sender_parts() -> tuple[str, str]:
+    """(name, email) from EMAIL_FROM (accepts 'Name <email>' or a bare email)."""
+    from email.utils import parseaddr
+
+    s = get_settings()
+    raw = s.email_from or s.smtp_from or s.smtp_user
+    name, addr = parseaddr(raw)
+    return (name or "KollegeApply Ads"), addr
+
+
+def _send_via_brevo(
+    *, to: str, subject: str, body: str, html: str | None,
+    attachment: bytes | None, attachment_name: str | None,
+) -> dict[str, Any]:
+    """Send over the Brevo HTTPS API (port 443). Sender verified by email link —
+    no DNS needed — so it works when you can't touch domain records."""
+    import httpx
+
+    s = get_settings()
+    _name, addr = _sender_parts()
+    if not addr:
+        return {"sent": False, "configured": False,
+                "reason": "Set EMAIL_FROM to your Brevo-verified sender address."}
+    payload: dict[str, Any] = {
+        "sender": {"email": addr, "name": _name},
+        "to": [{"email": a} for a in _recipients(to)],
+        "subject": subject,
+        "textContent": body,
+    }
+    if html:
+        payload["htmlContent"] = html
+    if attachment is not None and attachment_name:
+        payload["attachment"] = [{
+            "content": base64.b64encode(attachment).decode("ascii"),
+            "name": attachment_name,
+        }]
+    try:
+        resp = httpx.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": s.brevo_api_key, "Content-Type": "application/json",
+                     "accept": "application/json"},
+            json=payload,
+            timeout=20,
+        )
+        if resp.status_code >= 400:
+            return {"sent": False, "configured": True,
+                    "reason": f"Brevo {resp.status_code}: {resp.text[:200]}"}
+        return {"sent": True, "configured": True, "to": to, "via": "brevo"}
+    except Exception as exc:  # noqa: BLE001
+        log.info("email.brevo_failed", to=to, error=str(exc))
+        return {"sent": False, "configured": True, "reason": str(exc)}
+
+
 def _send_via_resend(
     *, to: str, subject: str, body: str, html: str | None,
     attachment: bytes | None, attachment_name: str | None,
@@ -96,7 +149,7 @@ def smtp_configured() -> bool:
 
 def email_configured() -> bool:
     s = get_settings()
-    return bool(s.resend_api_key) or smtp_configured()
+    return bool(s.brevo_api_key or s.resend_api_key) or smtp_configured()
 
 
 def send_email(
@@ -115,6 +168,11 @@ def send_email(
     like Render); otherwise falls back to SMTP.
     """
     s = get_settings()
+    if s.brevo_api_key:
+        return _send_via_brevo(
+            to=to, subject=subject, body=body, html=html,
+            attachment=attachment, attachment_name=attachment_name,
+        )
     if s.resend_api_key:
         return _send_via_resend(
             to=to, subject=subject, body=body, html=html,
@@ -122,8 +180,8 @@ def send_email(
         )
     if not smtp_configured():
         return {"sent": False, "configured": False,
-                "reason": "Email not configured (set RESEND_API_KEY, or SMTP_USER / "
-                          "SMTP_PASSWORD for local use)."}
+                "reason": "Email not configured (set BREVO_API_KEY or RESEND_API_KEY, "
+                          "or SMTP_USER / SMTP_PASSWORD for local use)."}
 
     msg = EmailMessage()
     msg["From"] = s.smtp_from or s.smtp_user

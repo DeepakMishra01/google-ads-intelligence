@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     # Preferred on hosts that block outbound SMTP (e.g. Render): the Resend HTTP
     # API (https, never blocked). When RESEND_API_KEY is set it's used; otherwise
     # SMTP is used (works locally). email_from must be a Resend-verified sender.
+    # Brevo (brevo.com) — HTTPS API, and a sender is verified by clicking a link
+    # emailed to it (NO DNS access needed). Preferred when you can't touch DNS.
+    brevo_api_key: str = ""
     resend_api_key: str = ""
     email_from: str = ""      # e.g. "KollegeApply Ads <ads@kollegeapply.com>"
     # SMTP (fallback / local dev), e.g. a team Gmail app password.
