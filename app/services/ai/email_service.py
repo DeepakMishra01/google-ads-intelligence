@@ -1,12 +1,14 @@
-"""Send approval emails via SMTP (e.g. a team Gmail app password).
+"""Send approval emails.
 
-Kept tiny and dependency-free (stdlib smtplib). If SMTP isn't configured the
-caller gets a clear ``configured: False`` result instead of an exception, so the
+Two transports: the **Resend HTTP API** (preferred — works on hosts like Render
+that block outbound SMTP) and **SMTP** (fallback / local dev). If neither is
+configured the caller gets ``configured: False`` instead of an exception, so the
 rest of the app never breaks.
 """
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import smtplib
 import socket
@@ -18,6 +20,52 @@ from app.config.logging import get_logger
 from app.config.settings import get_settings
 
 log = get_logger(__name__)
+
+
+def _recipients(to: str) -> list[str]:
+    return [a.strip() for a in (to or "").split(",") if a.strip()]
+
+
+def _send_via_resend(
+    *, to: str, subject: str, body: str, html: str | None,
+    attachment: bytes | None, attachment_name: str | None,
+) -> dict[str, Any]:
+    """Send over the Resend HTTPS API (port 443 — not blocked by Render)."""
+    import httpx
+
+    s = get_settings()
+    sender = s.email_from or s.smtp_from or s.smtp_user
+    if not sender:
+        return {"sent": False, "configured": False,
+                "reason": "Set EMAIL_FROM to a Resend-verified sender address."}
+    payload: dict[str, Any] = {
+        "from": sender,
+        "to": _recipients(to),
+        "subject": subject,
+        "text": body,
+    }
+    if html:
+        payload["html"] = html
+    if attachment is not None and attachment_name:
+        payload["attachments"] = [{
+            "filename": attachment_name,
+            "content": base64.b64encode(attachment).decode("ascii"),
+        }]
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {s.resend_api_key}",
+                     "Content-Type": "application/json"},
+            json=payload,
+            timeout=20,
+        )
+        if resp.status_code >= 400:
+            return {"sent": False, "configured": True,
+                    "reason": f"Resend {resp.status_code}: {resp.text[:200]}"}
+        return {"sent": True, "configured": True, "to": to, "via": "resend"}
+    except Exception as exc:  # noqa: BLE001 — surface a clean error to the UI
+        log.info("email.resend_failed", to=to, error=str(exc))
+        return {"sent": False, "configured": True, "reason": str(exc)}
 
 
 @contextlib.contextmanager
@@ -46,6 +94,11 @@ def smtp_configured() -> bool:
     return bool(s.smtp_host and s.smtp_user and s.smtp_password)
 
 
+def email_configured() -> bool:
+    s = get_settings()
+    return bool(s.resend_api_key) or smtp_configured()
+
+
 def send_email(
     *,
     to: str,
@@ -56,11 +109,21 @@ def send_email(
     attachment_name: str | None = None,
     attachment_mime: tuple[str, str] = ("application", "octet-stream"),
 ) -> dict[str, Any]:
-    """Send one email; returns {sent, ...}. Never raises to the caller."""
+    """Send one email; returns {sent, ...}. Never raises to the caller.
+
+    Uses the Resend HTTP API when configured (works behind SMTP-blocking hosts
+    like Render); otherwise falls back to SMTP.
+    """
     s = get_settings()
+    if s.resend_api_key:
+        return _send_via_resend(
+            to=to, subject=subject, body=body, html=html,
+            attachment=attachment, attachment_name=attachment_name,
+        )
     if not smtp_configured():
         return {"sent": False, "configured": False,
-                "reason": "SMTP not configured (set SMTP_USER / SMTP_PASSWORD)."}
+                "reason": "Email not configured (set RESEND_API_KEY, or SMTP_USER / "
+                          "SMTP_PASSWORD for local use)."}
 
     msg = EmailMessage()
     msg["From"] = s.smtp_from or s.smtp_user

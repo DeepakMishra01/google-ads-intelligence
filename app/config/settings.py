@@ -68,7 +68,13 @@ class Settings(BaseSettings):
     sync_retry_backoff_seconds: int = 30
     sync_default_lookback_days: int = 30  # rolling refresh window (env: SYNC_DEFAULT_LOOKBACK_DAYS; 60 for wider)
 
-    # --- Email (approval emails via SMTP, e.g. a team Gmail app password) ---
+    # --- Email (approval emails) ---
+    # Preferred on hosts that block outbound SMTP (e.g. Render): the Resend HTTP
+    # API (https, never blocked). When RESEND_API_KEY is set it's used; otherwise
+    # SMTP is used (works locally). email_from must be a Resend-verified sender.
+    resend_api_key: str = ""
+    email_from: str = ""      # e.g. "KollegeApply Ads <ads@kollegeapply.com>"
+    # SMTP (fallback / local dev), e.g. a team Gmail app password.
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""       # the sending Gmail address
