@@ -7,7 +7,10 @@ rest of the app never breaks.
 
 from __future__ import annotations
 
+import contextlib
 import smtplib
+import socket
+from collections.abc import Iterator
 from email.message import EmailMessage
 from typing import Any
 
@@ -15,6 +18,27 @@ from app.config.logging import get_logger
 from app.config.settings import get_settings
 
 log = get_logger(__name__)
+
+
+@contextlib.contextmanager
+def _prefer_ipv4() -> Iterator[None]:
+    """Force DNS resolution to IPv4 for the duration.
+
+    Hosts like Render advertise IPv6 but often can't route it outbound, so a plain
+    smtplib connection to smtp.gmail.com fails with '[Errno 101] Network is
+    unreachable'. Pinning getaddrinfo to AF_INET dodges that. Scoped narrowly to
+    the send; IPv4 works everywhere so this is safe.
+    """
+    original = socket.getaddrinfo
+
+    def ipv4_only(host, port, family=0, type=0, proto=0, flags=0):  # noqa: A002
+        return original(host, port, socket.AF_INET, type, proto, flags)
+
+    socket.getaddrinfo = ipv4_only  # type: ignore[assignment]
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original  # type: ignore[assignment]
 
 
 def smtp_configured() -> bool:
@@ -52,7 +76,7 @@ def send_email(
         )
 
     try:
-        with smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=20) as server:
+        with _prefer_ipv4(), smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=20) as server:
             if s.smtp_use_tls:
                 server.starttls()
             server.login(s.smtp_user, s.smtp_password)
