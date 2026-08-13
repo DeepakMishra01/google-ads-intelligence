@@ -43,7 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
   // Accountability
   { to: "/accountability", label: "Campaign Accountability", icon: Target, group: "Accountability" },
   { to: "/account-budgets", label: "Account Budgets", icon: Wallet, group: "Accountability" },
-  { to: "/weekly-budgets", label: "Weekly Budgets", icon: PiggyBank, group: "Accountability" },
+  { to: "/weekly-budgets", label: "Budget Planner", icon: PiggyBank, group: "Accountability" },
   { to: "/execution-audit", label: "Execution Audit", icon: ClipboardCheck, group: "Accountability" },
   { to: "/priorities", label: "Priority Queue", icon: ListChecks, group: "Accountability" },
   { to: "/alerts", label: "Alerts", icon: AlertTriangle, group: "Accountability" },

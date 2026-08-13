@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, get_current_user, require_admin
+from fastapi import HTTPException
+
+from app.api.deps import CurrentUser, get_current_user
 from app.database.session import get_db
 from app.services.ops.account_budget_service import AccountBudgetService
 
@@ -30,13 +32,21 @@ def account_budget_overview(
     return AccountBudgetService(db).overview(allowed_account_ids=user.allowed_account_ids)
 
 
-@router.put("", response_model=None, summary="Set an account budget (admin)")
+@router.put("", response_model=None, summary="Set an account budget")
 def set_account_budget(
     body: SetAccountBudget,
-    admin: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    # Overall (total) account budget is the admin's allocation → admin only.
+    # Monthly budgets are the AM's own plan → any user with access to the account.
+    if body.period == "total":
+        if not user.is_admin:
+            raise HTTPException(status_code=403, detail="Only admins set the overall account budget.")
+    elif not user.is_admin:
+        if user.allowed_account_ids is None or body.account_id not in user.allowed_account_ids:
+            raise HTTPException(status_code=403, detail="You can only set budgets for your accounts.")
     return AccountBudgetService(db).set_budget(
         account_id=body.account_id, period=body.period, amount=body.amount,
-        period_start=body.period_start, by=admin.email,
+        period_start=body.period_start, by=user.email,
     )

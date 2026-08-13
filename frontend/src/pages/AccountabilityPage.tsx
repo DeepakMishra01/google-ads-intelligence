@@ -283,8 +283,9 @@ export default function AccountabilityPage() {
         }
       />
 
-      {/* Account-level budgets (admin sets these; separate from per-campaign plans). */}
-      <AccountBudgetEditor />
+      {/* Admin sets the OVERALL budget allocated to each account (AMs plan their
+          weekly/monthly against it in the Budget Planner tab). */}
+      <AccountBudgetEditor mode="overall" />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Tile label="Campaigns" value={num(t.campaigns)} sub={`${t.managers} ad manager(s)`} />

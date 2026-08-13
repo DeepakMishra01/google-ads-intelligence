@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from fastapi import HTTPException
+
 from app.api.deps import CurrentUser, get_current_user, require_admin
 from app.database.session import get_db
 from app.services.ops.weekly_budget_service import WeeklyBudgetService
@@ -32,15 +34,19 @@ def weekly_overview(
     )
 
 
-@router.put("", response_model=None, summary="Set an account's weekly budget (admin)")
+@router.put("", response_model=None, summary="Set an account's weekly budget (AM or admin)")
 def set_weekly_budget(
     body: SetWeeklyBudget,
-    admin: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    # AMs plan weekly budgets for their own allocated accounts; admins any.
+    if not user.is_admin:
+        if user.allowed_account_ids is None or body.account_id not in user.allowed_account_ids:
+            raise HTTPException(status_code=403, detail="You can only set budgets for your accounts.")
     return WeeklyBudgetService(db).set_budget(
         account_id=body.account_id, week_start=body.week_start,
-        amount=body.amount, by=admin.email,
+        amount=body.amount, by=user.email,
     )
 
 

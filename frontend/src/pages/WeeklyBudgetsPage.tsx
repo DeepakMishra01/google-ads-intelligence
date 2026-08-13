@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
+import AccountBudgetEditor from "@/components/AccountBudgetEditor";
 import { Card, PageHeader, StateBlock } from "@/components/ui";
 import { money } from "@/lib/format";
 import { useSendWeeklyBudgetEmail, useSetWeeklyBudget, useWeeklyBudgets } from "@/lib/queries";
@@ -21,11 +22,11 @@ function usedClass(pct: number | null, over: boolean): string {
 function BudgetCell({
   account,
   week,
-  isAdmin,
+  canEdit,
 }: {
   account: WeeklyBudgetAccount;
   week: WeeklyBudgetWeek;
-  isAdmin: boolean;
+  canEdit: boolean;
 }) {
   const setBudget = useSetWeeklyBudget();
   const [draft, setDraft] = useState<string>(week.budget != null ? String(week.budget) : "");
@@ -48,7 +49,7 @@ function BudgetCell({
 
   return (
     <div className="min-w-[120px]">
-      {isAdmin ? (
+      {canEdit ? (
         <>
           <input
             className={`input h-8 w-full text-right text-sm ${setBudget.isError ? "border-red-400" : ""}`}
@@ -99,12 +100,8 @@ export default function WeeklyBudgetsPage() {
   return (
     <div>
       <PageHeader
-        title="Weekly Budgets"
-        subtitle={
-          isAdmin
-            ? "Set each account's weekly budget (Mon–Sun); track spend vs remaining, week on week"
-            : "Your accounts' weekly budget, spend and remaining — week on week"
-        }
+        title="Budget Planner"
+        subtitle="Plan weekly & monthly budgets for your accounts against the admin's overall allocation"
         actions={
           isAdmin && (
             <div className="flex items-center gap-2">
@@ -125,7 +122,12 @@ export default function WeeklyBudgetsPage() {
           )
         }
       />
+
+      {/* Monthly budget plan (AMs set these against the admin's overall allocation). */}
+      <AccountBudgetEditor mode="monthly" />
+
       <Card>
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">Weekly budgets (Mon–Sun)</h2>
         <StateBlock
           isLoading={isLoading}
           error={error}
@@ -156,7 +158,7 @@ export default function WeeklyBudgetsPage() {
                     </td>
                     {a.weeks.map((wk) => (
                       <td key={wk.week_start} className="px-2 py-2">
-                        <BudgetCell account={a} week={wk} isAdmin={isAdmin} />
+                        <BudgetCell account={a} week={wk} canEdit />
                       </td>
                     ))}
                   </tr>
