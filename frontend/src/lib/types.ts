@@ -906,10 +906,17 @@ export interface WeeklyBudgetWeek {
   spent: number;
   remaining: number | null;
   pct_used: number | null;
+  impressions?: number;
+  clicks?: number;
+  conversions?: number;
+  ctr?: number | null;
+  cpm?: number | null;
+  cpl?: number | null;
 }
 export interface WeeklyBudgetAccount {
   account_id: number;
   account_name: string;
+  manager?: string;
   weeks: WeeklyBudgetWeek[];
 }
 export interface WeeklyBudgetOverview {
