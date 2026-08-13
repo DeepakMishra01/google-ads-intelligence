@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { Card, PageHeader, StateBlock } from "@/components/ui";
 import { money } from "@/lib/format";
@@ -29,27 +29,42 @@ function BudgetCell({
 }) {
   const setBudget = useSetWeeklyBudget();
   const [draft, setDraft] = useState<string>(week.budget != null ? String(week.budget) : "");
+  const [focused, setFocused] = useState(false);
   const over = week.budget != null && week.spent > week.budget;
 
+  // Keep the field in sync with the saved value whenever it isn't being edited —
+  // so after a save it reflects reality, and a failed save reverts visibly.
+  useEffect(() => {
+    if (!focused) setDraft(week.budget != null ? String(week.budget) : "");
+  }, [week.budget, focused]);
+
   const commit = () => {
+    setFocused(false);
     const amt = Number(draft.replace(/[^0-9.]/g, ""));
-    if (draft.trim() === "" || Number.isNaN(amt)) return;
-    if (amt === week.budget) return;
+    if (draft.trim() === "" || Number.isNaN(amt) || amt === week.budget) return;
     setBudget.mutate({ account_id: account.account_id, week_start: week.week_start, amount: amt });
   };
 
   return (
     <div className="min-w-[120px]">
       {isAdmin ? (
-        <input
-          className="input h-8 w-full text-right text-sm"
-          inputMode="numeric"
-          placeholder="Set budget"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        />
+        <>
+          <input
+            className={`input h-8 w-full text-right text-sm ${setBudget.isError ? "border-red-400" : ""}`}
+            inputMode="numeric"
+            placeholder="Set budget"
+            value={draft}
+            onFocus={() => setFocused(true)}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          />
+          <div className="h-3 text-right text-[10px] leading-3">
+            {setBudget.isPending && <span className="text-slate-400">saving…</span>}
+            {setBudget.isSuccess && !setBudget.isPending && <span className="text-green-600">saved ✓</span>}
+            {setBudget.isError && <span className="text-red-500">save failed</span>}
+          </div>
+        </>
       ) : (
         <div className="text-right text-sm font-medium text-slate-800">
           {week.budget != null ? money(week.budget) : "—"}
