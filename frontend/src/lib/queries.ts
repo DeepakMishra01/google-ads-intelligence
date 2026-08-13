@@ -465,6 +465,12 @@ export function useSetWeeklyBudget() {
   });
 }
 
+export function useSendWeeklyBudgetEmail() {
+  return useMutation({
+    mutationFn: () => api.post("/weekly-budgets/email").then((r) => r.data),
+  });
+}
+
 export function usePortfolio() {
   return useQuery({
     queryKey: ["ad-copy-portfolio"],

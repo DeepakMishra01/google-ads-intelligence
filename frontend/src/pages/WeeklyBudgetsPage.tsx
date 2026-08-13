@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { Card, PageHeader, StateBlock } from "@/components/ui";
 import { money } from "@/lib/format";
-import { useSetWeeklyBudget, useWeeklyBudgets } from "@/lib/queries";
+import { useSendWeeklyBudgetEmail, useSetWeeklyBudget, useWeeklyBudgets } from "@/lib/queries";
 import type { WeeklyBudgetAccount, WeeklyBudgetWeek } from "@/lib/types";
 
 function weekLabel(iso: string): string {
@@ -68,6 +68,7 @@ function BudgetCell({
 export default function WeeklyBudgetsPage() {
   const { isAdmin } = useAuth();
   const { data, isLoading, error } = useWeeklyBudgets(8);
+  const sendEmail = useSendWeeklyBudgetEmail();
   const weeks = data?.week_starts ?? [];
   const currentWeek = data?.current_week;
 
@@ -79,6 +80,25 @@ export default function WeeklyBudgetsPage() {
           isAdmin
             ? "Set each account's weekly budget (Mon–Sun); track spend vs remaining, week on week"
             : "Your accounts' weekly budget, spend and remaining — week on week"
+        }
+        actions={
+          isAdmin && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-primary h-9 px-3"
+                onClick={() => sendEmail.mutate()}
+                disabled={sendEmail.isPending}
+              >
+                {sendEmail.isPending ? "Sending…" : "Email admins now"}
+              </button>
+              {sendEmail.data && (
+                <span className={`text-xs ${sendEmail.data.sent ? "text-green-600" : "text-amber-600"}`}>
+                  {sendEmail.data.sent ? "Sent ✓" : sendEmail.data.reason ?? "Not sent"}
+                </span>
+              )}
+            </div>
+          )
         }
       />
       <Card>
