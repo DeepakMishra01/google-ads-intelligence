@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    account_budget,
     accounts,
     ad_copy,
     ad_groups,
@@ -59,6 +60,7 @@ api_router.include_router(search_terms.router)
 api_router.include_router(budget_monitor.router)
 api_router.include_router(budgets.router)
 api_router.include_router(weekly_budgets.router)
+api_router.include_router(account_budget.router)
 api_router.include_router(metrics.router)
 api_router.include_router(sync.router)
 

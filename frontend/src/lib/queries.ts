@@ -36,6 +36,7 @@ import type {
   SearchTermRow,
   SyncLog,
   TrendPoint,
+  AccountBudgetOverview,
   WeeklyBudgetOverview,
 } from "./types";
 
@@ -462,6 +463,23 @@ export function useSetWeeklyBudget() {
     mutationFn: (p: { account_id: number; week_start: string; amount: number }) =>
       api.put("/weekly-budgets", p).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["weekly-budgets"] }),
+  });
+}
+
+export function useAccountBudgetOverview() {
+  return useQuery({
+    queryKey: ["account-budget-overview"],
+    queryFn: () =>
+      api.get("/account-budget/overview").then((r) => r.data as AccountBudgetOverview),
+  });
+}
+
+export function useSetAccountBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { account_id: number; period: "month" | "total"; amount: number }) =>
+      api.put("/account-budget", p).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["account-budget-overview"] }),
   });
 }
 

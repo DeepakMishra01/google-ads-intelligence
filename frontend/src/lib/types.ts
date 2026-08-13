@@ -919,6 +919,25 @@ export interface WeeklyBudgetAccount {
   manager?: string;
   weeks: WeeklyBudgetWeek[];
 }
+export interface AccountBudgetPeriod {
+  budget: number | null;
+  spent: number;
+  remaining: number | null;
+  pct_used: number | null;
+}
+export interface AccountBudgetRow {
+  account_id: number;
+  account_name: string;
+  manager: string;
+  monthly: AccountBudgetPeriod;
+  total: AccountBudgetPeriod;
+}
+export interface AccountBudgetOverview {
+  accounts: AccountBudgetRow[];
+  month_start: string;
+  as_of: string;
+}
+
 export interface WeeklyBudgetOverview {
   accounts: WeeklyBudgetAccount[];
   week_starts: string[];

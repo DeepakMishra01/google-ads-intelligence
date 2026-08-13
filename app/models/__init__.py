@@ -24,6 +24,7 @@ from app.models.keyword import Keyword, KeywordSnapshot
 from app.models.recommendation import RecommendationSnapshot
 from app.models.search_term import SearchTerm, SearchTermSnapshot
 from app.models.sync_log import SyncLog, SyncStatus, SyncType
+from app.models.account_budget import AccountBudget
 from app.models.user import User, UserAccount, UserRole
 from app.models.weekly_budget import AccountWeeklyBudget
 
@@ -56,6 +57,7 @@ __all__ = [
     "UserAccount",
     "UserRole",
     "AccountWeeklyBudget",
+    "AccountBudget",
     "Alert",
     "AlertSeverity",
     "AlertStatus",
