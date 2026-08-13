@@ -4,6 +4,7 @@ import { Card, PageHeader, StateBlock } from "@/components/ui";
 import { money } from "@/lib/format";
 import { useSendWeeklyBudgetEmail, useSetWeeklyBudget, useWeeklyBudgets } from "@/lib/queries";
 import type { WeeklyBudgetAccount, WeeklyBudgetWeek } from "@/lib/types";
+import { useFilters } from "@/state/FiltersContext";
 
 function weekLabel(iso: string): string {
   const d = new Date(iso + "T00:00:00");
@@ -67,10 +68,17 @@ function BudgetCell({
 
 export default function WeeklyBudgetsPage() {
   const { isAdmin } = useAuth();
+  const { accountId } = useFilters();
   const { data, isLoading, error } = useWeeklyBudgets(8);
   const sendEmail = useSendWeeklyBudgetEmail();
   const weeks = data?.week_starts ?? [];
   const currentWeek = data?.current_week;
+
+  // Admins can narrow to one account via the top-bar filter; AMs always see all
+  // of their allotted accounts (the backend already scopes them).
+  const accounts = (data?.accounts ?? []).filter(
+    (a) => !isAdmin || accountId == null || a.account_id === accountId
+  );
 
   return (
     <div>
@@ -105,8 +113,8 @@ export default function WeeklyBudgetsPage() {
         <StateBlock
           isLoading={isLoading}
           error={error}
-          isEmpty={!data?.accounts.length}
-          emptyText="No accounts to show."
+          isEmpty={!accounts.length}
+          emptyText="No accounts to show for this filter."
         >
           <div className="max-h-[72vh] overflow-auto">
             <table className="w-full border-collapse text-sm">
@@ -125,7 +133,7 @@ export default function WeeklyBudgetsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data?.accounts.map((a) => (
+                {accounts.map((a) => (
                   <tr key={a.account_id} className="border-b border-slate-100 align-top">
                     <td className="sticky left-0 bg-white py-2 pr-3 font-medium text-slate-800">
                       {a.account_name}
