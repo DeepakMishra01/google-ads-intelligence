@@ -63,6 +63,20 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
             replace_existing=True,
         )
+
+    if settings.weekly_budget_email_enabled:
+        from app.services.ops.weekly_budget_tasks import weekly_budget_job
+
+        scheduler.add_job(
+            weekly_budget_job,
+            CronTrigger(day_of_week="mon", hour=7, minute=0),  # Monday, week just ended
+            id="weekly_budget_email",
+            name="Weekly budget vs spend email to admins",
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=3600,
+            replace_existing=True,
+        )
     return scheduler
 
 

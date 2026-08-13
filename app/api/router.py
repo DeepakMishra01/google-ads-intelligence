@@ -31,6 +31,7 @@ from app.api.v1 import (
     search_terms,
     sync,
     trends,
+    weekly_budgets,
 )
 
 api_router = APIRouter()
@@ -57,6 +58,7 @@ api_router.include_router(search_explorer.router)
 api_router.include_router(search_terms.router)
 api_router.include_router(budget_monitor.router)
 api_router.include_router(budgets.router)
+api_router.include_router(weekly_budgets.router)
 api_router.include_router(metrics.router)
 api_router.include_router(sync.router)
 

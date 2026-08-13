@@ -27,6 +27,7 @@ const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
 const TrendsPage = lazy(() => import("./pages/TrendsPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
+const WeeklyBudgetsPage = lazy(() => import("./pages/WeeklyBudgetsPage"));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { loading, authEnabled, user } = useAuth();
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/ai/ad-copy" element={<AiAdCopyGeneratorPage />} />
             <Route path="/accountability" element={<AccountabilityPage />} />
             <Route path="/account-budgets" element={<AccountBudgetsPage />} />
+            <Route path="/weekly-budgets" element={<WeeklyBudgetsPage />} />
             <Route path="/execution-audit" element={<ExecutionAuditPage />} />
             <Route path="/landing-auditor" element={<LandingAuditorPage />} />
             <Route

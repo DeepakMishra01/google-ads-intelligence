@@ -900,6 +900,25 @@ export interface AdminUser {
   last_login_at: string | null;
   account_ids: number[];
 }
+export interface WeeklyBudgetWeek {
+  week_start: string;
+  budget: number | null;
+  spent: number;
+  remaining: number | null;
+  pct_used: number | null;
+}
+export interface WeeklyBudgetAccount {
+  account_id: number;
+  account_name: string;
+  weeks: WeeklyBudgetWeek[];
+}
+export interface WeeklyBudgetOverview {
+  accounts: WeeklyBudgetAccount[];
+  week_starts: string[];
+  current_week: string;
+  as_of: string;
+}
+
 export interface CampaignDetail {
   id: number;
   account_id: number;

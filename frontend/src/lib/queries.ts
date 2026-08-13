@@ -36,6 +36,7 @@ import type {
   SearchTermRow,
   SyncLog,
   TrendPoint,
+  WeeklyBudgetOverview,
 } from "./types";
 
 // Strip null/undefined/"" params so they don't appear in the query string.
@@ -444,6 +445,23 @@ export function useSaveKeywordEdits(genId: number) {
       overrides?: Record<string, { intent?: string; match_type?: string }>;
     }) => api.post(`/ai/ad-copy/${genId}/keywords`, p).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+  });
+}
+
+export function useWeeklyBudgets(weeks = 8) {
+  return useQuery({
+    queryKey: ["weekly-budgets", weeks],
+    queryFn: () =>
+      api.get("/weekly-budgets", { params: { weeks } }).then((r) => r.data as WeeklyBudgetOverview),
+  });
+}
+
+export function useSetWeeklyBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { account_id: number; week_start: string; amount: number }) =>
+      api.put("/weekly-budgets", p).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["weekly-budgets"] }),
   });
 }
 
