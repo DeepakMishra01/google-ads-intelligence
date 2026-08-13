@@ -28,11 +28,19 @@ class RefDates:
 
 
 def resolve_ref_dates(db: Session, account_id: int | None = None) -> RefDates:
-    """Return the latest and prior snapshot dates, falling back to the calendar."""
-    stmt = select(func.max(CampaignSnapshot.snapshot_date))
-    if account_id is not None:
-        stmt = stmt.where(CampaignSnapshot.account_id == account_id)
-    latest = db.execute(stmt).scalar_one_or_none()
+    """Return the latest and prior snapshot dates — anchored to the GLOBAL freshest
+    day any account has data for, not the selected account's own latest.
+
+    Why global: a dormant account's most recent snapshot may be months old (its last
+    active day). Anchoring 'last N days' to that stale date shows old data and makes
+    the account look active when it isn't. Anchoring to the freshest day across all
+    accounts means a dormant account correctly reports ~0 for the recent window,
+    matching Google Ads. (``account_id`` is accepted for call-site compatibility but
+    intentionally does not narrow the anchor date.)
+    """
+    latest = db.execute(
+        select(func.max(CampaignSnapshot.snapshot_date))
+    ).scalar_one_or_none()
     if latest is None:
         latest = date.today() - timedelta(days=1)
     return RefDates(latest=latest, prior=latest - timedelta(days=1))

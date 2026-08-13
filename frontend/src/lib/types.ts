@@ -919,6 +919,23 @@ export interface WeeklyBudgetAccount {
   manager?: string;
   weeks: WeeklyBudgetWeek[];
 }
+export interface AccountAuditRow {
+  account_id: number;
+  customer_id: string | null;
+  name: string | null;
+  latest_data: string | null;
+  snapshots: number;
+  campaigns: number;
+  duplicate_customer_id: boolean;
+  duplicate_name: boolean;
+}
+export interface AccountsAudit {
+  accounts: AccountAuditRow[];
+  total_accounts: number;
+  duplicate_customer_ids: number;
+  note: string;
+}
+
 export interface AccountBudgetPeriod {
   budget: number | null;
   spent: number;

@@ -4,12 +4,87 @@ import { Badge, Card, PageHeader, Spinner, StateBlock } from "@/components/ui";
 import { relativeTime } from "@/lib/format";
 import {
   useAccounts,
+  useAccountsAudit,
   useAdminUsers,
   useSetUserAccounts,
   useSetUserActive,
   useSetUserRole,
 } from "@/lib/queries";
 import type { AdminUser } from "@/lib/types";
+
+function AccountAuditSection() {
+  const [open, setOpen] = useState(false);
+  const audit = useAccountsAudit(open);
+  return (
+    <Card className="mt-4">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700">Account data audit</h2>
+          <p className="text-xs text-slate-400">
+            Duplicate account records &amp; each account's latest data date (spot stale/duplicated accounts)
+          </p>
+        </div>
+        <ChevronRight size={16} className={`text-slate-400 transition ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-3">
+          {audit.isLoading ? (
+            <Spinner label="Auditing accounts…" />
+          ) : (
+            <>
+              {audit.data && audit.data.duplicate_customer_ids > 0 && (
+                <div className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {audit.data.duplicate_customer_ids} Google Ads account(s) are imported more than
+                  once — the row with the older “Latest data” is the stale duplicate.
+                </div>
+              )}
+              <div className="max-h-[60vh] overflow-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="border-b-2 border-slate-200 text-left text-xs font-medium text-slate-500">
+                      <th className="py-2 pl-1">Account</th>
+                      <th>Customer ID</th>
+                      <th className="text-right">Latest data</th>
+                      <th className="text-right">Snapshots</th>
+                      <th className="text-right">Campaigns</th>
+                      <th>Flags</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {audit.data?.accounts.map((a) => (
+                      <tr
+                        key={a.account_id}
+                        className={`border-b border-slate-100 ${a.duplicate_customer_id ? "bg-amber-50/40" : ""}`}
+                      >
+                        <td className="py-1.5 pl-1 font-medium text-slate-800">{a.name ?? a.customer_id}</td>
+                        <td className="text-xs text-slate-500">{a.customer_id}</td>
+                        <td className="text-right tabular-nums text-slate-700">{a.latest_data ?? "—"}</td>
+                        <td className="text-right tabular-nums text-slate-500">{a.snapshots.toLocaleString()}</td>
+                        <td className="text-right tabular-nums text-slate-500">{a.campaigns}</td>
+                        <td className="text-xs">
+                          {a.duplicate_customer_id && (
+                            <span className="mr-1 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">dup id</span>
+                          )}
+                          {a.duplicate_name && (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">dup name</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function AccountEditor({ user, onDone }: { user: AdminUser; onDone: () => void }) {
   const { data: accounts } = useAccounts();
@@ -190,6 +265,7 @@ export default function AdminUsersPage() {
           </div>
         )}
       </Card>
+      <AccountAuditSection />
     </div>
   );
 }

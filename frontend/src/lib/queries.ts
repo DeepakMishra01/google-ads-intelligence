@@ -37,6 +37,7 @@ import type {
   SyncLog,
   TrendPoint,
   AccountBudgetOverview,
+  AccountsAudit,
   WeeklyBudgetOverview,
 } from "./types";
 
@@ -463,6 +464,15 @@ export function useSetWeeklyBudget() {
     mutationFn: (p: { account_id: number; week_start: string; amount: number }) =>
       api.put("/weekly-budgets", p).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["weekly-budgets"] }),
+  });
+}
+
+export function useAccountsAudit(enabled = true) {
+  return useQuery({
+    queryKey: ["accounts-audit"],
+    enabled,
+    queryFn: () =>
+      api.get("/admin/diagnostics/accounts").then((r) => r.data as AccountsAudit),
   });
 }
 

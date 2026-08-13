@@ -9,6 +9,7 @@ from app.api.v1 import (
     accounts,
     ad_copy,
     ad_groups,
+    admin_diagnostics,
     admin_users,
     ads,
     alerts,
@@ -40,6 +41,7 @@ api_router = APIRouter()
 # --- Auth + access control ---
 api_router.include_router(auth.router)
 api_router.include_router(admin_users.router)
+api_router.include_router(admin_diagnostics.router)
 
 # --- Phase 1 ---
 api_router.include_router(health.router)
