@@ -35,8 +35,9 @@ function BudgetCell({
   // Keep the field in sync with the saved value whenever it isn't being edited —
   // so after a save it reflects reality, and a failed save reverts visibly.
   useEffect(() => {
-    if (!focused) setDraft(week.budget != null ? String(week.budget) : "");
-  }, [week.budget, focused]);
+    if (!focused && !setBudget.isPending)
+      setDraft(week.budget != null ? String(week.budget) : "");
+  }, [week.budget, focused, setBudget.isPending]);
 
   const commit = () => {
     setFocused(false);
