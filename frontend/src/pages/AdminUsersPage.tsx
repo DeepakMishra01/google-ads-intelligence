@@ -2,10 +2,12 @@ import { Check, ChevronRight } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { Badge, Card, PageHeader, Spinner, StateBlock } from "@/components/ui";
 import { relativeTime } from "@/lib/format";
+import { useAuth } from "@/auth/AuthContext";
 import {
   useAccounts,
   useAccountsAudit,
   useAdminUsers,
+  useDeleteUser,
   useSetUserAccounts,
   useSetUserActive,
   useSetUserRole,
@@ -161,6 +163,8 @@ export default function AdminUsersPage() {
   const users = useAdminUsers();
   const setRole = useSetUserRole();
   const setActive = useSetUserActive();
+  const removeUser = useDeleteUser();
+  const { user: me } = useAuth();
   const [editing, setEditing] = useState<number | null>(null);
 
   return (
@@ -243,6 +247,22 @@ export default function AdminUsersPage() {
                               <Badge className="bg-slate-200 text-slate-500">Disabled</Badge>
                             )}
                           </button>
+                          {me?.id !== u.id && (
+                            <button
+                              className="ml-3 text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50"
+                              disabled={removeUser.isPending}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Remove ${u.full_name || u.email} from the platform? They lose all access and account assignments. Their history is kept.`
+                                  )
+                                )
+                                  removeUser.mutate(u.id);
+                              }}
+                            >
+                              Remove
+                            </button>
+                          )}
                         </td>
                       </tr>
                       {isOpen && !isAdmin && (

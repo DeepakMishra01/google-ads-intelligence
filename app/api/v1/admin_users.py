@@ -94,6 +94,21 @@ def set_accounts(
     return _one(svc, user_id)
 
 
+@router.delete("/{user_id}", response_model=None, summary="Remove a user from the platform")
+def delete_user(
+    user_id: int,
+    admin: CurrentUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="You can't remove your own account.")
+    svc = AuthUserService(db)
+    if not svc.delete_user(user_id):
+        raise HTTPException(status_code=404, detail="User not found.")
+    db.commit()
+    return {"ok": True, "removed": user_id}
+
+
 def _one(svc: AuthUserService, user_id: int) -> UserOut:
     for u in svc.list_users_with_access():
         if u["id"] == user_id:

@@ -734,3 +734,11 @@ export function useSetUserAccounts() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
   });
 }
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: number) => api.delete(`/admin/users/${userId}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
+}

@@ -148,6 +148,17 @@ class AuthUserService:
         self.db.flush()
         return user
 
+    def delete_user(self, user_id: int) -> bool:
+        """Remove a user entirely. ``user_accounts`` grants cascade-delete; any
+        ad-copy generations they own/submitted keep their history (the user FK is
+        set NULL). Returns False if the user doesn't exist."""
+        user = self.db.get(User, user_id)
+        if user is None:
+            return False
+        self.db.delete(user)
+        self.db.flush()
+        return True
+
     def set_accounts(self, user_id: int, account_ids: list[int]) -> User | None:
         """Replace a manager's account grants with ``account_ids``."""
         user = self.db.get(User, user_id)
