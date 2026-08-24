@@ -30,6 +30,7 @@ import {
 import { useFilters } from "@/state/FiltersContext";
 import type {
   AdCopyGenerateResponse,
+  AdCopySearchTerm,
   BidAudit,
   CampaignPlan,
   CplPlan,
@@ -1068,6 +1069,211 @@ function TopSearchTermsView({ st }: { st: TopSearchTerms }) {
           </tbody>
         </table>
       </div>
+    </Section>
+  );
+}
+
+// Consolidated keyword-optimization surface: turns search-term, keyword-history
+// and match-type intelligence into one prioritized "what to do" list — add the
+// queries that are working but aren't keywords yet, drop the under-performers,
+// and see the match-type each keyword should run in.
+function KeywordOptimizerView({
+  searchTerms,
+  history,
+  keywords,
+}: {
+  searchTerms: TopSearchTerms | null;
+  history: KeywordHistoryData | null;
+  keywords: KeywordInsight[];
+}) {
+  const suggestMatch = (t: AdCopySearchTerm) => (t.conversions > 0 ? "EXACT" : "PHRASE");
+  const fmtKw = (q: string, mt: string) => (mt === "EXACT" ? `[${q}]` : `"${q}"`);
+
+  // ADD: real queries that already get clicks/impressions but aren't keywords yet.
+  const addCandidates = (searchTerms?.available ? searchTerms.terms : [])
+    .filter((t) => !t.is_keyword && (t.clicks > 0 || t.impressions >= 50))
+    .sort((a, b) => b.conversions - a.conversions || b.clicks - a.clicks || b.impressions - a.impressions)
+    .slice(0, 12);
+  // DROP / REVIEW: keywords the history engine flagged (drop first).
+  const reviewDrop = (history?.available ? history.keywords : [])
+    .filter((k) => k.verdict === "review" || k.verdict === "drop")
+    .sort((a, b) => (a.verdict === "drop" ? 0 : 1) - (b.verdict === "drop" ? 0 : 1));
+
+  const [addOut, setAddOut] = useState<Set<string>>(new Set());
+  const [dropOut, setDropOut] = useState<Set<string>>(new Set());
+  const toggleAdd = (q: string) =>
+    setAddOut((p) => { const n = new Set(p); n.has(q) ? n.delete(q) : n.add(q); return n; });
+  const toggleDrop = (q: string) =>
+    setDropOut((p) => { const n = new Set(p); n.has(q) ? n.delete(q) : n.add(q); return n; });
+
+  const addSel = addCandidates.filter((t) => !addOut.has(t.query));
+  const dropSel = reviewDrop.filter((k) => !dropOut.has(k.keyword));
+  const addCopy = addSel.map((t) => fmtKw(t.query, suggestMatch(t))).join("\n");
+  const dropCopy = dropSel.map((k) => k.keyword).join("\n");
+
+  const topKw = [...keywords].sort((a, b) => b.score - a.score).slice(0, 8);
+  const exactCount = keywords.filter((k) => (k.recommended_match_type || "").toUpperCase() === "EXACT").length;
+
+  const MATCH_BADGE: Record<string, string> = {
+    EXACT: "bg-indigo-100 text-indigo-700",
+    PHRASE: "bg-sky-100 text-sky-700",
+    BOTH: "bg-violet-100 text-violet-700",
+    BROAD: "bg-amber-100 text-amber-700",
+  };
+
+  return (
+    <Section
+      title="Keyword optimizer — what to add, drop & tighten"
+      hint="from your search terms, keyword history & match types"
+    >
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <Tile label="Queries to add" value={num(addCandidates.length)} sub="working, not keywords yet" />
+        <Tile label="Keywords to review/drop" value={num(reviewDrop.length)} sub="under-performing" />
+        <Tile label="High-intent exact" value={num(exactCount)} sub="lock in for control" />
+      </div>
+
+      {/* A) ADD — search terms that earn clicks but aren't keywords yet. */}
+      {addCandidates.length > 0 && (
+        <div className="mb-4">
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-xs font-medium text-slate-600">
+              Add these search terms as keywords — they already get traffic:
+            </div>
+            <CopyChip text={addCopy} label={`Copy ${addSel.length} as keywords`} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                  <th className="w-8 py-1.5"></th>
+                  <th>Search term</th>
+                  <th className="text-right">Clicks</th>
+                  <th className="text-right">CTR</th>
+                  <th className="text-right">Conv</th>
+                  <th>Add as</th>
+                </tr>
+              </thead>
+              <tbody>
+                {addCandidates.map((t) => {
+                  const on = !addOut.has(t.query);
+                  const mt = suggestMatch(t);
+                  return (
+                    <tr
+                      key={t.query}
+                      className={`cursor-pointer border-b border-slate-50 hover:bg-slate-50 ${on ? "" : "opacity-40"}`}
+                      onClick={() => toggleAdd(t.query)}
+                    >
+                      <td className="py-1.5 text-center">
+                        <input type="checkbox" checked={on} readOnly />
+                      </td>
+                      <td className={`font-medium text-slate-800 ${on ? "" : "line-through"}`}>{t.query}</td>
+                      <td className="text-right">{num(t.clicks)}</td>
+                      <td className="text-right">{t.ctr != null ? pct(t.ctr) : "—"}</td>
+                      <td className="text-right">{t.conversions > 0 ? num(t.conversions) : "—"}</td>
+                      <td>
+                        <Badge className={MATCH_BADGE[mt]}>{mt === "EXACT" ? "Exact" : "Phrase"}</Badge>
+                        {t.conversions > 0 && (
+                          <span className="ml-1 text-[11px] text-green-700">converts — lock exact</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* B) DROP / REVIEW — keywords the history engine flagged. */}
+      {reviewDrop.length > 0 && (
+        <div className="mb-4">
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-xs font-medium text-slate-600">
+              Review or drop these keywords — poor return last period:
+            </div>
+            <CopyChip text={dropCopy} label={`Copy ${dropSel.length} to remove`} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                  <th className="w-8 py-1.5"></th>
+                  <th>Keyword</th>
+                  <th>Verdict</th>
+                  <th className="text-right">Clicks</th>
+                  <th className="text-right">Cost</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviewDrop.map((k) => {
+                  const on = !dropOut.has(k.keyword);
+                  return (
+                    <tr
+                      key={k.keyword}
+                      className={`cursor-pointer border-b border-slate-50 hover:bg-slate-50 ${on ? "" : "opacity-40"}`}
+                      onClick={() => toggleDrop(k.keyword)}
+                    >
+                      <td className="py-1.5 text-center">
+                        <input type="checkbox" checked={on} readOnly />
+                      </td>
+                      <td className={`font-medium text-slate-800 ${on ? "" : "line-through"}`}>{k.keyword}</td>
+                      <td>
+                        <Badge className={k.verdict === "drop" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>
+                          {k.verdict}
+                        </Badge>
+                      </td>
+                      <td className="text-right">{num(k.total_clicks)}</td>
+                      <td className="text-right">{money(k.total_cost)}</td>
+                      <td className="text-xs text-slate-500">{k.verdict_reason}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* C) MATCH TYPES — the recommended match type for the top keywords. */}
+      <div>
+        <div className="mb-1 text-xs font-medium text-slate-600">
+          Match-type guidance for your top keywords (exact = tight control, phrase = reach):
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <th className="py-1.5">Keyword</th>
+                <th>Intent</th>
+                <th>Recommended</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topKw.map((k) => {
+                const mt = (k.recommended_match_type || "PHRASE").toUpperCase();
+                return (
+                  <tr key={k.keyword} className="border-b border-slate-50">
+                    <td className="py-1.5 font-medium text-slate-800">{k.keyword}</td>
+                    <td className="text-xs text-slate-500">{k.intent}</td>
+                    <td>
+                      <Badge className={MATCH_BADGE[mt] ?? "bg-slate-100 text-slate-600"}>{mt}</Badge>
+                    </td>
+                    <td className="text-xs text-slate-500">{k.match_reason ?? "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p className="mt-3 text-[11px] text-slate-400">
+        Copy the add/remove lists here, then apply them in the keyword editor below (edits persist to the
+        plan and show in the approval email). Match types can be changed per keyword there.
+      </p>
     </Section>
   );
 }
@@ -2411,6 +2617,14 @@ export default function AiAdCopyGeneratorPage() {
 
             {tab === "setup" && result.setup_guide && result.setup_guide.steps.length > 0 && (
               <SetupGuideView guide={result.setup_guide} />
+            )}
+
+            {tab === "keywords" && (
+              <KeywordOptimizerView
+                searchTerms={result.top_search_terms ?? null}
+                history={result.keyword_history ?? null}
+                keywords={result.keywords}
+              />
             )}
 
             {tab === "keywords" && result.top_search_terms?.available && (
