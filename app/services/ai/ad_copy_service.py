@@ -86,6 +86,24 @@ def _match_formats(keyword: str, match_type: str) -> list[str]:
     return [_match_format(keyword, match_type)]
 
 
+# Funnel tiers for ad-copy prioritisation. BOF (bottom-of-funnel) = ready-to-act
+# intents that convert best — they lead the headlines and get pinned. MOF
+# (mid-of-funnel) = consideration intents (fees / courses / eligibility / placement)
+# — surfaced only when they genuinely rank among the campus's top keywords, never
+# as generic filler. Everything else (location / generic / research) is TOF.
+_BOF_INTENTS = {"brand", "admission", "application", "registration", "deadline"}
+_MOF_INTENTS = {"fees", "course", "courses", "eligibility", "placement"}
+
+
+def _intent_tier(intent: str | None) -> int:
+    i = (intent or "").lower()
+    if i in _BOF_INTENTS:
+        return 0
+    if i in _MOF_INTENTS:
+        return 1
+    return 2  # top-of-funnel: location / generic / research
+
+
 class AdCopyService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -858,6 +876,13 @@ class AdCopyService:
             "tone": tone,
             "landing_facts": facts[:12],
             "top_keywords": [k["keyword"] for k in keyword_insights[:12]],
+            # Scored, intent-tagged keywords so generation can prioritise by funnel
+            # stage (BOF/MOF) instead of treating every keyword equally.
+            "top_insights": [
+                {"keyword": k.get("keyword"), "intent": (k.get("intent") or "generic"),
+                 "score": k.get("score") or 0, "search_volume": k.get("search_volume")}
+                for k in keyword_insights[:15]
+            ],
             "historical_headlines": historical["top_headlines"][:10],
             "historical_descriptions": historical["top_descriptions"][:6],
             "keyword_themes": historical["best_keyword_themes"][:10],
@@ -887,10 +912,13 @@ class AdCopyService:
             + f"\nWinning historical headlines: {', '.join(context['historical_headlines'])}"
             + f"\nVerified landing-page facts: {', '.join(context['landing_facts']) or 'none'}"
             + (f"\nTone: {context['tone']}" if context.get("tone") else "")
-            + "\nMost headlines MUST reflect the specific intents in the top keywords "
-            "(e.g. fees, fee structure, courses, placements, the exact programme like "
-            "MBA/PGDM/B.Tech, online, admission, application form, the entrance exam) — "
-            "not generic slogans. Include the brand name in most headlines."
+            + "\nPRIORITISE bottom-of-funnel, high-intent messaging (brand, admission, "
+            "application, apply/enrol, registration, the entrance exam, deadlines, the "
+            "exact programme like MBA/PGDM/B.Tech) — these convert best, so most "
+            "headlines should be these and include the brand name. Only write "
+            "fees / eligibility / courses / placement headlines when those words "
+            "actually appear in the top keywords above; do NOT add generic "
+            "fees or eligibility slogans otherwise. Avoid generic slogans entirely."
             + "\nReturn JSON: {\"headlines\":[{\"text\":\"..\",\"reason\":\"..\"}] (15 items), "
             "\"descriptions\":[{\"text\":\"..\",\"reason\":\"..\"}] (4 items), "
             "\"callouts\":[\"..\"] (4 items)}. Each reason must cite the keyword it came from."
@@ -954,21 +982,30 @@ class AdCopyService:
             low = kw.lower()
             return any(p in low for p in patterns)
 
-        ordered = list(dict.fromkeys([*context["keyword_themes"], *context["top_keywords"]]))
-        brand_kw = [kw for kw in ordered if is_brand(kw)]
-        # Intent detection uses brand-relevant keywords (fall back to all if none).
-        blob = " ".join(brand_kw or ordered).lower()
+        # Scored, intent-tagged keywords for this campus (brand-relevant only),
+        # ranked by funnel tier then score so BOF high-intent keywords lead.
+        insights = [
+            k for k in context.get("top_insights", [])
+            if k.get("keyword") and is_brand(k["keyword"])
+        ]
+        ranked = sorted(
+            insights, key=lambda k: (_intent_tier(k.get("intent")), -(k.get("score") or 0))
+        )
+        present = {(k.get("intent") or "").lower() for k in insights}
 
-        def has(*ws: str) -> bool:
-            return any(w in blob for w in ws)
+        def has_intent(*names: str) -> bool:
+            return any(n in present for n in names)
 
-        f_fees = has("fee")
-        f_courses = has("course")
-        f_place = has("placement")
-        f_online = has("online", "distance")
-        f_admit = has("admission")
-        f_elig = has("eligibility", "eligible", "cutoff", "cut off")
-        f_schol = has("scholarship")
+        # Text blob only for programme / scholarship / online detection (not intents).
+        blob = " ".join(k["keyword"].lower() for k in insights) or " ".join(
+            context.get("top_keywords", [])
+        ).lower()
+        f_fees = has_intent("fees")
+        f_courses = has_intent("course", "courses")
+        f_place = has_intent("placement")
+        f_elig = has_intent("eligibility")
+        f_schol = "scholarship" in blob
+        f_online = ("online" in blob) or ("distance" in blob)
         progs = [
             p for p, kw in [("MBA", "mba"), ("PGDM", "pgdm"), ("B.Tech", "btech"),
                             ("BBA", "bba"), ("BCA", "bca"), ("LLB", "llb")] if kw in blob
@@ -976,52 +1013,63 @@ class AdCopyService:
         if not progs:  # fall back to the configured programme
             progs = [brief.programs[0]]
 
-        # Candidate headlines, ranked: brand → real programme/intent → exam/location → CTA.
+        # 1) Core bottom-of-funnel headlines — brand + apply/admission always lead
+        #    (highest-converting), then programme-admission, exam, location.
         hl: list[tuple[str, str]] = [
-            (s, "Brand headline — top relevance for brand searches."),
-            (f"{s} Admission 2026", "Brand + 'admission' — a top keyword intent."),
-            (f"Apply to {s} 2026", "Direct application CTA."),
+            (s, "Brand headline — top relevance for brand searches (bottom-of-funnel)."),
+            (f"Apply to {s} 2026", "Direct application CTA (bottom-of-funnel)."),
+            (f"{s} Admission 2026", "Brand + 'admission' — a top converting intent."),
         ]
         for p in progs[:2]:
-            hl.append((f"{s} {p} Admission", f"'{p}' appears in your top keywords."))
-        if f_fees:
-            hl.append((f"{s} Fees & Courses", "'fees' is your most-searched intent."))
-            hl.append((f"{s} Fee Structure 2026", "Matches 'fee structure' searches."))
-        if f_courses:
-            hl.append((f"{s} Courses & Programmes", "'courses' is a top keyword intent."))
-        if f_place:
-            hl.append((f"{s} Placements & Careers", "'placement' is a top keyword intent."))
-        if f_online:
-            hl.append((f"{s} Online Programmes", "'online/distance' is a top keyword intent."))
-        if f_admit:
-            hl.append((f"{s} Application Form 2026", "Matches 'application form' searches."))
+            hl.append((f"{s} {p} Admission", f"Programme ({p}) admission — high intent."))
         if exam:
-            hl.append((f"{exam} Registration 2026", f"Entrance exam ({exam}) intent."))
+            hl.append((f"{exam} Registration 2026", f"Entrance exam ({exam}) — bottom-of-funnel."))
             hl.append((f"Register for {exam} 2026", f"Exam registration ({exam})."))
         if loc:
-            hl.append((f"{s} {loc} Admission", f"Brand + location ({loc}) — your keyword style."))
-        if f_elig:
-            hl.append((f"{s} Eligibility & Cutoff", "Eligibility/cutoff intent."))
-        if f_schol:
-            hl.append((f"{s} Scholarships 2026", "Scholarship intent."))
-        # A few built verbatim from the top BRAND keywords (authentic phrasing).
-        for kw in brand_kw[:6]:
+            hl.append((f"{s} {loc} Admission", f"Brand + location ({loc})."))
+
+        # 2) Headlines built VERBATIM from the real keywords, BOF first (ranked), so
+        #    copy mirrors how people actually search for this campus.
+        for k in ranked:
+            kw = k["keyword"]
             h = self._kw_headline(s, kw)
-            if h:
-                hl.append((h, f"Built directly from your real keyword '{kw}'."))
-        # Brand + generic fallbacks to top up to 15 (used only if needed).
+            if not h:
+                continue
+            t = _intent_tier(k.get("intent"))
+            stage = ("bottom-of-funnel" if t == 0 else "mid-of-funnel" if t == 1
+                     else "top-of-funnel")
+            hl.append((h, f"Built from your real keyword '{kw}' "
+                          f"({k.get('intent')}, {stage})."))
+
+        # 3) Mid-of-funnel headlines — ONLY when that intent genuinely ranks in the
+        #    top keywords (never as generic filler).
+        if f_fees:
+            hl.append((f"{s} Fees & Courses", "'fees' ranks among your top keyword intents."))
+            hl.append((f"{s} Fee Structure 2026", "Matches your 'fee structure' searches."))
+        if f_courses:
+            hl.append((f"{s} Courses & Programmes", "'courses' ranks among your top keywords."))
+        if f_place:
+            hl.append((f"{s} Placements & Careers", "'placement' ranks among your top keywords."))
+        if f_online:
+            hl.append((f"{s} Online Programmes", "'online/distance' ranks in your top keywords."))
+        if f_elig:
+            hl.append((f"{s} Eligibility & Cutoff", "'eligibility' ranks among your top keywords."))
+        if f_schol:
+            hl.append((f"{s} Scholarships 2026", "Scholarship intent in your keywords."))
+
+        # 4) Brand / application top-ups (bottom-of-funnel — NOT generic fees or
+        #    eligibility) to reach 15 headlines.
         study = f"Study at {s}, {loc}" if loc else f"Study at {s}"
         hl += [
             (f"{s} Admissions 2026", "Brand + admissions + year."),
             (f"{s} {progs[0]} 2026", f"Brand + programme ({progs[0]})."),
-            (f"{s} Application Form", "Application-form intent."),
-            (study, f"Brand{' + location' if loc else ''} awareness."),
+            (f"{s} Application Form 2026", "Application-form intent (bottom-of-funnel)."),
             (f"Apply Online to {s}", "Apply-online CTA."),
+            (study, f"Brand{' + location' if loc else ''} awareness."),
             (f"{s} Official Admissions", "Brand + trust signal."),
             ("Admissions Open 2026", "Open-now signal."),
-            ("Check Eligibility & Apply", "Eligibility → apply."),
             ("Enquire About Admissions", "Soft-conversion CTA."),
-            ("Applications Closing Soon", "Deadline urgency."),
+            ("Applications Closing Soon", "Deadline urgency (bottom-of-funnel)."),
         ]
 
         headlines: list[dict[str, Any]] = []

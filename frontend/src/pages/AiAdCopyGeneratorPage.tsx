@@ -378,7 +378,7 @@ function CplPlanView({ cpl }: { cpl: CplPlan }) {
       title={`CPL optimizer — target ₹${cpl.target_cpl_low}–${cpl.target_cpl_high}`}
       hint={
         cpl.status === "beating" ? "already under target"
-        : cpl.status === "reachable" ? "reachable" : "needs funnel improvement"
+        : cpl.status === "reachable" ? "reachable" : "needs conversion-rate improvement"
       }
     >
       <div
@@ -468,7 +468,7 @@ function CplPlanView({ cpl }: { cpl: CplPlan }) {
 function ReversePlanView({ rp }: { rp: ReversePlan }) {
   return (
     <Section
-      title={`Reverse plan — to get ${num(rp.target_leads)} leads`}
+      title={`Campaign strategy — to get ${num(rp.target_leads)} leads`}
       hint={rp.feasible ? "achievable" : "needs adjustment"}
     >
       <div
@@ -2220,11 +2220,12 @@ export default function AiAdCopyGeneratorPage() {
                 <Badge className={STRENGTH_CLASS[result.quality.expected_ad_strength] ?? "bg-slate-100"}>
                   Ad Strength: {result.quality.expected_ad_strength}
                 </Badge>
+                {/* Anyone who can see a plan can download the complete plan (Excel). */}
+                <button className="btn btn-primary h-9 px-3" onClick={() => doDownload("excel")} disabled={downloading}>
+                  <FileSpreadsheet size={15} /> Download full plan
+                </button>
                 {isAdmin && (
                   <>
-                    <button className="btn btn-primary h-9 px-3" onClick={() => doDownload("excel")} disabled={downloading}>
-                      <FileSpreadsheet size={15} /> Excel
-                    </button>
                     <button className="btn-ghost h-9 px-3" onClick={() => doDownload("csv")} disabled={downloading}>
                       <Download size={15} /> CSV
                     </button>
