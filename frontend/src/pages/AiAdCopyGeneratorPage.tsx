@@ -1073,49 +1073,164 @@ function TopSearchTermsView({ st }: { st: TopSearchTerms }) {
 }
 
 function NegativesView({ neg }: { neg: NegativeKeywordsDetail }) {
-  const all = [...neg.from_search_terms.map((d) => d.term), ...neg.preventive].join("\n");
+  // Match type applied to the observed junk queries in the copy output.
+  const [matchType, setMatchType] = useState<"phrase" | "exact" | "broad">("phrase");
+  // Terms the user chose to IGNORE (keep OUT of the list). Everything else is
+  // selected for exclusion by default (these are the recommended negatives).
+  const [ignored, setIgnored] = useState<Set<string>>(new Set());
+  const toggle = (t: string) =>
+    setIgnored((prev) => {
+      const n = new Set(prev);
+      n.has(t) ? n.delete(t) : n.add(t);
+      return n;
+    });
+  const setMany = (terms: string[], ignore: boolean) =>
+    setIgnored((prev) => {
+      const n = new Set(prev);
+      terms.forEach((t) => (ignore ? n.add(t) : n.delete(t)));
+      return n;
+    });
+
+  const fmt = (t: string) =>
+    matchType === "exact" ? `[${t}]` : matchType === "broad" ? t : `"${t}"`;
+
+  const wasteful = neg.from_search_terms.filter((d) => !ignored.has(d.term));
+  const prevSel = neg.preventive.filter((p) => !ignored.has(p));
+  const recovered = wasteful.reduce((s, d) => s + (d.cost || 0), 0);
+  // Observed queries in the chosen match type; preventive theme-words stay broad.
+  const listText = [...wasteful.map((d) => fmt(d.term)), ...prevSel].join("\n");
+  const total = wasteful.length + prevSel.length;
+
+  const MATCHES: { k: "phrase" | "exact" | "broad"; label: string }[] = [
+    { k: "phrase", label: 'Phrase ("term")' },
+    { k: "exact", label: "Exact ([term])" },
+    { k: "broad", label: "Broad (any order)" },
+  ];
+
   return (
     <Section
-      title="Negative keywords — stop wasted spend"
+      title="Negative keywords — optimize out wasted spend"
       hint={neg.wasted_spend > 0 ? `₹${Math.round(neg.wasted_spend).toLocaleString("en-IN")} wasted` : undefined}
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <span className="text-xs text-slate-500">{neg.note}</span>
-        <CopyChip text={all} label="Copy all negatives" />
+      <p className="mb-3 text-xs text-slate-500">{neg.note}</p>
+
+      {/* Action bar: how the selected negatives get formatted + copy the list. */}
+      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md bg-slate-50 p-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-slate-600">Add junk queries as:</span>
+          {MATCHES.map((m) => (
+            <button
+              key={m.k}
+              onClick={() => setMatchType(m.k)}
+              className={`rounded px-2 py-1 text-xs font-medium ${
+                matchType === m.k ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-slate-600">
+            <b>{total}</b> to exclude
+            {recovered > 0 && (
+              <>
+                {" "}· recovers ~<b className="text-green-700">{money(recovered)}</b>
+              </>
+            )}
+          </span>
+          <CopyChip text={listText} label="Copy negative list" />
+        </div>
       </div>
 
       {neg.from_search_terms.length > 0 && (
         <div className="mb-3 overflow-x-auto">
-          <div className="mb-1 text-xs font-medium text-slate-600">
-            From YOUR search terms (add these first — real wasted spend):
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-xs font-medium text-slate-600">
+              Irrelevant queries from YOUR search terms — tick to exclude, untick to keep:
+            </div>
+            <div className="flex gap-2 text-xs text-slate-500">
+              <button className="hover:underline" onClick={() => setMany(neg.from_search_terms.map((d) => d.term), false)}>
+                Exclude all
+              </button>
+              <button className="hover:underline" onClick={() => setMany(neg.from_search_terms.map((d) => d.term), true)}>
+                Keep all
+              </button>
+            </div>
           </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                <th className="py-1.5">Search term</th>
+                <th className="w-8 py-1.5"></th>
+                <th>Search term</th>
                 <th className="text-right">Clicks</th>
                 <th className="text-right">Wasted</th>
                 <th>Why block it</th>
               </tr>
             </thead>
             <tbody>
-              {neg.from_search_terms.map((d) => (
-                <tr key={d.term} className="border-b border-slate-50">
-                  <td className="py-1.5 font-medium text-slate-800">{d.term}</td>
-                  <td className="text-right">{num(d.clicks)}</td>
-                  <td className="text-right text-red-600">{money(d.cost)}</td>
-                  <td className="text-xs text-slate-500">{d.reason}</td>
-                </tr>
-              ))}
+              {neg.from_search_terms.map((d) => {
+                const excluded = !ignored.has(d.term);
+                return (
+                  <tr
+                    key={d.term}
+                    className={`cursor-pointer border-b border-slate-50 hover:bg-slate-50 ${
+                      excluded ? "" : "opacity-40"
+                    }`}
+                    onClick={() => toggle(d.term)}
+                  >
+                    <td className="py-1.5 text-center">
+                      <input type="checkbox" checked={excluded} readOnly />
+                    </td>
+                    <td className={`font-medium text-slate-800 ${excluded ? "" : "line-through"}`}>{d.term}</td>
+                    <td className="text-right">{num(d.clicks)}</td>
+                    <td className="text-right text-red-600">{money(d.cost)}</td>
+                    <td className="text-xs text-slate-500">{d.reason}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      <div className="mb-1 text-xs font-medium text-slate-600">
-        Preventive blocks (add as broad negatives to protect the campaign):
+      <div className="mb-1 flex items-center justify-between">
+        <div className="text-xs font-medium text-slate-600">
+          Preventive blocks (broad negatives to protect the campaign) — click to toggle:
+        </div>
       </div>
-      <Chips items={neg.preventive} tone="red" />
+      <div className="flex flex-wrap gap-1.5">
+        {neg.preventive.map((p) => {
+          const on = !ignored.has(p);
+          return (
+            <button
+              key={p}
+              onClick={() => toggle(p)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                on ? "bg-red-50 text-red-700 ring-1 ring-red-200" : "bg-slate-100 text-slate-400 line-through"
+              }`}
+            >
+              {p}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Paste-ready output the user copies into Google Ads. */}
+      <div className="mt-3">
+        <div className="mb-1 text-xs font-medium text-slate-600">
+          Negative keyword list to add ({total}) — paste into Google Ads:
+        </div>
+        <textarea
+          readOnly
+          value={listText}
+          rows={Math.min(8, Math.max(3, total))}
+          className="input w-full resize-y font-mono text-xs"
+        />
+        <p className="mt-1 text-[11px] text-slate-400">
+          This list is also included in the downloaded plan (Excel → Negative Keywords).
+        </p>
+      </div>
     </Section>
   );
 }
