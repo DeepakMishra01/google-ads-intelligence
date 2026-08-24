@@ -21,6 +21,7 @@ import {
   useFinalUrl,
   useGenerateAdCopy,
   useKeywordLookup,
+  useSaveAssetEdits,
   useSaveKeywordEdits,
   useSaveScorecard,
   useScorecard,
@@ -1755,46 +1756,192 @@ function LastYearView({ ly }: { ly: LastYearSummary }) {
   );
 }
 
-function AssetList({ assets, limit }: { assets: GeneratedAsset[]; limit: number }) {
-  const [copied, setCopied] = useState<number | null>(null);
-  const copy = (text: string, i: number) => {
-    navigator.clipboard?.writeText(text);
-    setCopied(i);
-    setTimeout(() => setCopied(null), 1200);
-  };
+// One editable column of ad-copy lines (headlines / descriptions / callouts).
+function EditableAssetColumn({
+  title,
+  hint,
+  limit,
+  lines,
+  originals,
+  onChange,
+}: {
+  title: string;
+  hint: string;
+  limit: number;
+  lines: string[];
+  originals: Set<string>;
+  onChange: (next: string[]) => void;
+}) {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const setAt = (i: number, val: string) =>
+    onChange(lines.map((l, j) => (j === i ? val : l)));
+  const removeAt = (i: number) => onChange(lines.filter((_, j) => j !== i));
+  const add = () => onChange([...lines, ""]);
   return (
-    <ul className="divide-y divide-slate-100">
-      {assets.map((a, i) => {
-        const over = a.length > limit;
-        return (
-          <li key={i} className="flex items-start gap-3 py-2">
-            <span
-              className={`mt-0.5 w-10 shrink-0 text-right text-xs font-mono ${
-                over ? "text-red-600" : "text-slate-400"
-              }`}
-            >
-              {a.length}/{limit}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-slate-800">{a.text}</span>
-                {a.pinned_position && (
-                  <Badge className="bg-brand-50 text-brand-700">pin {a.pinned_position}</Badge>
+    <Section title={title} hint={hint}>
+      <div className="space-y-1.5">
+        {lines.map((line, i) => {
+          const len = line.length;
+          const over = len > limit;
+          const edited = line.trim() !== "" && !originals.has(norm(line));
+          return (
+            <div key={i} className="flex items-start gap-2">
+              <span
+                className={`mt-2 w-12 shrink-0 text-right text-xs font-mono ${
+                  over ? "text-red-600" : "text-slate-400"
+                }`}
+              >
+                {len}/{limit}
+              </span>
+              <textarea
+                value={line}
+                rows={1}
+                maxLength={limit + 20}
+                onChange={(e) => setAt(i, e.target.value)}
+                className={`input min-h-[38px] flex-1 resize-y py-1.5 text-sm ${
+                  over ? "border-red-400 focus:border-red-500" : ""
+                }`}
+              />
+              <div className="mt-1.5 flex w-16 shrink-0 items-center gap-1">
+                {edited && (
+                  <Badge className="bg-violet-100 text-violet-700">edited</Badge>
                 )}
+                <button
+                  className="btn-ghost h-7 px-1.5 text-slate-400 hover:text-red-600"
+                  title="Remove this line"
+                  onClick={() => removeAt(i)}
+                >
+                  ✕
+                </button>
               </div>
-              <div className="text-xs text-slate-500">{a.reason}</div>
             </div>
-            <button
-              className="btn-ghost h-7 px-2 text-slate-400"
-              onClick={() => copy(a.text, i)}
-              title="Copy"
-            >
-              {copied === i ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+          );
+        })}
+        <button className="btn-ghost h-8 px-2 text-sm text-brand-600" onClick={add}>
+          + Add {title.toLowerCase().replace(/s$/, "")}
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+// Editable ad copy: the ad manager can rewrite / add / remove any AI-generated
+// headline, description or callout. Saved edits reset the plan to draft and are
+// tagged "edited by ad manager" in the approval email + Excel.
+function EditableAdCopy({
+  genId,
+  headlines,
+  descriptions,
+  callouts,
+}: {
+  genId: number | null;
+  headlines: GeneratedAsset[];
+  descriptions: GeneratedAsset[];
+  callouts: string[];
+}) {
+  const [hl, setHl] = useState<string[]>(headlines.map((h) => h.text));
+  const [desc, setDesc] = useState<string[]>(descriptions.map((d) => d.text));
+  const [co, setCo] = useState<string[]>(callouts);
+  const [savedAt, setSavedAt] = useState(false);
+  const save = useSaveAssetEdits(genId ?? 0);
+
+  const norm = (s: string) => s.trim().toLowerCase();
+  const origHl = useMemo(() => new Set(headlines.map((h) => norm(h.text))), [headlines]);
+  const origDesc = useMemo(() => new Set(descriptions.map((d) => norm(d.text))), [descriptions]);
+  const origCo = useMemo(() => new Set(callouts.map(norm)), [callouts]);
+
+  const editedCount =
+    hl.filter((t) => t.trim() && !origHl.has(norm(t))).length +
+    desc.filter((t) => t.trim() && !origDesc.has(norm(t))).length +
+    co.filter((t) => t.trim() && !origCo.has(norm(t))).length;
+  const overCount =
+    hl.filter((t) => t.length > 30).length +
+    desc.filter((t) => t.length > 90).length +
+    co.filter((t) => t.length > 25).length;
+
+  const doSave = () => {
+    if (!genId) return;
+    save.mutate(
+      {
+        headlines: hl.map((s) => s.trim()).filter(Boolean),
+        descriptions: desc.map((s) => s.trim()).filter(Boolean),
+        callouts: co.map((s) => s.trim()).filter(Boolean),
+      },
+      { onSuccess: (r) => setSavedAt(!!r?.ok) },
+    );
+  };
+
+  const wrap =
+    (set: (v: string[]) => void) =>
+    (next: string[]) => {
+      setSavedAt(false);
+      set(next);
+    };
+
+  return (
+    <Card className="mb-4 border border-brand-100 bg-brand-50/30">
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800">Edit the ad copy</h3>
+          <p className="text-xs text-slate-500">
+            Don't like a line? Rewrite, add or remove it. Your edits are tagged
+            “edited by ad manager” in the approval email &amp; Excel.
+          </p>
+        </div>
+        {editedCount > 0 && (
+          <Badge className="bg-violet-100 text-violet-700">{editedCount} edited</Badge>
+        )}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <EditableAssetColumn
+          title="Headlines"
+          hint="max 30 chars each"
+          limit={30}
+          lines={hl}
+          originals={origHl}
+          onChange={wrap(setHl)}
+        />
+        <EditableAssetColumn
+          title="Descriptions"
+          hint="max 90 chars each"
+          limit={90}
+          lines={desc}
+          originals={origDesc}
+          onChange={wrap(setDesc)}
+        />
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <EditableAssetColumn
+          title="Callouts"
+          hint="max 25 chars each"
+          limit={25}
+          lines={co}
+          originals={origCo}
+          onChange={wrap(setCo)}
+        />
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 border-t border-brand-100 pt-3">
+        <button
+          className="btn btn-primary h-9 px-4"
+          disabled={!genId || save.isPending || overCount > 0}
+          onClick={doSave}
+        >
+          {save.isPending ? "Saving…" : "Save ad copy changes"}
+        </button>
+        <span className="text-xs text-slate-500">
+          {!genId
+            ? "Generate & save the plan first to edit the copy."
+            : overCount > 0
+              ? `${overCount} line(s) over the character limit — trim them to save.`
+              : save.data && !save.data.ok
+                ? save.data.reason ?? "Couldn't save — check the lines."
+                : savedAt
+                  ? "Saved ✓ — the plan reset to draft; re-submit for approval. Your edits appear in the approval email, tagged."
+                  : "Edited/added lines are tagged in the approval email and the attached Excel."}
+        </span>
+      </div>
+    </Card>
   );
 }
 
@@ -2168,21 +2315,17 @@ export default function AiAdCopyGeneratorPage() {
 
             {tab === "adcopy" && (
             <>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <Section title="Headlines" hint="max 30 chars each">
-                <AssetList assets={result.assets.headlines} limit={30} />
-              </Section>
-              <Section title="Descriptions" hint="max 90 chars each">
-                <AssetList assets={result.assets.descriptions} limit={90} />
-              </Section>
-            </div>
+            <EditableAdCopy
+              key={result.id ?? "new"}
+              genId={result.id ?? null}
+              headlines={result.assets.headlines}
+              descriptions={result.assets.descriptions}
+              callouts={result.assets.callouts}
+            />
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Section title="Display paths">
                 <Chips items={result.assets.display_paths} tone="brand" />
-              </Section>
-              <Section title="Callouts">
-                <Chips items={result.assets.callouts} />
               </Section>
               <Section title="Negative keywords">
                 <Chips items={result.assets.negative_keywords} tone="red" />

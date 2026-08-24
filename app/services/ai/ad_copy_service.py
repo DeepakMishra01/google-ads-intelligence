@@ -544,6 +544,67 @@ class AdCopyService:
                 "removed": len(removed_norm), "edited": len(clean_overrides),
                 "keyword_groups": groups}
 
+    def save_asset_edits(
+        self, gen_id: int, *,
+        headlines: list[str] | None = None,
+        descriptions: list[str] | None = None,
+        callouts: list[str] | None = None,
+        actor: str | None,
+    ) -> dict[str, Any]:
+        """Persist the ad manager's edits to the generated ad copy.
+
+        Each provided list is the FULL desired set for that asset kind (edited +
+        added lines). Editing resets approval to draft (it must be re-approved), and
+        the change is logged so the review email can flag copy the ad manager
+        edited/added. Entries over the Google Ads character limit are rejected.
+        """
+        from app.services.ai.approval_service import ApprovalService, effective_assets
+
+        gen = self.repo.get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+
+        limits = {"headlines": H_MAX, "descriptions": D_MAX, "callouts": 25}
+        incoming = {"headlines": headlines, "descriptions": descriptions,
+                    "callouts": callouts}
+        edits = dict(gen.asset_edits or {})
+        invalid: list[dict[str, Any]] = []
+        for kind, items in incoming.items():
+            if items is None:  # not touched this save
+                continue
+            cleaned: list[str] = []
+            seen: set[str] = set()
+            for raw in items:
+                t = re.sub(r"\s+", " ", (raw or "")).strip()
+                if not t or t.lower() in seen:
+                    continue
+                if len(t) > limits[kind]:
+                    invalid.append({"kind": kind, "text": t, "length": len(t),
+                                    "limit": limits[kind]})
+                    continue
+                seen.add(t.lower())
+                cleaned.append(t)
+            edits[kind] = cleaned
+        if invalid:
+            return {"ok": False,
+                    "reason": "Some lines exceed the Google Ads character limit.",
+                    "invalid": invalid}
+
+        edits["by"] = actor
+        edits["at"] = datetime.now(UTC).isoformat()
+        gen.asset_edits = edits
+        if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
+            gen.approval_status = "draft"
+        self.db.flush()
+        ea = effective_assets(gen)
+        ApprovalService(self.db).events.add_event(
+            gen_id, "adcopy_edited", actor,
+            f"{ea['edited_count']} line(s) edited/added by ad manager",
+        )
+        self.db.commit()
+        return {"ok": True, "gen_id": gen_id, "edited_count": ea["edited_count"],
+                "assets": {k: ea[k] for k in ("headlines", "descriptions", "callouts")}}
+
     def _classify_added(self, brief, added: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Turn user-added keyword dicts into full scored insights (intent/match/bid)."""
         brand_terms = brief.patterns()

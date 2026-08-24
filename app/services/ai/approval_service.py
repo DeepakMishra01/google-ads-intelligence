@@ -56,6 +56,68 @@ def effective_keywords(gen: AdCopyGeneration) -> tuple[list[dict], list[dict]]:
     return active, removed
 
 
+# Google Ads character limits per editable ad-copy asset kind.
+_ASSET_LIMITS = {"headlines": 30, "descriptions": 90, "callouts": 25}
+
+
+def effective_assets(gen: AdCopyGeneration) -> dict[str, Any]:
+    """Merge the generated ad copy with the ad manager's edits.
+
+    Returns, per kind (headlines / descriptions / callouts), the effective list of
+    ``{text, reason, length, over, edited}`` plus the items the manager removed.
+    Any text not present in the original generated set is flagged ``edited`` ("edited
+    by the ad manager"). With no edits, the original copy is returned verbatim.
+    """
+    base = gen.generated_assets or {}
+    edits = gen.asset_edits or {}
+
+    def _orig(kind: str) -> list[dict]:
+        out: list[dict] = []
+        for a in base.get(kind, []) or []:
+            if isinstance(a, dict):
+                out.append({"text": a.get("text"), "reason": a.get("reason")})
+            else:  # callouts are stored as plain strings
+                out.append({"text": a, "reason": None})
+        return out
+
+    result: dict[str, Any] = {"removed": {}, "edited_count": 0}
+    for kind, limit in _ASSET_LIMITS.items():
+        originals = _orig(kind)
+        orig_by_lc = {(o["text"] or "").lower(): o for o in originals if o["text"]}
+        edited_list = edits.get(kind)
+        if edited_list is None:  # untouched — original generated copy
+            result[kind] = [
+                {"text": o["text"], "reason": o["reason"],
+                 "length": len(o["text"] or ""), "over": len(o["text"] or "") > limit,
+                 "edited": False}
+                for o in originals if o["text"]
+            ]
+            result["removed"][kind] = []
+            continue
+        items: list[dict] = []
+        kept_lc: set[str] = set()
+        for raw in edited_list:
+            t = (raw or "").strip()
+            if not t:
+                continue
+            lc = t.lower()
+            kept_lc.add(lc)
+            match = orig_by_lc.get(lc)
+            edited = match is None
+            items.append({
+                "text": t,
+                "reason": (match["reason"] if match else "Edited by the ad manager."),
+                "length": len(t), "over": len(t) > limit, "edited": edited,
+            })
+            if edited:
+                result["edited_count"] += 1
+        result[kind] = items
+        result["removed"][kind] = [
+            o["text"] for o in originals if (o["text"] or "").lower() not in kept_lc
+        ]
+    return result
+
+
 # Fields the operator may override on the final strategy.
 _EDITABLE = ("budget", "target_leads", "target_cvr_pct", "bidding")
 _DEFAULT_TARGET_LEADS = 2000
@@ -181,8 +243,20 @@ def _approval_html(
     def _rows(items: list[str]) -> str:
         return "".join(f"<li>{_esc(i)}</li>" for i in items)
 
-    headlines = [a.get("text") for a in assets.get("headlines", [])][:15]
-    descriptions = [a.get("text") for a in assets.get("descriptions", [])][:4]
+    ea = effective_assets(gen)
+
+    def _copy_rows(items: list[dict[str, Any]]) -> str:
+        out = []
+        for a in items:
+            badge = ("<span style='margin-left:6px;background:#ede9fe;color:#6d28d9;"
+                     "border-radius:4px;padding:1px 6px;font-size:11px;font-weight:bold'>"
+                     "✎ edited by ad manager</span>") if a.get("edited") else ""
+            out.append(f"<li style='margin:3px 0'>{_esc(a.get('text'))}{badge}</li>")
+        return "".join(out)
+
+    headline_items = ea["headlines"][:15]
+    description_items = ea["descriptions"][:4]
+    callout_items = ea["callouts"][:8]
     active_kws, removed_kws = effective_keywords(gen)
     kws = active_kws[:25]
 
@@ -243,6 +317,54 @@ def _approval_html(
         return (f"<table style='width:100%;border-collapse:collapse;font-size:14px;"
                 f"border:1px solid #e2e8f0;border-radius:8px;overflow:hidden'>{inner}</table>")
 
+    # ---- Final summary: everything the approver is being asked to sign off ----
+    def _sum_row(label: str, value: str) -> str:
+        return (f"<tr><td style='padding:6px 10px;border-top:1px solid #eef2f7;color:#475569'>"
+                f"{label}</td><td style='padding:6px 10px;border-top:1px solid #eef2f7;"
+                f"text-align:right'>{value}</td></tr>")
+
+    def _edited_tag(n: int) -> str:
+        return (f" <span style='color:#7c3aed;font-weight:bold'>· {n} edited by ad manager</span>"
+                if n else "")
+
+    hl_edited = sum(1 for a in headline_items if a.get("edited"))
+    desc_edited = sum(1 for a in description_items if a.get("edited"))
+    co_edited = sum(1 for a in callout_items if a.get("edited"))
+    copy_removed = sum(len(v) for v in ea.get("removed", {}).values())
+    added_kw = sum(1 for k in active_kws if k.get("source") == "user_added")
+    kw_edited = sum(1 for k in active_kws if k.get("intent_edited") or k.get("match_edited"))
+    budget_val = next((f["value"] for f in fs.get("fields", []) if f["key"] == "budget"), None)
+    kw_extra = "".join([
+        f" · {added_kw} added by ad manager" if added_kw else "",
+        f" · {len(removed_kws)} removed" if removed_kws else "",
+        f" · {kw_edited} intent/match edited" if kw_edited else "",
+    ])
+    final_summary = _card_table("".join([
+        _sum_row("College", f"<b>{_esc(gen.campus)}</b>"),
+        _sum_row("Ad manager", _esc(gen.ad_manager or "Unassigned")),
+        _sum_row("Requested by", _esc(requested_by or "—")),
+        _sum_row("Budget", f"₹{_esc(budget_val)}" if budget_val else "—"),
+        _sum_row("Projected", f"<b>{_esc(fs.get('est_leads'))}</b> leads @ "
+                 f"<b>₹{_esc(fs.get('est_cpl'))}</b> CPL "
+                 f"(target {_esc(fs.get('target_leads'))})"),
+        _sum_row("Headlines", f"{len(headline_items)}{_edited_tag(hl_edited)}"),
+        _sum_row("Descriptions", f"{len(description_items)}{_edited_tag(desc_edited)}"),
+        _sum_row("Callouts", f"{len(callout_items)}{_edited_tag(co_edited)}") if callout_items else "",
+        _sum_row("Keywords", f"{len(active_kws)} active{kw_extra}"),
+        _sum_row("Negative keywords", f"{len(neg.get('keywords', []))}"),
+        _sum_row("Landing page", f"{_esc(lq.get('score'))}/100 (Grade {_esc(lq.get('grade'))})")
+        if lq.get("score") is not None else "",
+        _sum_row("Attached", "Full plan as Excel (all keywords, negatives, month-wise "
+                 "spend, seasonality, setup guide)"),
+    ]))
+    edits_note = ""
+    if hl_edited or desc_edited or co_edited or copy_removed:
+        edits_note = (
+            "<p style='font-size:13px;color:#7c3aed;margin:8px 0 0'>"
+            "✎ The ad manager edited some of the AI-generated copy — edited/added lines "
+            "are tagged above. </p>"
+        )
+
     banner_color = "#16a34a" if approved else "#4f46e5"
     banner_text = ("✓ APPROVED — cleared to launch" if approved
                    else "Review needed — approve or request changes below")
@@ -292,9 +414,12 @@ def _approval_html(
     {removed_block}
 
     {_h3("Ad copy — headlines")}
-    <ul style="font-size:14px;margin:0;padding-left:20px;color:#334155">{_rows(headlines)}</ul>
+    <ul style="font-size:14px;margin:0;padding-left:20px;color:#334155">{_copy_rows(headline_items)}</ul>
     {_h3("Ad copy — descriptions")}
-    <ul style="font-size:14px;margin:0;padding-left:20px;color:#334155">{_rows(descriptions)}</ul>
+    <ul style="font-size:14px;margin:0;padding-left:20px;color:#334155">{_copy_rows(description_items)}</ul>
+    {(_h3("Ad copy — callouts") +
+      "<ul style='font-size:14px;margin:0;padding-left:20px;color:#334155'>"
+      + _copy_rows(callout_items) + "</ul>") if callout_items else ""}
 
     {_h3("Landing page")}
     <p style="font-size:14px;margin:0;color:#334155">Score:
@@ -305,6 +430,12 @@ def _approval_html(
     <p style="font-size:14px;margin:0;color:#334155">
       <b>{_esc(len(neg.get('keywords', [])))}</b> negatives prepared
       (₹{_esc(neg.get('wasted_spend') or 0)} historically wasted on junk queries).</p>
+
+    {_h3("Final summary — what you're approving")}
+    <p style="font-size:13px;color:#64748b;margin:0 0 8px">
+      Everything included in this plan, at a glance:</p>
+    {final_summary}
+    {edits_note}
 
     <p style="font-size:12px;color:#94a3b8;margin-top:22px;border-top:1px solid #eef2f7;
        padding-top:12px">
@@ -660,9 +791,25 @@ class ApprovalService:
         for f in fs["fields"]:
             tag = " (edited)" if f["edited"] else ""
             lines.append(f"  - {f['label']}: {f['value']}{tag}")
+        ea = effective_assets(gen)
+        active_kws, removed_kws = effective_keywords(gen)
+        added_kw = sum(1 for k in active_kws if k.get("source") == "user_added")
+
+        def _n_edited(kind: str) -> str:
+            e = sum(1 for a in ea.get(kind, []) if a.get("edited"))
+            return f" ({e} edited by ad manager)" if e else ""
+
         lines += [
             f"  - Projected leads: {fs['est_leads']} (target {fs['target_leads']})",
             f"  - Projected CPL: ₹{fs['est_cpl']}",
+            "",
+            "WHAT'S INCLUDED (final summary)",
+            f"  - Headlines: {len(ea.get('headlines', []))}{_n_edited('headlines')}",
+            f"  - Descriptions: {len(ea.get('descriptions', []))}{_n_edited('descriptions')}",
+            f"  - Callouts: {len(ea.get('callouts', []))}{_n_edited('callouts')}",
+            f"  - Keywords: {len(active_kws)} active"
+            + (f", {added_kw} added by ad manager" if added_kw else "")
+            + (f", {len(removed_kws)} removed" if removed_kws else ""),
             "",
             "Full plan attached as Excel. This strategy is "
             + ("CLEARED to launch." if gen.approval_status == "approved"

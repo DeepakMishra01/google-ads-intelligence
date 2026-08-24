@@ -185,6 +185,27 @@ def save_keyword_edits(
     )
 
 
+class AssetEditsRequest(BaseModel):
+    # Each list is the FULL desired set for that asset kind (edited + added lines).
+    # Omit a field (null) to leave that asset kind untouched.
+    headlines: list[str] | None = None
+    descriptions: list[str] | None = None
+    callouts: list[str] | None = None
+
+
+@router.post("/{gen_id}/ad-copy", response_model=None, summary="Save ad-manager edits to the ad copy")
+def save_asset_edits(
+    gen_id: int,
+    body: AssetEditsRequest,
+    x_actor: str | None = Header(None),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.save_asset_edits(
+        gen_id, headlines=body.headlines, descriptions=body.descriptions,
+        callouts=body.callouts, actor=x_actor,
+    )
+
+
 @router.get("/portfolio", response_model=None, summary="Campaign + ad-manager accountability")
 def portfolio(
     user: CurrentUser = Depends(get_current_user),

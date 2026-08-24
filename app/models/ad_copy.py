@@ -52,6 +52,12 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     # "removed": ["kw", ...]}. The approval plan/email reflect these with tags.
     keyword_edits: Mapped[dict | None] = mapped_column(JSONType)
     generated_assets: Mapped[dict | None] = mapped_column(JSONType)
+    # Ad-manager edits to the generated ad copy: {"headlines": [str, ...],
+    # "descriptions": [str, ...], "callouts": [str, ...], "by": email, "at": iso}.
+    # Each list is the FULL desired set (edits + additions); anything not present in
+    # the original generated_assets is flagged "edited by the ad manager" in the
+    # approval plan / email / Excel.
+    asset_edits: Mapped[dict | None] = mapped_column(JSONType)
     scores: Mapped[dict | None] = mapped_column(JSONType)
     reasoning: Mapped[dict | None] = mapped_column(JSONType)
 

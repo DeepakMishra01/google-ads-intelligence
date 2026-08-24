@@ -31,6 +31,7 @@ def render_json(gen: AdCopyGeneration) -> str:
         "backend": gen.backend,
         "generated_at": gen.created_at.isoformat() if gen.created_at else None,
         "assets": gen.generated_assets,
+        "asset_edits": gen.asset_edits,
         "keywords": (gen.keyword_snapshot or {}).get("keywords", []),
         "scores": gen.scores,
         "reasoning": gen.reasoning,
@@ -39,20 +40,26 @@ def render_json(gen: AdCopyGeneration) -> str:
 
 
 def render_csv(gen: AdCopyGeneration) -> str:
+    from app.services.ai.approval_service import effective_assets
+
     a = _assets(gen)
+    ea = effective_assets(gen)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Asset Type", _H, _L, _R])
-    for h in a.get("headlines", []):
-        w.writerow(["Headline", h.get("text"), h.get("length"), h.get("reason")])
-    for d in a.get("descriptions", []):
-        w.writerow(["Description", d.get("text"), d.get("length"), d.get("reason")])
+    w.writerow(["Asset Type", _H, _L, "Edited by ad manager", _R])
+    for h in ea["headlines"]:
+        w.writerow(["Headline", h.get("text"), h.get("length"),
+                    "Yes" if h.get("edited") else "", h.get("reason")])
+    for d in ea["descriptions"]:
+        w.writerow(["Description", d.get("text"), d.get("length"),
+                    "Yes" if d.get("edited") else "", d.get("reason")])
     for p in a.get("display_paths", []):
-        w.writerow(["Display Path", p, len(p), ""])
-    for c in a.get("callouts", []):
-        w.writerow(["Callout", c, len(c), ""])
+        w.writerow(["Display Path", p, len(p), "", ""])
+    for c in ea["callouts"]:
+        w.writerow(["Callout", c.get("text"), c.get("length"),
+                    "Yes" if c.get("edited") else "", ""])
     for n in a.get("negative_keywords", []):
-        w.writerow(["Negative Keyword", n, "", ""])
+        w.writerow(["Negative Keyword", n, "", "", ""])
     return buf.getvalue()
 
 
@@ -63,7 +70,10 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("openpyxl is required for Excel export.") from exc
 
+    from app.services.ai.approval_service import effective_assets
+
     a = _assets(gen)
+    ea = effective_assets(gen)
     wb = Workbook()
     head_fill = PatternFill("solid", fgColor="1E40AF")
     head_font = Font(bold=True, color="FFFFFF")
@@ -93,25 +103,36 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
     ]:
         ws.append([k, v])
 
-    # Headlines
+    # Headlines — reflects the ad manager's edits (edited/added lines flagged).
+    _E = "Edited by ad manager"
+    orig_pins = {(h.get("text") or "").lower(): h.get("pinned_position")
+                 for h in a.get("headlines", [])}
     hs = wb.create_sheet("Headlines")
-    _header(hs, ["#", _H, _L, _P, _R])
-    for i, h in enumerate(a.get("headlines", []), 1):
-        hs.append([i, h.get("text"), h.get("length"), h.get("pinned_position"), h.get("reason")])
+    _header(hs, ["#", _H, _L, _P, _E, _R])
+    for i, h in enumerate(ea["headlines"], 1):
+        hs.append([i, h.get("text"), h.get("length"),
+                   orig_pins.get((h.get("text") or "").lower()),
+                   "Yes" if h.get("edited") else "", h.get("reason")])
+    for r in ea["removed"].get("headlines", []):
+        hs.append(["", r, len(r or ""), "", "Removed by ad manager", ""])
 
     # Descriptions
     ds = wb.create_sheet("Descriptions")
-    _header(ds, ["#", _H, _L, _R])
-    for i, d in enumerate(a.get("descriptions", []), 1):
-        ds.append([i, d.get("text"), d.get("length"), d.get("reason")])
+    _header(ds, ["#", _H, _L, _E, _R])
+    for i, d in enumerate(ea["descriptions"], 1):
+        ds.append([i, d.get("text"), d.get("length"),
+                   "Yes" if d.get("edited") else "", d.get("reason")])
+    for r in ea["removed"].get("descriptions", []):
+        ds.append(["", r, len(r or ""), "Removed by ad manager", ""])
 
     # Extensions
     es = wb.create_sheet("Extensions")
     _header(es, ["Type", "Value", "Description 1", "Description 2"])
     for p in a.get("display_paths", []):
         es.append(["Display Path", p])
-    for c in a.get("callouts", []):
-        es.append(["Callout", c])
+    for c in ea["callouts"]:
+        es.append(["Callout", c.get("text"),
+                   "Edited by ad manager" if c.get("edited") else "", ""])
     for label, vals in (a.get("structured_snippets") or {}).items():
         es.append([f"Snippet: {label}", ", ".join(vals)])
     for s in a.get("sitelinks", []):

@@ -450,6 +450,27 @@ export function useSaveKeywordEdits(genId: number) {
   });
 }
 
+export interface AssetEditsResult {
+  ok: boolean;
+  reason?: string;
+  edited_count?: number;
+  invalid?: { kind: string; text: string; length: number; limit: number }[];
+}
+
+// Save the ad manager's edits to the generated ad copy. Each list is the FULL
+// desired set for that asset kind; omit a field to leave it untouched.
+export function useSaveAssetEdits(genId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: {
+      headlines?: string[];
+      descriptions?: string[];
+      callouts?: string[];
+    }) => api.post(`/ai/ad-copy/${genId}/ad-copy`, p).then((r) => r.data as AssetEditsResult),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+  });
+}
+
 export function useWeeklyBudgets(weeks = 8) {
   return useQuery({
     queryKey: ["weekly-budgets", weeks],
