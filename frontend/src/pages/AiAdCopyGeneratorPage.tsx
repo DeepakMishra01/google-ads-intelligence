@@ -1627,9 +1627,9 @@ function ApprovalTab({ genId }: { genId: number }) {
         </div>
         <p className="mt-2 text-xs text-slate-500">
           Enter your name and click <b>Submit</b> — the full plan is emailed to the{" "}
-          <b>{REVIEWER_LABEL}</b> automatically, with one-click <b>Approve</b> / <b>Reject</b>{" "}
-          buttons. You don't need to type their address. (The “Approve/Reject here” buttons are for
-          reviewing inside the app.)
+          <b>{REVIEWER_LABEL}</b> automatically (with a <b>copy to you</b>), with one-click{" "}
+          <b>Approve</b> / <b>Reject</b> buttons. You don't need to type their address. (The
+          “Approve/Reject here” buttons are for reviewing inside the app.)
         </p>
         {submit.data?.email != null && (
           <div className={`mt-1 text-xs ${submit.data.email.sent ? "text-green-600" : "text-amber-600"}`}>

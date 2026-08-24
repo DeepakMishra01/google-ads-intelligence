@@ -410,9 +410,15 @@ class ApprovalService:
         email = None
         if auto_send:
             reviewer = self._approver_recipients()
-            if reviewer:
+            # CC the submitter so they get a copy of exactly what was sent.
+            submitter = self._submitter_email(gen)
+            parts = [r.strip() for r in (reviewer or "").split(",") if r.strip()]
+            if submitter:
+                parts.append(submitter)
+            recipients = ", ".join(dict.fromkeys(p.lower() for p in parts))
+            if recipients:
                 email = self.send_approval(
-                    gen_id, to=reviewer, actor=actor, base_url=base_url,
+                    gen_id, to=recipients, actor=actor, base_url=base_url,
                     requested_by=actor,
                 )
         return {"ok": True, **self.state(gen_id), "email": email}
