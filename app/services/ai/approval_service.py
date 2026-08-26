@@ -339,10 +339,17 @@ def _approval_html(
         f" · {len(removed_kws)} removed" if removed_kws else "",
         f" · {kw_edited} intent/match edited" if kw_edited else "",
     ])
+    # The finalised landing-page (Final URL) chosen while building the plan.
+    final_url = gen.final_url or ""
+    url_link = (
+        f"<a href='{_esc(final_url)}' style='color:#4f46e5;word-break:break-all'>"
+        f"{_esc(final_url)}</a>" if final_url else "—"
+    )
     final_summary = _card_table("".join([
         _sum_row("College", f"<b>{_esc(gen.campus)}</b>"),
         _sum_row("Ad manager", _esc(gen.ad_manager or "Unassigned")),
         _sum_row("Requested by", _esc(requested_by or "—")),
+        _sum_row("Landing page", url_link),
         _sum_row("Budget", f"₹{_esc(budget_val)}" if budget_val else "—"),
         _sum_row("Projected", f"<b>{_esc(fs.get('est_leads'))}</b> leads @ "
                  f"<b>₹{_esc(fs.get('est_cpl'))}</b> CPL "
@@ -377,6 +384,8 @@ def _approval_html(
         f"<td style='padding:4px 0;text-align:right'>{_esc(requested_by or '—')}</td></tr>"
         f"<tr><td style='padding:4px 0;color:#64748b'>Ad manager</td>"
         f"<td style='padding:4px 0;text-align:right'>{_esc(gen.ad_manager or 'Unassigned')}</td></tr>"
+        f"<tr><td style='padding:4px 0;color:#64748b'>Landing page</td>"
+        f"<td style='padding:4px 0;text-align:right'>{url_link}</td></tr>"
         f"<tr><td style='padding:4px 0;color:#64748b'>Projected</td>"
         f"<td style='padding:4px 0;text-align:right'><b>{_esc(fs.get('est_leads'))}</b> leads "
         f"@ <b>₹{_esc(fs.get('est_cpl'))}</b> CPL</td></tr></table>"
@@ -422,6 +431,8 @@ def _approval_html(
       + _copy_rows(callout_items) + "</ul>") if callout_items else ""}
 
     {_h3("Landing page")}
+    <p style="font-size:14px;margin:0 0 4px;color:#334155">
+      Final URL: {url_link}</p>
     <p style="font-size:14px;margin:0;color:#334155">Score:
       <b>{_esc(lq.get('score'))}/100</b> (Grade {_esc(lq.get('grade'))}).
       {_esc((lq.get('suggestions') or [''])[0])}</p>
@@ -783,6 +794,7 @@ class ApprovalService:
         lines = [
             f"Campaign strategy for {gen.campus}",
             f"Requested by: {requested_by or '—'}   Ad manager: {gen.ad_manager or 'Unassigned'}",
+            f"Landing page: {gen.final_url or '—'}",
             f"Status: {gen.approval_status.upper()}"
             + (f"  (approved by {gen.reviewer_name})" if gen.approval_status == "approved" else ""),
             "",
