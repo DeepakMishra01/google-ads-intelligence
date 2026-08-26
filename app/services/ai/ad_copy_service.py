@@ -487,6 +487,20 @@ class AdCopyService:
     def get_generation(self, gen_id: int):  # type: ignore[no-untyped-def]
         return self.repo.get(gen_id)
 
+    def get_plan(self, gen_id: int) -> dict[str, Any] | None:
+        """Re-open a saved generation's full result payload (for the UI).
+
+        Returns the exact ``generate()`` result stored at generation time, so a
+        plan survives navigation/reload. Returns None for a missing plan or an old
+        generation created before result payloads were saved.
+        """
+        gen = self.repo.get(gen_id)
+        if gen is None or not gen.result_payload:
+            return None
+        payload = dict(gen.result_payload)
+        payload["id"] = gen.id  # the payload was stored before the id was assigned
+        return payload
+
     # ------------------------------------------------------------------ #
     # User keyword edits (add / remove / overwrite)
     # ------------------------------------------------------------------ #
@@ -1226,6 +1240,9 @@ class AdCopyService:
                         "descriptions": [{"text": a["text"], "reason": a["reason"]}
                                          for a in assets["descriptions"]],
                     },
+                    # Full result payload (JSON-safe) so the plan can be re-opened
+                    # exactly as generated. default=str coerces datetimes/Decimals.
+                    "result_payload": json.loads(json.dumps(result, default=str)),
                 }
             )
             self.db.commit()

@@ -696,6 +696,31 @@ export async function downloadAdCopy(
   URL.revokeObjectURL(url);
 }
 
+export interface AdCopyHistoryItem {
+  id: number;
+  campus: string;
+  final_url: string | null;
+  backend: string | null;
+  created_at: string;
+}
+
+/** Recent saved generations (the "records" list) — click one to re-open it. */
+export function useAdCopyHistory(limit = 25) {
+  return useQuery({
+    queryKey: ["adcopy-history", limit],
+    queryFn: () =>
+      api
+        .get("/ai/ad-copy/history", { params: { limit } })
+        .then((r) => r.data.items as AdCopyHistoryItem[]),
+  });
+}
+
+/** Re-open a saved plan by id (returns the full result, exactly as generated). */
+export async function fetchAdCopyPlan(genId: number): Promise<AdCopyGenerateResponse> {
+  const res = await api.get(`/ai/ad-copy/${genId}/plan`);
+  return res.data as AdCopyGenerateResponse;
+}
+
 /** Trigger a browser download of a report in the chosen format. */
 export async function downloadReport(
   period: "daily" | "weekly" | "monthly",

@@ -15,6 +15,8 @@ import { apiErrorMessage } from "@/lib/api";
 import { money, num, pct } from "@/lib/format";
 import {
   downloadAdCopy,
+  fetchAdCopyPlan,
+  useAdCopyHistory,
   useApproval,
   useApprovalActions,
   useCampusSearch,
@@ -2266,6 +2268,67 @@ function EditableAdCopy({
   );
 }
 
+// Saved-plan records: generations persist in the DB, so a plan can be re-opened
+// after closing the platform or switching tools. Lists recent plans; click to load.
+function RecentPlansPanel({
+  onOpen,
+  activeId,
+  loading,
+}: {
+  onOpen: (id: number) => void;
+  activeId?: number | null;
+  loading?: boolean;
+}) {
+  const history = useAdCopyHistory(25);
+  const items = history.data ?? [];
+  const [open, setOpen] = useState(!activeId);
+  if (!items.length) return null;
+  return (
+    <Card className="mb-4">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700">Saved plans ({items.length})</h2>
+          <p className="text-xs text-slate-400">
+            Re-open a plan you generated earlier — plans stay saved even after you close the
+            platform or switch tools.
+          </p>
+        </div>
+        <span className={`text-slate-400 transition ${open ? "rotate-90" : ""}`}>▸</span>
+      </button>
+      {open && (
+        <div className="mt-3 max-h-72 divide-y divide-slate-100 overflow-auto">
+          {items.map((p) => {
+            const active = activeId === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onOpen(p.id)}
+                className={`flex w-full items-center justify-between py-2 text-left text-sm hover:bg-slate-50 ${
+                  active ? "bg-brand-50" : ""
+                }`}
+              >
+                <span className="font-medium text-slate-800">
+                  {p.campus}
+                  {active && <span className="ml-2 text-xs font-normal text-brand-600">open</span>}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {new Date(p.created_at).toLocaleDateString()} · #{p.id}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {loading && <div className="mt-2 text-xs text-slate-400">Loading plan…</div>}
+    </Card>
+  );
+}
+
 export default function AiAdCopyGeneratorPage() {
   const { isAdmin } = useAuth();
   const { accountId } = useFilters();
@@ -2294,6 +2357,48 @@ export default function AiAdCopyGeneratorPage() {
   const suggestions = useCampusSearch(debounced || undefined);
   const finalUrl = useFinalUrl(campus ?? undefined, override || undefined);
   const gen = useGenerateAdCopy();
+  const [loadingPlan, setLoadingPlan] = useState(false);
+
+  const LAST_KEY = "adcopy:lastGenId";
+
+  // Re-open a saved plan from the DB (survives navigation / reload / closing).
+  const loadPlan = async (genId: number) => {
+    setLoadingPlan(true);
+    setDownloadErr(null);
+    try {
+      const data = await fetchAdCopyPlan(genId);
+      setResult(data);
+      setGroupsOverride(null);
+      setCampus(data.campus);
+      setTab("adcopy");
+      try {
+        localStorage.setItem(LAST_KEY, String(genId));
+      } catch {
+        /* storage unavailable — ignore */
+      }
+    } catch {
+      setDownloadErr("Couldn't load that saved plan — it may have been removed.");
+      try {
+        localStorage.removeItem(LAST_KEY);
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setLoadingPlan(false);
+    }
+  };
+
+  // On first mount, restore the last plan the user was viewing so it doesn't vanish.
+  useEffect(() => {
+    let last: string | null = null;
+    try {
+      last = localStorage.getItem(LAST_KEY);
+    } catch {
+      last = null;
+    }
+    if (last && !result) loadPlan(Number(last));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectCampus = (name: string) => {
     setCampus(name);
@@ -2318,7 +2423,19 @@ export default function AiAdCopyGeneratorPage() {
         conversion_tracking: tracking,
         lp_type: lpType,
       },
-      { onSuccess: (data) => { setResult(data); setGroupsOverride(null); } }
+      {
+        onSuccess: (data) => {
+          setResult(data);
+          setGroupsOverride(null);
+          if (data.id != null) {
+            try {
+              localStorage.setItem(LAST_KEY, String(data.id));
+            } catch {
+              /* storage unavailable — ignore */
+            }
+          }
+        },
+      }
     );
   };
 
@@ -2515,11 +2632,13 @@ export default function AiAdCopyGeneratorPage() {
         </Card>
       )}
 
+      <RecentPlansPanel onOpen={loadPlan} activeId={result?.id} loading={loadingPlan} />
+
       <StateBlock
-        isLoading={gen.isPending}
+        isLoading={gen.isPending || loadingPlan}
         error={null}
         isEmpty={!result}
-        emptyText="Search a campus and click Generate to see production-ready ad copy."
+        emptyText="Search a campus and click Generate — saved plans appear above and can be re-opened anytime."
       >
         {result && (
           <>

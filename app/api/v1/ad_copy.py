@@ -465,6 +465,23 @@ def history(
     return AdCopyHistoryResponse(**svc.history_rows(campus=campus, limit=limit))
 
 
+@router.get("/{gen_id}/plan", response_model=AdCopyGenerateResponse, summary="Re-open a saved plan")
+def get_plan(
+    gen_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> AdCopyGenerateResponse:
+    """Return a saved generation's full result so the UI can re-open it exactly as
+    generated (survives navigating away, switching tools, closing the tab)."""
+    payload = svc.get_plan(gen_id)
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Plan not found, or generated before plans were saved — re-generate it.",
+        )
+    return AdCopyGenerateResponse(**payload)
+
+
 @router.get("/{gen_id}/export", response_model=None, summary="Export a generation (excel/csv/json)")
 def export(
     gen_id: int,
@@ -472,8 +489,13 @@ def export(
     user: CurrentUser = Depends(get_current_user),
     svc: AdCopyService = Depends(get_ad_copy_service),
 ) -> Response:
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Downloads are admin-only.")
+    # The complete plan (Excel) is downloadable by any signed-in user; the raw
+    # CSV/JSON exports stay admin-only.
+    if fmt in ("csv", "json") and not user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="CSV/JSON export is admin-only — use 'Download full plan' (Excel).",
+        )
     gen = svc.get_generation(gen_id)
     if gen is None:
         raise HTTPException(status_code=404, detail="Generation not found.")

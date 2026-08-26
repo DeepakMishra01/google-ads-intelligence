@@ -58,6 +58,10 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     # the original generated_assets is flagged "edited by the ad manager" in the
     # approval plan / email / Excel.
     asset_edits: Mapped[dict | None] = mapped_column(JSONType)
+    # Full generate() result payload (JSON-safe) so a saved plan can be re-opened in
+    # the UI exactly as generated — after the user navigates away, switches tools, or
+    # reloads. This is what makes generations persistent "records" on the platform.
+    result_payload: Mapped[dict | None] = mapped_column(JSONType)
     scores: Mapped[dict | None] = mapped_column(JSONType)
     reasoning: Mapped[dict | None] = mapped_column(JSONType)
 
