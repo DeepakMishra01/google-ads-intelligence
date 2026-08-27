@@ -242,15 +242,21 @@ def render_excel(gen: AdCopyGeneration) -> bytes:
         if dev:
             bp.append(["Device:", dev.get("recommendation")])
 
-        # Seasonality (real Keyword Planner month-on-month) + monthly pacing
+        # Seasonality (real Keyword Planner month-on-month) + monthly pacing.
+        # Suggested Budget reflects the ad manager's per-month edits when present.
+        from app.services.ai.approval_service import effective_pacing
+
+        eff_b = {m["month"]: m["budget"]
+                 for m in (effective_pacing(gen) or {}).get("months", [])}
         se = wb.create_sheet("Seasonality & Pacing")
         _header(se, ["Month", "Searches (Keyword Planner)", "Index (1.0=avg)", "Demand",
                      "Suggested Budget", "Focus"])
         pacing_by_m = {p["month"]: p for p in plan.get("monthly_pacing", [])}
         for mo in seasonality.get("months", []):
             pm = pacing_by_m.get(mo["month"], {})
+            budget = eff_b.get(mo["month"], pm.get("budget"))
             se.append([mo.get("name"), mo.get("searches"), mo.get("index"), mo.get("level"),
-                       pm.get("budget"), mo.get("emphasis")])
+                       budget, mo.get("emphasis")])
         if not seasonality.get("available"):
             se.append(["(Keyword Planner seasonality unavailable — budget paced evenly.)"])
 

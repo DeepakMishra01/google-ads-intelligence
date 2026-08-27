@@ -206,6 +206,21 @@ def save_asset_edits(
     )
 
 
+class BudgetPacingRequest(BaseModel):
+    # {"<month 1-12>": amount}. Only months present in the plan's pacing are applied.
+    months: dict[str, float] = {}
+
+
+@router.post("/{gen_id}/budget-pacing", response_model=None, summary="Edit month-wise budget pacing")
+def save_budget_pacing(
+    gen_id: int,
+    body: BudgetPacingRequest,
+    x_actor: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ApprovalService(db).set_budget_pacing(gen_id, months=body.months, by=x_actor)
+
+
 @router.get("/portfolio", response_model=None, summary="Campaign + ad-manager accountability")
 def portfolio(
     user: CurrentUser = Depends(get_current_user),

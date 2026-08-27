@@ -450,7 +450,25 @@ export interface ApprovalState {
   reviewer_name?: string | null;
   review_note?: string | null;
   final_strategy?: FinalStrategy;
+  budget_pacing?: BudgetPacing | null;
   events?: ApprovalEvent[];
+}
+export interface BudgetPacingMonth {
+  month: number;
+  name: string;
+  budget: number;
+  base_budget: number;
+  per_week: number;
+  level: string | null;
+  edited: boolean;
+}
+export interface BudgetPacing {
+  months: BudgetPacingMonth[];
+  total: number;
+  per_week_avg: number;
+  source: string | null; // search_seasonality | even
+  plan_budget: number;
+  any_edited: boolean;
 }
 export interface ScorecardHistoryRow {
   id: number;

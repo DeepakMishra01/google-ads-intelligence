@@ -34,6 +34,7 @@ import type {
   AdCopyGenerateResponse,
   AdCopySearchTerm,
   BidAudit,
+  BudgetPacing,
   CampaignPlan,
   CplPlan,
   ReversePlan,
@@ -1874,6 +1875,122 @@ const APPROVAL_STYLE: Record<string, string> = {
   draft: "bg-amber-50 text-amber-800 border-amber-200",
 };
 
+// Editable month-on-month budget pacing (before approval). Base is the budget the
+// ad manager entered, divided by real search seasonality; they can adjust any month.
+function BudgetPacingEditor({
+  genId,
+  pacing,
+  actor,
+}: {
+  genId: number;
+  pacing: BudgetPacing;
+  actor: string;
+}) {
+  const { savePacing } = useApprovalActions(genId);
+  const [draft, setDraft] = useState<Record<number, string>>(() =>
+    Object.fromEntries(pacing.months.map((m) => [m.month, String(m.budget)]))
+  );
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    setDraft(Object.fromEntries(pacing.months.map((m) => [m.month, String(m.budget)])));
+    setSaved(false);
+  }, [pacing]);
+
+  const valOf = (m: BudgetPacing["months"][number]) =>
+    Math.round(Number(draft[m.month] ?? m.budget) || 0);
+  const total = pacing.months.reduce((a, m) => a + valOf(m), 0);
+  const dirty = pacing.months.some((m) => valOf(m) !== m.budget);
+
+  const doSave = () => {
+    const months: Record<string, number> = {};
+    pacing.months.forEach((m) => {
+      const v = valOf(m);
+      if (v !== m.base_budget) months[String(m.month)] = v; // only real deviations
+    });
+    savePacing.mutate({ months, by: actor || "operator" }, { onSuccess: () => setSaved(true) });
+  };
+
+  const reset = () =>
+    setDraft(Object.fromEntries(pacing.months.map((m) => [m.month, String(m.base_budget)])));
+
+  return (
+    <Section
+      title="Budget pacing — month-on-month (editable)"
+      hint={
+        pacing.source === "search_seasonality"
+          ? "auto-split by real search seasonality — adjust as needed"
+          : "even split (no seasonality data) — adjust as needed"
+      }
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className="py-1.5">Month</th>
+              <th className="text-right">Monthly budget (₹)</th>
+              <th className="text-right">≈ Per week</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pacing.months.map((m) => {
+              const v = valOf(m);
+              const changed = v !== m.base_budget;
+              return (
+                <tr key={m.month} className="border-b border-slate-50">
+                  <td className="py-1.5 text-slate-700">
+                    {m.name}
+                    {(m.level === "peak" || m.level === "high") && (
+                      <span className="ml-1.5 text-xs font-medium text-amber-600">peak</span>
+                    )}
+                    {changed && <span className="ml-1.5 text-xs font-medium text-violet-600">edited</span>}
+                  </td>
+                  <td className="text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      className="input h-8 w-32 py-0 text-right text-sm"
+                      value={draft[m.month] ?? ""}
+                      onChange={(e) => {
+                        setSaved(false);
+                        setDraft((d) => ({ ...d, [m.month]: e.target.value }));
+                      }}
+                    />
+                  </td>
+                  <td className="text-right tabular-nums text-slate-500">
+                    {money(Math.round(v / 4.345))}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="border-t-2 border-slate-200 font-semibold">
+              <td className="py-2">Total</td>
+              <td className="text-right tabular-nums">{money(total)}</td>
+              <td className="text-right tabular-nums text-slate-500">{money(Math.round(total / 52))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <button
+          className="btn btn-primary h-9 px-4"
+          disabled={savePacing.isPending || !dirty}
+          onClick={doSave}
+        >
+          {savePacing.isPending ? "Saving…" : "Save budget pacing"}
+        </button>
+        <button className="text-xs text-slate-500 hover:underline" onClick={reset}>
+          Reset to seasonality split
+        </button>
+        <span className="text-xs text-slate-500">
+          {saved
+            ? "Saved ✓ — the plan reset to draft; re-submit. The approval email shows the adjusted months."
+            : "Edited months are tagged in the approval email; total & per-week update live."}
+        </span>
+      </div>
+    </Section>
+  );
+}
+
 function ApprovalTab({ genId }: { genId: number }) {
   const { isAdmin } = useAuth();
   const { data, isLoading } = useApproval(genId);
@@ -2012,6 +2129,10 @@ function ApprovalTab({ genId }: { genId: number }) {
             copy needs a re-generate.
           </div>
         </Section>
+      )}
+
+      {data.budget_pacing && data.budget_pacing.months.length > 0 && (
+        <BudgetPacingEditor genId={genId} pacing={data.budget_pacing} actor={name} />
       )}
 
       <Section title="Approval email" hint={`goes to ${REVIEWER_LABEL}`}>

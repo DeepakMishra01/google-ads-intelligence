@@ -118,6 +118,41 @@ def effective_assets(gen: AdCopyGeneration) -> dict[str, Any]:
     return result
 
 
+def effective_pacing(gen: AdCopyGeneration) -> dict[str, Any] | None:
+    """Month-wise budget pacing after the ad manager's per-month edits.
+
+    Base = the plan's seasonality-weighted ``monthly_pacing``; any month the AM
+    edited (``pacing_overrides``) replaces that month's budget. Returns per-month
+    budget + derived average per-week, the (possibly edited) total, and flags.
+    Returns None when the plan has no budget/pacing.
+    """
+    plan = (gen.scores or {}).get("campaign_plan") or {}
+    base = plan.get("monthly_pacing") or []
+    if not base:
+        return None
+    ov = {str(k): v for k, v in (gen.pacing_overrides or {}).items()}
+    months: list[dict[str, Any]] = []
+    for p in base:
+        m = p.get("month")
+        edited = str(m) in ov
+        budget = round(float(ov[str(m)])) if edited else (p.get("budget") or 0)
+        months.append({
+            "month": m, "name": p.get("name"), "budget": budget,
+            "base_budget": p.get("budget") or 0,  # seasonality value before edits
+            "per_week": round(budget / 4.345), "level": p.get("level"),
+            "edited": edited,
+        })
+    total = sum(x["budget"] or 0 for x in months)
+    return {
+        "months": months,
+        "total": total,
+        "per_week_avg": round(total / 52) if total else 0,
+        "source": plan.get("pacing_source"),
+        "plan_budget": round((plan.get("forecast") or {}).get("budget") or 0),
+        "any_edited": bool(ov),
+    }
+
+
 # Fields the operator may override on the final strategy.
 _EDITABLE = ("budget", "target_leads", "target_cvr_pct", "bidding")
 _DEFAULT_TARGET_LEADS = 2000
@@ -373,10 +408,9 @@ def _approval_html(
         )
 
     # ---- Budget pacing: how the budget is spent month-on-month (and ≈ per week) ----
-    plan = scores.get("campaign_plan") or {}
-    pacing = plan.get("monthly_pacing") or []
+    ep = effective_pacing(gen)
     pacing_block = ""
-    if plan.get("available") and pacing:
+    if ep and ep["months"]:
         def _inr(v: Any) -> str:
             return f"{int(round(v or 0)):,}"
 
@@ -385,14 +419,15 @@ def _approval_html(
             f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>{_esc(p.get('name'))}"
             + ((" <span style='color:#d97706;font-weight:bold'>peak</span>")
                if (p.get('level') or '').lower() in ('peak', 'high') else "")
+            + ((" <span style='color:#7c3aed;font-weight:bold'>✎ edited</span>")
+               if p.get('edited') else "")
             + f"</td>"
             f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"
             f"font-variant-numeric:tabular-nums'>₹{_inr(p.get('budget'))}</td>"
             f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"
-            f"font-variant-numeric:tabular-nums'>₹{_inr((p.get('budget') or 0) / 4.345)}</td></tr>"
-            for p in pacing
+            f"font-variant-numeric:tabular-nums'>₹{_inr(p.get('per_week'))}</td></tr>"
+            for p in ep["months"]
         )
-        total_m = sum(p.get("budget") or 0 for p in pacing)
         head = (
             "<tr style='background:#f8fafc'>"
             "<th style='padding:7px 10px;text-align:left;font-size:12px;color:#64748b'>Month</th>"
@@ -402,21 +437,23 @@ def _approval_html(
         total_row = (
             f"<tr><td style='padding:6px 10px;border-top:2px solid #e2e8f0;font-weight:bold'>Total</td>"
             f"<td style='padding:6px 10px;border-top:2px solid #e2e8f0;text-align:right;"
-            f"font-weight:bold;font-variant-numeric:tabular-nums'>₹{_inr(total_m)}</td>"
+            f"font-weight:bold;font-variant-numeric:tabular-nums'>₹{_inr(ep['total'])}</td>"
             f"<td style='padding:6px 10px;border-top:2px solid #e2e8f0;text-align:right;"
-            f"font-variant-numeric:tabular-nums'>₹{_inr(total_m / 52)}</td></tr>"
+            f"font-variant-numeric:tabular-nums'>₹{_inr(ep['per_week_avg'])}</td></tr>"
         )
         source_note = (
             "paced to this campus's real search seasonality (Keyword Planner demand — "
             "search volume, relevancy & 12-month trend)"
-            if plan.get("pacing_source") == "search_seasonality"
+            if ep.get("source") == "search_seasonality"
             else "paced evenly across the year (no search-seasonality data available for this campus)"
         )
+        edited_note = (" Some months were adjusted by the ad manager (✎ edited)."
+                       if ep.get("any_edited") else "")
         pacing_block = (
             _h3("Budget pacing — month-on-month")
-            + f"<p style='font-size:13px;color:#64748b;margin:0 0 6px'>How the budget is spread "
-              f"across the year — {source_note}. The per-week figure is the average within "
-              f"each month.</p>"
+            + f"<p style='font-size:13px;color:#64748b;margin:0 0 6px'>How the ad manager's "
+              f"budget is spread across the year — {source_note}.{edited_note} The per-week "
+              f"figure is the average within each month.</p>"
             + _card_table(head + rows + total_row)
         )
 
@@ -817,6 +854,41 @@ class ApprovalService:
         self.db.commit()
         return self.state(gen_id)
 
+    def set_budget_pacing(
+        self, gen_id: int, *, months: dict[str, Any], by: str | None
+    ) -> dict[str, Any]:
+        """Save the ad manager's per-month budget edits (before approval).
+
+        ``months`` = {"<1-12>": amount}. Only months that exist in the plan's pacing
+        are accepted. Editing resets approval to draft; the approval email/Excel then
+        reflect the adjusted pacing.
+        """
+        gen = self._get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        base = ((gen.scores or {}).get("campaign_plan") or {}).get("monthly_pacing") or []
+        if not base:
+            return {"ok": False, "reason": "This plan has no budget pacing to edit."}
+        valid = {str(p.get("month")) for p in base}
+        clean: dict[str, float] = {}
+        for k, v in (months or {}).items():
+            key = str(k).strip()
+            if key in valid and v is not None and str(v) != "":
+                try:
+                    amt = round(float(v))
+                except (TypeError, ValueError):
+                    continue
+                if amt >= 0:
+                    clean[key] = amt
+        gen.pacing_overrides = clean or None
+        if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
+            gen.approval_status = "draft"
+            gen.reviewed_at = None
+        self.events.add_event(gen_id, "budget_pacing_edited", by,
+                              f"{len(clean)} month(s) adjusted")
+        self.db.commit()
+        return {"ok": True, **self.state(gen_id)}
+
     def send_approval(
         self,
         gen_id: int,
@@ -865,12 +937,13 @@ class ApprovalService:
             f"  - Projected leads: {fs['est_leads']} (target {fs['target_leads']})",
             f"  - Projected CPL: ₹{fs['est_cpl']}",
         ]
-        pacing = ((gen.scores or {}).get("campaign_plan") or {}).get("monthly_pacing") or []
-        if pacing:
+        ep = effective_pacing(gen)
+        if ep and ep["months"]:
             lines += ["", "BUDGET PACING (month → monthly ₹ · ≈ per week)"]
-            for p in pacing:
+            for p in ep["months"]:
                 mb = int(round(p.get("budget") or 0))
-                lines.append(f"  - {p.get('name')}: ₹{mb:,}  (≈ ₹{int(round(mb / 4.345)):,}/wk)")
+                tag = " [edited]" if p.get("edited") else ""
+                lines.append(f"  - {p.get('name')}: ₹{mb:,}  (≈ ₹{int(round(mb / 4.345)):,}/wk){tag}")
         lines += [
             "",
             "WHAT'S INCLUDED (final summary)",
@@ -929,6 +1002,7 @@ class ApprovalService:
             "reviewer_name": gen.reviewer_name,
             "review_note": gen.review_note,
             "final_strategy": build_final_strategy(gen),
+            "budget_pacing": effective_pacing(gen),
             "events": [
                 {
                     "event": e.event,

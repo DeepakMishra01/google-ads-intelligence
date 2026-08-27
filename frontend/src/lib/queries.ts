@@ -426,7 +426,18 @@ export function useApprovalActions(genId: number | null | undefined) {
       api.post(`/ai/ad-copy/${genId}/request-changes`, null, { params: p }).then((r) => r.data),
     onSuccess: invalidate,
   });
-  return { submit, decide, override, email, requestChanges };
+  const savePacing = useMutation({
+    mutationFn: (p: { months: Record<string, number>; by?: string }) =>
+      api
+        .post(
+          `/ai/ad-copy/${genId}/budget-pacing`,
+          { months: p.months },
+          { headers: p.by ? { "X-Actor": p.by } : undefined }
+        )
+        .then((r) => r.data),
+    onSuccess: invalidate,
+  });
+  return { submit, decide, override, email, requestChanges, savePacing };
 }
 
 export function useKeywordLookup() {

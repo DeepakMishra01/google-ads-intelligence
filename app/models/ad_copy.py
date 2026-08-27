@@ -62,6 +62,9 @@ class AdCopyGeneration(IntPKMixin, TimestampMixin, Base):
     # the UI exactly as generated — after the user navigates away, switches tools, or
     # reloads. This is what makes generations persistent "records" on the platform.
     result_payload: Mapped[dict | None] = mapped_column(JSONType)
+    # Ad-manager overrides of the month-wise budget pacing, {"<month 1-12>": amount}.
+    # Editing the pacing before approval; the approval email/Excel reflect these.
+    pacing_overrides: Mapped[dict | None] = mapped_column(JSONType)
     scores: Mapped[dict | None] = mapped_column(JSONType)
     reasoning: Mapped[dict | None] = mapped_column(JSONType)
 
