@@ -499,6 +499,9 @@ class AdCopyService:
             return None
         payload = dict(gen.result_payload)
         payload["id"] = gen.id  # the payload was stored before the id was assigned
+        # Restore the ad manager's saved edits so the editors re-open with them.
+        payload["keyword_edits"] = gen.keyword_edits
+        payload["asset_edits"] = gen.asset_edits
         return payload
 
     # ------------------------------------------------------------------ #

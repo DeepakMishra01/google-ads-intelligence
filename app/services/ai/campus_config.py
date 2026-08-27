@@ -108,33 +108,73 @@ CAMPUS_BRIEFS: list[CampusBrief] = [
 _BY_KEY = {b.key: b for b in CAMPUS_BRIEFS}
 
 
+# Tokens that mark an ONLINE / distance-learning query. When present, we must not
+# match the offline campus brief (its programmes, historical ads and keywords are
+# for the on-campus university) — the online offering is a distinct product.
+_ONLINE_TOKENS = (
+    "online", "distance", "e-learning", "elearning", "digital", "virtual",
+    "sol", "open learning", "correspondence",
+)
+
+
+def _is_online(text: str) -> bool:
+    t = f" {(text or '').lower()} "
+    return any(f" {w} " in t or t.strip().endswith(w) for w in _ONLINE_TOKENS)
+
+
 def find_brief(query: str) -> CampusBrief | None:
-    """Best-effort match of a free-text campus query to a known brief."""
+    """Best-effort match of a free-text campus query to a known brief.
+
+    An online/distance query ("Manipal Online") is NOT matched to the offline
+    campus brief — only to a brief that is itself an online entity — so online
+    searches don't inherit on-campus programmes, ad copy and keywords.
+    """
     q = (query or "").strip().lower()
     if not q:
         return None
-    if q in _BY_KEY:
+    online = _is_online(q)
+
+    def _blocks(b: CampusBrief) -> bool:
+        # Skip an offline campus brief when the query is explicitly online.
+        return online and not _is_online(f"{b.brand} {' '.join(b.aliases)}")
+
+    if q in _BY_KEY and not _blocks(_BY_KEY[q]):
         return _BY_KEY[q]
     # exact alias / short match first
     for b in CAMPUS_BRIEFS:
         if q == b.short.lower() or q == b.brand.lower() or q in [a.lower() for a in b.aliases]:
+            if _blocks(b):
+                continue
             return b
     # substring / contains match
     for b in CAMPUS_BRIEFS:
         if any(term in q or q in term for term in b.patterns()):
+            if _blocks(b):
+                continue
             return b
     return None
 
 
 def generic_brief(query: str) -> CampusBrief:
-    """Build a fallback brief for a campus not in the curated list."""
+    """Build a fallback brief for a campus not in the curated list.
+
+    For an online/distance query the brief is tailored to online programmes (and
+    keeps the full name, incl. 'Online', in the brand) so the generated copy and
+    keywords are about the online offering, not an on-campus degree.
+    """
     name = (query or "").strip() or "University"
+    online = _is_online(name)
+    short = name if online else name.split()[0]
+    programs = (
+        ["Online Programmes", "Online Degree", "Distance Learning"]
+        if online else ["Admissions"]
+    )
     return CampusBrief(
         key=name.lower().replace(" ", "_"),
         brand=name,
-        short=name.split()[0],
+        short=short,
         aliases=[name.lower()],
         location="",
-        programs=["Admissions"],
+        programs=programs,
         match_terms=[name.lower()],
     )

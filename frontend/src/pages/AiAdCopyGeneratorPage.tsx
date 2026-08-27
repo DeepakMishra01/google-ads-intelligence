@@ -33,8 +33,10 @@ import { useFilters } from "@/state/FiltersContext";
 import type {
   AdCopyGenerateResponse,
   AdCopySearchTerm,
+  AssetEdits,
   BidAudit,
   BudgetPacing,
+  KeywordEdits,
   CampaignPlan,
   CplPlan,
   ReversePlan,
@@ -119,19 +121,46 @@ const LEVEL_COLOR: Record<string, string> = {
 function KeywordEditor({
   genId,
   keywords,
+  initialEdits,
   onGroupsSaved,
+  onSaved,
 }: {
   genId: number | null;
   keywords: KeywordInsight[];
+  initialEdits?: KeywordEdits | null;
   onGroupsSaved?: (groups: KeywordGroup[]) => void;
+  onSaved?: () => void;
 }) {
-  const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [added, setAdded] = useState<KeywordInsight[]>([]);
+  // Restore previously-saved edits so re-opening / switching tabs keeps them.
+  const [removed, setRemoved] = useState<Set<string>>(
+    () => new Set(initialEdits?.removed ?? [])
+  );
+  const [added, setAdded] = useState<KeywordInsight[]>(
+    () => (initialEdits?.added ?? []) as KeywordInsight[]
+  );
   const [newKw, setNewKw] = useState("");
   const [showAll, setShowAll] = useState(false);
-  const [savedAt, setSavedAt] = useState(false);
+  const [savedAt, setSavedAt] = useState(
+    () =>
+      !!(initialEdits &&
+        ((initialEdits.added?.length ?? 0) > 0 ||
+          (initialEdits.removed?.length ?? 0) > 0 ||
+          Object.keys(initialEdits.overrides ?? {}).length > 0))
+  );
+  const [saveErr, setSaveErr] = useState<string | null>(null);
   // Per-keyword intent/match overrides, keyed by keyword text.
-  const [overrides, setOverrides] = useState<Record<string, { intent?: string; match?: string }>>({});
+  const [overrides, setOverrides] = useState<Record<string, { intent?: string; match?: string }>>(
+    () => {
+      const o: Record<string, { intent?: string; match?: string }> = {};
+      for (const [kw, v] of Object.entries(initialEdits?.overrides ?? {})) {
+        const e: { intent?: string; match?: string } = {};
+        if (v.intent) e.intent = v.intent;
+        if (v.match_type) e.match = v.match_type;
+        if (Object.keys(e).length) o[kw] = e;
+      }
+      return o;
+    }
+  );
   const lookup = useKeywordLookup();
   const save = useSaveKeywordEdits(genId ?? 0);
 
@@ -222,13 +251,21 @@ function KeywordEditor({
       if (v.match) o.match_type = v.match;
       if (Object.keys(o).length) overridesPayload[kw] = o;
     }
+    setSaveErr(null);
     save.mutate(
       { added, removed: [...removed], overrides: overridesPayload },
       {
-        onSuccess: (data: { keyword_groups?: KeywordGroup[] }) => {
+        onSuccess: (data: { ok?: boolean; reason?: string; keyword_groups?: KeywordGroup[] }) => {
+          if (data && data.ok === false) {
+            setSavedAt(false);
+            setSaveErr(data.reason ?? "Couldn't save the keyword changes.");
+            return;
+          }
           setSavedAt(true);
           if (data?.keyword_groups) onGroupsSaved?.(data.keyword_groups);
+          onSaved?.();
         },
+        onError: () => setSaveErr("Couldn't save — please try again."),
       }
     );
   };
@@ -341,8 +378,10 @@ function KeywordEditor({
           >
             {save.isPending ? "Saving…" : "Save keyword changes"}
           </button>
-          <span className="text-xs text-slate-500">
-            {genId == null
+          <span className={`text-xs ${saveErr ? "text-red-600" : "text-slate-500"}`}>
+            {saveErr
+              ? saveErr
+              : genId == null
               ? "Generate & save the plan first to edit keywords."
               : savedAt && !save.isPending
                 ? "Saved ✓ — the plan reset to draft; re-submit for approval. Your changes appear in the approval email, tagged."
@@ -2277,16 +2316,23 @@ function EditableAdCopy({
   headlines,
   descriptions,
   callouts,
+  assetEdits,
+  onSaved,
 }: {
   genId: number | null;
   headlines: GeneratedAsset[];
   descriptions: GeneratedAsset[];
   callouts: string[];
+  assetEdits?: AssetEdits | null;
+  onSaved?: () => void;
 }) {
-  const [hl, setHl] = useState<string[]>(headlines.map((h) => h.text));
-  const [desc, setDesc] = useState<string[]>(descriptions.map((d) => d.text));
-  const [co, setCo] = useState<string[]>(callouts);
-  const [savedAt, setSavedAt] = useState(false);
+  // Restore previously-saved copy edits so re-opening / switching tabs keeps them.
+  const [hl, setHl] = useState<string[]>(assetEdits?.headlines ?? headlines.map((h) => h.text));
+  const [desc, setDesc] = useState<string[]>(
+    assetEdits?.descriptions ?? descriptions.map((d) => d.text)
+  );
+  const [co, setCo] = useState<string[]>(assetEdits?.callouts ?? callouts);
+  const [savedAt, setSavedAt] = useState(!!assetEdits);
   const save = useSaveAssetEdits(genId ?? 0);
 
   const norm = (s: string) => s.trim().toLowerCase();
@@ -2311,7 +2357,12 @@ function EditableAdCopy({
         descriptions: desc.map((s) => s.trim()).filter(Boolean),
         callouts: co.map((s) => s.trim()).filter(Boolean),
       },
-      { onSuccess: (r) => setSavedAt(!!r?.ok) },
+      {
+        onSuccess: (r) => {
+          setSavedAt(!!r?.ok);
+          if (r?.ok) onSaved?.();
+        },
+      },
     );
   };
 
@@ -2520,6 +2571,18 @@ export default function AiAdCopyGeneratorPage() {
     if (last && !result) loadPlan(Number(last));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Silently re-pull the saved plan after an edit so the editors (on their next
+  // mount) restore the saved keyword/copy edits — the plan no longer "reverts".
+  const refreshPlan = async () => {
+    if (!result?.id) return;
+    try {
+      const data = await fetchAdCopyPlan(result.id);
+      setResult(data);
+    } catch {
+      /* keep the current view if the refresh fails */
+    }
+  };
 
   const selectCampus = (name: string) => {
     setCampus(name);
@@ -2891,6 +2954,8 @@ export default function AiAdCopyGeneratorPage() {
               headlines={result.assets.headlines}
               descriptions={result.assets.descriptions}
               callouts={result.assets.callouts}
+              assetEdits={result.asset_edits}
+              onSaved={refreshPlan}
             />
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -2994,7 +3059,9 @@ export default function AiAdCopyGeneratorPage() {
                 key={result.id ?? "new"}
                 genId={result.id ?? null}
                 keywords={result.keywords}
+                initialEdits={result.keyword_edits}
                 onGroupsSaved={setGroupsOverride}
+                onSaved={refreshPlan}
               />
             </Section>
 

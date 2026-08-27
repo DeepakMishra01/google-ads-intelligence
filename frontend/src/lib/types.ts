@@ -577,6 +577,18 @@ export interface AdCopyGenerateResponse {
   landing_audit: LandingAudit | null;
   last_year_summary: LastYearSummary | null;
   generated_at: string;
+  keyword_edits?: KeywordEdits | null;
+  asset_edits?: AssetEdits | null;
+}
+export interface KeywordEdits {
+  added?: KeywordInsight[];
+  removed?: string[];
+  overrides?: Record<string, { intent?: string; match_type?: string }>;
+}
+export interface AssetEdits {
+  headlines?: string[];
+  descriptions?: string[];
+  callouts?: string[];
 }
 
 export interface SetupStep {

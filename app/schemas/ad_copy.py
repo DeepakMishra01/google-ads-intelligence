@@ -562,6 +562,10 @@ class AdCopyGenerateResponse(BaseModel):
     landing_audit: LandingAudit | None = None
     last_year_summary: LastYearSummary | None = None
     generated_at: datetime
+    # Saved ad-manager edits, so re-opening a plan restores them in the editors
+    # (populated when a stored plan is re-opened; null for a fresh generation).
+    keyword_edits: dict | None = None
+    asset_edits: dict | None = None
 
 
 class AdCopyHistoryRow(BaseModel):

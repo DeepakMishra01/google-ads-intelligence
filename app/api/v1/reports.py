@@ -7,7 +7,12 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import CurrentUser, get_current_user, get_reporting_service
+from app.api.deps import (
+    CurrentUser,
+    _assert_account_allowed,
+    get_current_user,
+    get_reporting_service,
+)
 from app.schemas.ops import ReportResponse
 from app.services.ops.reporting_service import ReportingService
 
@@ -28,11 +33,16 @@ def report(
     user: CurrentUser = Depends(get_current_user),
     svc: ReportingService = Depends(get_reporting_service),
 ) -> Response:
-    # File downloads (CSV/Excel) are admin-only; managers can still view (JSON).
-    if fmt in ("csv", "excel") and not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Downloads are admin-only."
-        )
+    # Managers may download a report for an account they own; only admins can pull
+    # the all-accounts (account_id=None) file. This keeps cross-account data from
+    # leaking while letting managers export their own account's report.
+    if not user.is_admin and user.allowed_account_ids is not None:
+        if account_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select one of your assigned accounts to download its report.",
+            )
+        _assert_account_allowed(account_id, user)
     data = svc.build_report(period=period, account_id=account_id)
     stem = f"{period}_report_{data['end_date']}"
 
