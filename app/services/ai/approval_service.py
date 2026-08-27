@@ -372,6 +372,48 @@ def _approval_html(
             "are tagged above. </p>"
         )
 
+    # ---- Budget pacing: how the budget is spent month-on-month (and ≈ per week) ----
+    plan = scores.get("campaign_plan") or {}
+    pacing = plan.get("monthly_pacing") or []
+    pacing_block = ""
+    if plan.get("available") and pacing:
+        def _inr(v: Any) -> str:
+            return f"{int(round(v or 0)):,}"
+
+        rows = "".join(
+            f"<tr>"
+            f"<td style='padding:6px 10px;border-top:1px solid #eef2f7'>{_esc(p.get('name'))}"
+            + ((" <span style='color:#d97706;font-weight:bold'>peak</span>")
+               if (p.get('level') or '').lower() in ('peak', 'high') else "")
+            + f"</td>"
+            f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"
+            f"font-variant-numeric:tabular-nums'>₹{_inr(p.get('budget'))}</td>"
+            f"<td style='padding:6px 10px;border-top:1px solid #eef2f7;text-align:right;"
+            f"font-variant-numeric:tabular-nums'>₹{_inr((p.get('budget') or 0) / 4.345)}</td></tr>"
+            for p in pacing
+        )
+        total_m = sum(p.get("budget") or 0 for p in pacing)
+        head = (
+            "<tr style='background:#f8fafc'>"
+            "<th style='padding:7px 10px;text-align:left;font-size:12px;color:#64748b'>Month</th>"
+            "<th style='padding:7px 10px;text-align:right;font-size:12px;color:#64748b'>Monthly budget</th>"
+            "<th style='padding:7px 10px;text-align:right;font-size:12px;color:#64748b'>≈ Per week</th></tr>"
+        )
+        total_row = (
+            f"<tr><td style='padding:6px 10px;border-top:2px solid #e2e8f0;font-weight:bold'>Total</td>"
+            f"<td style='padding:6px 10px;border-top:2px solid #e2e8f0;text-align:right;"
+            f"font-weight:bold;font-variant-numeric:tabular-nums'>₹{_inr(total_m)}</td>"
+            f"<td style='padding:6px 10px;border-top:2px solid #e2e8f0;text-align:right;"
+            f"font-variant-numeric:tabular-nums'>₹{_inr(total_m / 52)}</td></tr>"
+        )
+        pacing_block = (
+            _h3("Budget pacing — month-on-month")
+            + "<p style='font-size:13px;color:#64748b;margin:0 0 6px'>How the ad manager plans to "
+              "spend the budget across the year — weighted to real admission-season demand. "
+              "The per-week figure is the average within each month.</p>"
+            + _card_table(head + rows + total_row)
+        )
+
     banner_color = "#16a34a" if approved else "#4f46e5"
     banner_text = ("✓ APPROVED — cleared to launch" if approved
                    else "Review needed — approve or request changes below")
@@ -409,6 +451,8 @@ def _approval_html(
 
     {_h3("Final strategy")}
     {_card_table(strat_rows)}
+
+    {pacing_block}
 
     {_h3("Keywords used (with monthly search volume)")}
     {_card_table(
@@ -814,6 +858,14 @@ class ApprovalService:
         lines += [
             f"  - Projected leads: {fs['est_leads']} (target {fs['target_leads']})",
             f"  - Projected CPL: ₹{fs['est_cpl']}",
+        ]
+        pacing = ((gen.scores or {}).get("campaign_plan") or {}).get("monthly_pacing") or []
+        if pacing:
+            lines += ["", "BUDGET PACING (month → monthly ₹ · ≈ per week)"]
+            for p in pacing:
+                mb = int(round(p.get("budget") or 0))
+                lines.append(f"  - {p.get('name')}: ₹{mb:,}  (≈ ₹{int(round(mb / 4.345)):,}/wk)")
+        lines += [
             "",
             "WHAT'S INCLUDED (final summary)",
             f"  - Headlines: {len(ea.get('headlines', []))}{_n_edited('headlines')}",
