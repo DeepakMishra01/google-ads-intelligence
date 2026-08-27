@@ -25,33 +25,32 @@ from app.services.ai.seasonality_service import MONTH_NAMES
 # budget, quality all cap it well below 100%).
 _MAX_IMPRESSION_SHARE = 0.75
 
-# The team's admission-season budget rule (month -> share). These months are
-# pinned; the rest of the budget is spread across the other months.
-_ADMISSION_SEASON = {5: 0.20, 6: 0.30, 7: 0.20}
-_SEASON_LEVEL = {5: "high", 6: "peak", 7: "high"}
+def _pacing_weights(seasonality: dict[str, Any]) -> tuple[dict[int, float], str]:
+    """Month → budget share, driven by REAL search seasonality (no fixed rule).
 
-
-def _season_weights(data_weights: dict[int, float]) -> dict[int, float]:
-    """Pin the admission-season months; spread the remainder by real demand.
-
-    The remaining budget (1 - sum of pinned months) is distributed across the
-    other months in proportion to the Keyword Planner demand curve when present,
-    else evenly. Always sums to 1.0.
+    Uses the Keyword Planner demand curve built from THIS campus's own keywords
+    (search volume × relevancy × the last 12 months of trend), so spend follows how
+    people actually search for this college. Falls back to an even split only when
+    there is no seasonality data at all. Always sums to 1.0.
     """
-    pinned = _ADMISSION_SEASON
-    remaining = max(0.0, 1.0 - sum(pinned.values()))
-    others = [m for m in range(1, 13) if m not in pinned]
-    other_data = {m: float(data_weights.get(m, 0.0) or 0.0) for m in others}
-    denom = sum(other_data.values())
-    weights: dict[int, float] = {}
-    for m in range(1, 13):
-        if m in pinned:
-            weights[m] = pinned[m]
-        elif denom > 0:
-            weights[m] = remaining * other_data[m] / denom
-        else:
-            weights[m] = remaining / len(others)
-    return weights
+    raw = seasonality.get("monthly_weights") or {}
+    total = sum(float(raw.get(m, 0.0) or 0.0) for m in range(1, 13))
+    if seasonality.get("available") and total > 0:
+        return ({m: float(raw.get(m, 0.0) or 0.0) / total for m in range(1, 13)},
+                "search_seasonality")
+    return {m: 1 / 12 for m in range(1, 13)}, "even"
+
+
+def _level_from_weight(weight: float) -> str:
+    """Demand level from a month's budget share (1/12 = average = index 1.0)."""
+    idx = weight * 12
+    if idx >= 1.3:
+        return "peak"
+    if idx >= 1.05:
+        return "high"
+    if idx >= 0.8:
+        return "moderate"
+    return "low"
 
 
 def build_realism(
@@ -288,21 +287,21 @@ def build_plan(
         "cpc_basis": cpc_basis,
     }
 
-    # ---- month-wise pacing ----
-    # The team's admission-season rule takes priority: concentrate spend in the
-    # intake peak (May 20% · June 30% · July 20% = 70%); spread the remaining 30%
-    # across the other months in proportion to real search demand (even if no data).
+    # ---- month-wise pacing (follows REAL search seasonality, not a fixed rule) ----
+    # Spend tracks the campus's own Keyword Planner demand curve (search volume ×
+    # relevancy × 12-month trend). Falls back to an even split only with no data.
     levels = {mo["month"]: mo["level"] for mo in seasonality.get("months", [])}
-    weights = _season_weights(seasonality.get("monthly_weights") or {})
+    weights, pacing_source = _pacing_weights(seasonality)
     raw = {m: round(budget * weights[m]) for m in range(1, 13)}
     drift = round(budget) - sum(raw.values())
-    raw[6] += drift  # correct rounding on the peak month so the year sums to budget
+    peak_m = max(range(1, 13), key=lambda m: weights[m])
+    raw[peak_m] += drift  # absorb rounding on the busiest month → year sums to budget
     pacing = [
         {
             "month": m,
             "name": MONTH_NAMES[m],
             "budget": raw[m],
-            "level": levels.get(m, _SEASON_LEVEL.get(m, "moderate")),
+            "level": levels.get(m, _level_from_weight(weights[m])),
         }
         for m in range(1, 13)
     ]
@@ -442,6 +441,7 @@ def build_plan(
         "allocation": rows,
         "forecast": forecast,
         "monthly_pacing": pacing,
+        "pacing_source": pacing_source,
         "phasing": phasing,
         "bidding": bidding,
         "device": device,

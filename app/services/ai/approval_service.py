@@ -406,11 +406,17 @@ def _approval_html(
             f"<td style='padding:6px 10px;border-top:2px solid #e2e8f0;text-align:right;"
             f"font-variant-numeric:tabular-nums'>₹{_inr(total_m / 52)}</td></tr>"
         )
+        source_note = (
+            "paced to this campus's real search seasonality (Keyword Planner demand — "
+            "search volume, relevancy & 12-month trend)"
+            if plan.get("pacing_source") == "search_seasonality"
+            else "paced evenly across the year (no search-seasonality data available for this campus)"
+        )
         pacing_block = (
             _h3("Budget pacing — month-on-month")
-            + "<p style='font-size:13px;color:#64748b;margin:0 0 6px'>How the ad manager plans to "
-              "spend the budget across the year — weighted to real admission-season demand. "
-              "The per-week figure is the average within each month.</p>"
+            + f"<p style='font-size:13px;color:#64748b;margin:0 0 6px'>How the budget is spread "
+              f"across the year — {source_note}. The per-week figure is the average within "
+              f"each month.</p>"
             + _card_table(head + rows + total_row)
         )
 
