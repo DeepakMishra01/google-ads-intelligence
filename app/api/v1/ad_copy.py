@@ -206,6 +206,15 @@ def save_asset_edits(
     )
 
 
+@router.post("/{gen_id}/regenerate-copy", response_model=None, summary="Regenerate ad copy from current keywords")
+def regenerate_copy(
+    gen_id: int,
+    x_actor: str | None = Header(None),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.regenerate_copy(gen_id, actor=x_actor)
+
+
 class BudgetPacingRequest(BaseModel):
     # {"<month 1-12>": amount}. Only months present in the plan's pacing are applied.
     months: dict[str, float] = {}

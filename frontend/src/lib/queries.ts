@@ -468,6 +468,19 @@ export interface AssetEditsResult {
   invalid?: { kind: string; text: string; length: number; limit: number }[];
 }
 
+// Rebuild the ad copy from the plan's current (edited) keywords. Discards manual
+// copy edits, so the fresh copy reflects the keywords.
+export function useRegenerateAdCopy(genId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api
+        .post(`/ai/ad-copy/${genId}/regenerate-copy`, null, { timeout: 60_000 })
+        .then((r) => r.data as { ok: boolean; reason?: string; backend?: string }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+  });
+}
+
 // Save the ad manager's edits to the generated ad copy. Each list is the FULL
 // desired set for that asset kind; omit a field to leave it untouched.
 export function useSaveAssetEdits(genId: number) {

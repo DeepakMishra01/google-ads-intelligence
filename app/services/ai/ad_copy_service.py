@@ -22,7 +22,7 @@ from app.services.ai import intent_classifier
 from app.services.ai.bid_auction_service import build_bid_audit
 from app.services.ai.budget_planner import build_plan
 from app.services.ai.campaign_scorecard import build_scorecard
-from app.services.ai.campus_config import find_brief, generic_brief
+from app.services.ai.campus_config import _is_online, find_brief, generic_brief
 from app.services.ai.campus_service import CampusService, campus_campaign_filter
 from app.services.ai.cpl_optimizer import build_cpl_plan
 from app.services.ai.historical_intelligence_service import HistoricalIntelligenceService
@@ -102,6 +102,29 @@ def _intent_tier(intent: str | None) -> int:
     if i in _MOF_INTENTS:
         return 1
     return 2  # top-of-funnel: location / generic / research
+
+
+# Programme acronyms we can reliably read off a landing page (word-boundary), to
+# seed keywords + copy with the courses the college actually offers.
+_LANDING_PROGRAMS = [
+    ("MBA", r"\bmba\b"), ("PGDM", r"\bpgdm\b"), ("PGPM", r"\bpgpm\b"),
+    ("BBA", r"\bbba\b"), ("BCA", r"\bbca\b"), ("MCA", r"\bmca\b"),
+    ("B.Tech", r"\bb\.?tech\b"), ("M.Tech", r"\bm\.?tech\b"),
+    ("B.Com", r"\bb\.?com\b"), ("M.Com", r"\bm\.?com\b"),
+    ("BSc", r"\bb\.?sc\b"), ("MSc", r"\bm\.?sc\b"),
+    ("BA", r"\bb\.?a\b"), ("MA", r"\bm\.?a\b"),
+    ("LLB", r"\bllb\b"), ("LLM", r"\bllm\b"), ("PhD", r"\bph\.?d\b"),
+    ("Diploma", r"\bdiploma\b"),
+]
+
+
+def _programs_from_landing(landing: dict[str, Any], online: bool) -> list[str]:
+    """Programme names actually present on the landing page (drives relevance)."""
+    blob = " ".join(landing.get("courses", []) or []).lower()
+    if not blob:
+        return []
+    found = [label for label, rx in _LANDING_PROGRAMS if re.search(rx, blob)]
+    return [f"Online {p}" for p in found] if online else found
 
 
 class AdCopyService:
@@ -231,6 +254,18 @@ class AdCopyService:
 
         # Step 3: landing page.
         landing = self.landing.analyze(selected["url"] if selected else None)
+
+        # Enrich the brief's programmes with what the landing page ACTUALLY offers,
+        # so keywords AND ad copy reflect the real courses (especially for online /
+        # uncurated colleges) instead of a generic "Admissions" seed.
+        lp_programs = _programs_from_landing(landing, _is_online(campus))
+        if lp_programs:
+            from dataclasses import replace
+
+            base_progs = [p for p in brief.programs
+                          if p.lower() not in ("admissions", "admission")]
+            merged = list(dict.fromkeys([*lp_programs, *base_progs])) or brief.programs
+            brief = replace(brief, programs=merged[:8])
 
         # Step 4: historical intelligence.
         historical = self.history.analyze(brief)
@@ -565,6 +600,16 @@ class AdCopyService:
 
         gen.keyword_edits = {"added": norm_added, "removed": removed_norm,
                              "overrides": clean_overrides, "groups": groups}
+        # Refresh the ad copy so it reflects the edited keywords — UNLESS the ad
+        # manager has manually edited the copy (their copy then stands; the
+        # "Regenerate ad copy" button overrides that on demand).
+        regenerated = False
+        if not gen.asset_edits:
+            try:
+                self._regenerate_copy(gen, brief=brief)
+                regenerated = True
+            except Exception as exc:  # noqa: BLE001
+                log.info("adcopy.regen_on_edit_failed", error=str(exc))
         # A changed plan can't keep a stale approval.
         if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
             gen.approval_status = "draft"
@@ -572,12 +617,13 @@ class AdCopyService:
         ApprovalService(self.db).events.add_event(
             gen_id, "keywords_edited", actor,
             f"+{len(norm_added)} added, -{len(removed_norm)} removed, "
-            f"{len(clean_overrides)} edited",
+            f"{len(clean_overrides)} edited"
+            + (" · ad copy refreshed" if regenerated else ""),
         )
         self.db.commit()
         return {"ok": True, "gen_id": gen_id, "added": len(norm_added),
                 "removed": len(removed_norm), "edited": len(clean_overrides),
-                "keyword_groups": groups}
+                "keyword_groups": groups, "copy_regenerated": regenerated}
 
     def save_asset_edits(
         self, gen_id: int, *,
@@ -639,6 +685,73 @@ class AdCopyService:
         self.db.commit()
         return {"ok": True, "gen_id": gen_id, "edited_count": ea["edited_count"],
                 "assets": {k: ea[k] for k in ("headlines", "descriptions", "callouts")}}
+
+    def _regenerate_copy(self, gen, *, brief=None) -> str:  # type: ignore[no-untyped-def]
+        """Regenerate headlines/descriptions/callouts from the plan's CURRENT keywords.
+
+        Rebuilds the generation context from the stored landing/historical data plus
+        the effective (edited) keyword set, so the ad copy reflects the keywords.
+        Only the copy is refreshed; structural assets (paths / sitelinks / snippets /
+        negatives) are kept. Returns the backend used ("llm" | "template").
+        """
+        from app.services.ai.approval_service import effective_keywords
+
+        brief = brief or find_brief(gen.campus) or generic_brief(gen.campus)
+        active, _removed = effective_keywords(gen)
+        active = sorted(active, key=lambda k: k.get("score") or 0, reverse=True)
+        payload = gen.result_payload or {}
+        landing = payload.get("landing_page") or {}
+        hist = gen.historical_features_used or {}
+        historical = {
+            "top_headlines": hist.get("top_headlines", []) or [],
+            "top_descriptions": [],
+            "best_keyword_themes": hist.get("keyword_themes", []) or [],
+        }
+        context = self._build_context(brief, landing, historical, active, None)
+        assets, backend = self._generate_assets(context)
+        merged = dict(gen.generated_assets or {})
+        merged["headlines"] = assets["headlines"]
+        merged["descriptions"] = assets["descriptions"]
+        if assets.get("callouts"):
+            merged["callouts"] = assets["callouts"]
+        gen.generated_assets = merged
+        if gen.result_payload:
+            rp = dict(gen.result_payload)
+            rp["assets"] = merged
+            gen.result_payload = rp
+        return backend
+
+    def regenerate_copy(self, gen_id: int, *, actor: str | None) -> dict[str, Any]:
+        """Explicitly rebuild the ad copy from the current keywords (button action).
+
+        Discards any manual copy edits (the ad manager asked for fresh copy) and
+        resets approval to draft.
+        """
+        from app.services.ai.approval_service import ApprovalService
+
+        gen = self.repo.get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        gen.asset_edits = None  # explicit regenerate → discard manual copy edits
+        if gen.result_payload:
+            rp = dict(gen.result_payload)
+            rp["asset_edits"] = None
+            gen.result_payload = rp
+        try:
+            backend = self._regenerate_copy(gen)
+        except Exception as exc:  # noqa: BLE001
+            self.db.rollback()
+            return {"ok": False, "reason": f"could not regenerate: {exc}"}
+        if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
+            gen.approval_status = "draft"
+        self.db.flush()
+        ApprovalService(self.db).events.add_event(
+            gen_id, "adcopy_regenerated", actor, "from current keywords"
+        )
+        self.db.commit()
+        return {"ok": True, "backend": backend,
+                "assets": {k: gen.generated_assets.get(k)
+                           for k in ("headlines", "descriptions", "callouts")}}
 
     def _classify_added(self, brief, added: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Turn user-added keyword dicts into full scored insights (intent/match/bid)."""

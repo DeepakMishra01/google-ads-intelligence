@@ -23,6 +23,7 @@ import {
   useFinalUrl,
   useGenerateAdCopy,
   useKeywordLookup,
+  useRegenerateAdCopy,
   useSaveAssetEdits,
   useSaveKeywordEdits,
   useSaveScorecard,
@@ -2308,6 +2309,37 @@ function EditableAssetColumn({
   );
 }
 
+// Rebuild the ad copy from the plan's current (edited) keywords. Used when the
+// manager has changed keywords and wants the headlines/descriptions to match.
+function RegenerateCopyBar({ genId, onDone }: { genId: number | null; onDone: () => void }) {
+  const regen = useRegenerateAdCopy(genId ?? 0);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <Card className="mb-3 flex flex-wrap items-center justify-between gap-3 border border-amber-100 bg-amber-50/40">
+      <div className="text-sm text-slate-600">
+        <b>Copy should follow your keywords.</b> Edited the keywords? Regenerate the
+        headlines &amp; descriptions from your current keyword set.
+      </div>
+      <div className="flex items-center gap-2">
+        {err && <span className="text-xs text-red-600">{err}</span>}
+        <button
+          className="btn btn-primary h-9 px-4"
+          disabled={!genId || regen.isPending}
+          onClick={() => {
+            setErr(null);
+            regen.mutate(undefined, {
+              onSuccess: (r) => (r?.ok ? onDone() : setErr(r?.reason ?? "Couldn't regenerate.")),
+              onError: () => setErr("Couldn't regenerate — please try again."),
+            });
+          }}
+        >
+          {regen.isPending ? "Regenerating…" : "Regenerate ad copy from keywords"}
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 // Editable ad copy: the ad manager can rewrite / add / remove any AI-generated
 // headline, description or callout. Saved edits reset the plan to draft and are
 // tagged "edited by ad manager" in the approval email + Excel.
@@ -2520,6 +2552,8 @@ export default function AiAdCopyGeneratorPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
   const [tab, setTab] = useState("landing");
+  // Bumped when the ad copy is regenerated, to remount the editor with fresh copy.
+  const [copyVersion, setCopyVersion] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 250);
@@ -2948,8 +2982,15 @@ export default function AiAdCopyGeneratorPage() {
 
             {tab === "adcopy" && (
             <>
+            <RegenerateCopyBar
+              genId={result.id ?? null}
+              onDone={async () => {
+                await refreshPlan();
+                setCopyVersion((v) => v + 1);
+              }}
+            />
             <EditableAdCopy
-              key={result.id ?? "new"}
+              key={`${result.id ?? "new"}-${copyVersion}`}
               genId={result.id ?? null}
               headlines={result.assets.headlines}
               descriptions={result.assets.descriptions}
