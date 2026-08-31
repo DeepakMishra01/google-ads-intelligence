@@ -784,11 +784,22 @@ class ApprovalService:
     def _notify_submitter(
         self, gen: AdCopyGeneration, *, approved: bool, note: str | None
     ) -> None:
-        """Email the submitter the outcome so they act (build) or revise."""
-        to = self._submitter_email(gen)
-        if not to:
-            return
+        """Email the submitter the outcome (build or revise), CC'ing the admins."""
         from app.services.ai.email_service import send_email
+
+        submitter = self._submitter_email(gen)
+        # Admins are copied on every decision so they have a record of the outcome.
+        admin_list = [a.strip().lower()
+                      for a in (self._approver_recipients() or "").split(",") if a.strip()]
+        if submitter:
+            to = submitter
+            cc = ", ".join(a for a in dict.fromkeys(admin_list) if a != submitter.lower())
+        else:
+            # No submitter on file — send straight to the admins so it isn't lost.
+            if not admin_list:
+                return
+            to = ", ".join(dict.fromkeys(admin_list))
+            cc = ""
 
         campus = gen.campus
         if approved:
@@ -811,7 +822,7 @@ class ApprovalService:
             )
             body = (f"Your campaign plan for {campus} was not approved.\n\n"
                     f"Reviewer's comments:\n{note or '—'}\n\nPlease revise and resubmit.")
-        send_email(to=to, subject=subject, body=body, html=html)
+        send_email(to=to, subject=subject, body=body, html=html, cc=cc or None)
 
     def decide(
         self, gen_id: int, *, approved: bool, reviewer_name: str, note: str | None

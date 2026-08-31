@@ -39,6 +39,7 @@ def _sender_parts() -> tuple[str, str]:
 def _send_via_brevo(
     *, to: str, subject: str, body: str, html: str | None,
     attachment: bytes | None, attachment_name: str | None,
+    cc: str | None = None,
 ) -> dict[str, Any]:
     """Send over the Brevo HTTPS API (port 443). Sender verified by email link —
     no DNS needed — so it works when you can't touch domain records."""
@@ -55,6 +56,8 @@ def _send_via_brevo(
         "subject": subject,
         "textContent": body,
     }
+    if cc and _recipients(cc):
+        payload["cc"] = [{"email": a} for a in _recipients(cc)]
     if html:
         payload["htmlContent"] = html
     if attachment is not None and attachment_name:
@@ -82,6 +85,7 @@ def _send_via_brevo(
 def _send_via_resend(
     *, to: str, subject: str, body: str, html: str | None,
     attachment: bytes | None, attachment_name: str | None,
+    cc: str | None = None,
 ) -> dict[str, Any]:
     """Send over the Resend HTTPS API (port 443 — not blocked by Render)."""
     import httpx
@@ -97,6 +101,8 @@ def _send_via_resend(
         "subject": subject,
         "text": body,
     }
+    if cc and _recipients(cc):
+        payload["cc"] = _recipients(cc)
     if html:
         payload["html"] = html
     if attachment is not None and attachment_name:
@@ -158,24 +164,25 @@ def send_email(
     subject: str,
     body: str,
     html: str | None = None,
+    cc: str | None = None,
     attachment: bytes | None = None,
     attachment_name: str | None = None,
     attachment_mime: tuple[str, str] = ("application", "octet-stream"),
 ) -> dict[str, Any]:
     """Send one email; returns {sent, ...}. Never raises to the caller.
 
-    Uses the Resend HTTP API when configured (works behind SMTP-blocking hosts
-    like Render); otherwise falls back to SMTP.
+    ``cc`` is a comma-joined list of copy recipients. Uses Brevo/Resend HTTP APIs
+    when configured (work behind SMTP-blocking hosts like Render); else SMTP.
     """
     s = get_settings()
     if s.brevo_api_key:
         return _send_via_brevo(
-            to=to, subject=subject, body=body, html=html,
+            to=to, subject=subject, body=body, html=html, cc=cc,
             attachment=attachment, attachment_name=attachment_name,
         )
     if s.resend_api_key:
         return _send_via_resend(
-            to=to, subject=subject, body=body, html=html,
+            to=to, subject=subject, body=body, html=html, cc=cc,
             attachment=attachment, attachment_name=attachment_name,
         )
     if not smtp_configured():
@@ -186,6 +193,8 @@ def send_email(
     msg = EmailMessage()
     msg["From"] = s.smtp_from or s.smtp_user
     msg["To"] = to
+    if cc:
+        msg["Cc"] = cc
     msg["Subject"] = subject
     msg.set_content(body)
     if html:
