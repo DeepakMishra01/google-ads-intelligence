@@ -13,7 +13,29 @@ listed still works: it falls back to a generic brief built from the typed name.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+
+
+def _normalise(text: str) -> str:
+    """Lowercase and collapse non-alphanumerics to single spaces (with edges)."""
+    return " " + re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip() + " "
+
+
+def word_matches(text: str, patterns: Iterable[str]) -> bool:
+    """True if any pattern appears as a WHOLE WORD/phrase in ``text``.
+
+    Prevents a short brand token like 'ims' from matching inside 'nmims' — the
+    naive substring check pulled unrelated colleges' keywords and campaigns into a
+    new campus's plan.
+    """
+    hay = _normalise(text)
+    for p in patterns:
+        needle = _normalise(p).strip()
+        if needle and f" {needle} " in hay:
+            return True
+    return False
 
 
 @dataclass(frozen=True)

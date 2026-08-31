@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, func, not_, or_, select
+from sqlalchemy import and_, false, func, not_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.account import Account
@@ -27,9 +27,27 @@ _MICROS = 1_000_000
 
 
 def campus_campaign_filter(brief: CampusBrief):  # type: ignore[no-untyped-def]
-    """SQLAlchemy predicate matching campaigns belonging to a campus."""
-    includes = [Campaign.name.ilike(f"%{p}%") for p in brief.patterns()]
-    pred = or_(*includes)
+    """SQLAlchemy predicate matching campaigns belonging to a campus.
+
+    Patterns match as WHOLE WORDS (space-bounded), not substrings — so a short
+    token like 'ims' doesn't pull in 'NMIMS …' campaigns. Excludes stay broad
+    (substring) so a false-match term is filtered aggressively.
+    """
+    name = func.lower(Campaign.name)
+
+    def _word(p: str):  # type: ignore[no-untyped-def]
+        pl = (p or "").lower().replace("%", "").replace("_", "").strip()
+        if not pl:
+            return None
+        return or_(
+            name == pl,
+            name.like(f"{pl} %"),
+            name.like(f"% {pl}"),
+            name.like(f"% {pl} %"),
+        )
+
+    includes = [c for c in (_word(p) for p in brief.patterns()) if c is not None]
+    pred = or_(*includes) if includes else false()
     if brief.exclude_terms:
         excludes = [not_(Campaign.name.ilike(f"%{x}%")) for x in brief.exclude_terms]
         pred = and_(pred, *excludes)

@@ -22,7 +22,12 @@ from app.services.ai import intent_classifier
 from app.services.ai.bid_auction_service import build_bid_audit
 from app.services.ai.budget_planner import build_plan
 from app.services.ai.campaign_scorecard import build_scorecard
-from app.services.ai.campus_config import _is_online, find_brief, generic_brief
+from app.services.ai.campus_config import (
+    _is_online,
+    find_brief,
+    generic_brief,
+    word_matches,
+)
 from app.services.ai.campus_service import CampusService, campus_campaign_filter
 from app.services.ai.cpl_optimizer import build_cpl_plan
 from app.services.ai.historical_intelligence_service import HistoricalIntelligenceService
@@ -854,7 +859,7 @@ class AdCopyService:
         patterns = brief.patterns()
 
         def is_relevant(kw: str) -> bool:
-            return any(p in kw.lower() for p in patterns)
+            return word_matches(kw, patterns)
 
         # Drop broad-match spillover: keep only keywords that mention this campus.
         historical = [kw for kw in raw_kw if is_relevant(kw["keyword"])]
@@ -1109,8 +1114,7 @@ class AdCopyService:
         patterns = brief.patterns()
 
         def is_brand(kw: str) -> bool:
-            low = kw.lower()
-            return any(p in low for p in patterns)
+            return word_matches(kw, patterns)
 
         # Scored, intent-tagged keywords for this campus (brand-relevant only),
         # ranked by funnel tier then score so BOF high-intent keywords lead.
