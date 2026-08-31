@@ -128,6 +128,22 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
     clearCustom();
   };
 
+  // Today / Yesterday are single-day windows (local date), set as a custom range.
+  const toISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  const todayISO = toISO(new Date());
+  const yestISO = toISO(new Date(Date.now() - 86_400_000));
+  const rangeValue =
+    isCustom && start === end && start === todayISO
+      ? "today"
+      : isCustom && start === end && start === yestISO
+        ? "yesterday"
+        : isCustom
+          ? "custom"
+          : String(days);
+
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-slate-200/70 bg-white/75 px-4 backdrop-blur-md">
       <button className="btn-ghost h-9 px-2 lg:hidden" onClick={onMenu} aria-label="Menu">
@@ -150,14 +166,19 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       {/* Preset range (used unless a custom range is set) */}
       <select
         className="input"
-        value={isCustom ? "custom" : days}
+        value={rangeValue}
         onChange={(e) => {
+          const v = e.target.value;
           resetDates();
-          setDays(Number(e.target.value));
+          if (v === "today") setCustomRange(todayISO, todayISO);
+          else if (v === "yesterday") setCustomRange(yestISO, yestISO);
+          else setDays(Number(v));
         }}
         title="Date range"
       >
-        {isCustom && <option value="custom">Custom range</option>}
+        {rangeValue === "custom" && <option value="custom">Custom range</option>}
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
         {DATE_PRESETS.map((p) => (
           <option key={p.days} value={p.days}>
             Last {p.label}
