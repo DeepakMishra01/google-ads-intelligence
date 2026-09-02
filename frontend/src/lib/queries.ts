@@ -393,7 +393,11 @@ export function useApproval(genId: number | null | undefined) {
 
 export function useApprovalActions(genId: number | null | undefined) {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["approval", genId] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["approval", genId] });
+    // Approval-state changes shift the plan-history counts/filters.
+    qc.invalidateQueries({ queryKey: ["adcopy-history"] });
+  };
   const submit = useMutation({
     mutationFn: (p?: { by?: string }) =>
       api
@@ -458,7 +462,10 @@ export function useSaveKeywordEdits(genId: number) {
       removed: string[];
       overrides?: Record<string, { intent?: string; match_type?: string }>;
     }) => api.post(`/ai/ad-copy/${genId}/keywords`, p).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["approval", genId] });
+      qc.invalidateQueries({ queryKey: ["adcopy-history"] });
+    },
   });
 }
 
@@ -486,7 +493,10 @@ export function useImportKeywords(genId: number) {
               overrides?: Record<string, { intent?: string; match_type?: string }>;
             }
         ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["approval", genId] });
+      qc.invalidateQueries({ queryKey: ["adcopy-history"] });
+    },
   });
 }
 
@@ -506,7 +516,10 @@ export function useRegenerateAdCopy(genId: number) {
       api
         .post(`/ai/ad-copy/${genId}/regenerate-copy`, null, { timeout: 60_000 })
         .then((r) => r.data as { ok: boolean; reason?: string; backend?: string }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["approval", genId] });
+      qc.invalidateQueries({ queryKey: ["adcopy-history"] });
+    },
   });
 }
 
@@ -520,7 +533,10 @@ export function useSaveAssetEdits(genId: number) {
       descriptions?: string[];
       callouts?: string[];
     }) => api.post(`/ai/ad-copy/${genId}/ad-copy`, p).then((r) => r.data as AssetEditsResult),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["approval", genId] });
+      qc.invalidateQueries({ queryKey: ["adcopy-history"] });
+    },
   });
 }
 
@@ -724,7 +740,7 @@ export function useGenerateAdCopy() {
       api
         .post<AdCopyGenerateResponse>("/ai/ad-copy/generate", body, { timeout: 180_000 })
         .then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ad-copy-history"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["adcopy-history"] }),
   });
 }
 
@@ -755,16 +771,60 @@ export interface AdCopyHistoryItem {
   final_url: string | null;
   backend: string | null;
   created_at: string;
+  approval_status: string;
+  ad_manager: string | null;
+  reviewer_name: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  budget: number | null;
+  target_leads: number | null;
+  edited: boolean;
 }
 
-/** Recent saved generations (the "records" list) — click one to re-open it. */
-export function useAdCopyHistory(limit = 25) {
+export interface AdCopyHistoryCounts {
+  total: number;
+  approved: number;
+  rejected: number;
+  submitted: number;
+  draft: number;
+  changes_requested: number;
+  pending: number;
+}
+
+export interface AdCopyHistoryResult {
+  items: AdCopyHistoryItem[];
+  counts: AdCopyHistoryCounts;
+}
+
+/** Recent saved generations (the "records" list) — click one to re-open it.
+ *  Optionally filtered by approval status and/or campus. */
+export function useAdCopyHistory(limit = 25, status?: string, campus?: string) {
   return useQuery({
-    queryKey: ["adcopy-history", limit],
+    queryKey: ["adcopy-history", limit, status ?? "", campus ?? ""],
     queryFn: () =>
       api
-        .get("/ai/ad-copy/history", { params: { limit } })
-        .then((r) => r.data.items as AdCopyHistoryItem[]),
+        .get("/ai/ad-copy/history", {
+          params: {
+            limit,
+            ...(status ? { status } : {}),
+            ...(campus ? { campus } : {}),
+          },
+        })
+        .then(
+          (r) =>
+            (r.data as AdCopyHistoryResult) ?? {
+              items: [],
+              counts: {
+                total: 0,
+                approved: 0,
+                rejected: 0,
+                submitted: 0,
+                draft: 0,
+                changes_requested: 0,
+                pending: 0,
+              },
+            }
+        ),
   });
 }
 

@@ -500,9 +500,13 @@ def approval_reject_confirm(
 def history(
     campus: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    status: str | None = Query(
+        None,
+        description="Filter by approval state: draft | submitted | approved | rejected | changes_requested.",
+    ),
     svc: AdCopyService = Depends(get_ad_copy_service),
 ) -> AdCopyHistoryResponse:
-    return AdCopyHistoryResponse(**svc.history_rows(campus=campus, limit=limit))
+    return AdCopyHistoryResponse(**svc.history_rows(campus=campus, limit=limit, status=status))
 
 
 @router.get("/{gen_id}/plan", response_model=AdCopyGenerateResponse, summary="Re-open a saved plan")

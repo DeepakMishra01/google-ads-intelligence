@@ -2598,6 +2598,21 @@ function EditableAdCopy({
 
 // Saved-plan records: generations persist in the DB, so a plan can be re-opened
 // after closing the platform or switching tools. Lists recent plans; click to load.
+const PLAN_STATUS_STYLE: Record<string, string> = {
+  approved: "bg-green-100 text-green-700",
+  rejected: "bg-red-100 text-red-700",
+  submitted: "bg-amber-100 text-amber-700",
+  changes_requested: "bg-orange-100 text-orange-700",
+  draft: "bg-slate-100 text-slate-600",
+};
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  approved: "Approved",
+  rejected: "Rejected",
+  submitted: "Pending review",
+  changes_requested: "Changes requested",
+  draft: "Draft",
+};
+
 function RecentPlansPanel({
   onOpen,
   activeId,
@@ -2607,10 +2622,24 @@ function RecentPlansPanel({
   activeId?: number | null;
   loading?: boolean;
 }) {
-  const history = useAdCopyHistory(25);
-  const items = history.data ?? [];
+  // "" = all statuses; otherwise a single approval_status value.
+  const [filter, setFilter] = useState<string>("");
+  const history = useAdCopyHistory(50, filter || undefined);
+  const items = history.data?.items ?? [];
+  const counts = history.data?.counts;
   const [open, setOpen] = useState(!activeId);
-  if (!items.length) return null;
+  // Nothing generated yet at all — hide the panel entirely.
+  if (!counts?.total) return null;
+
+  const FILTERS: { key: string; label: string; n: number; cls?: string }[] = [
+    { key: "", label: "All", n: counts.total },
+    { key: "approved", label: "Approved", n: counts.approved, cls: "text-green-700" },
+    { key: "submitted", label: "Pending", n: counts.submitted, cls: "text-amber-700" },
+    { key: "changes_requested", label: "Changes", n: counts.changes_requested, cls: "text-orange-700" },
+    { key: "rejected", label: "Rejected", n: counts.rejected, cls: "text-red-700" },
+    { key: "draft", label: "Drafts", n: counts.draft, cls: "text-slate-600" },
+  ];
+
   return (
     <Card className="mb-4">
       <button
@@ -2619,38 +2648,80 @@ function RecentPlansPanel({
         onClick={() => setOpen((v) => !v)}
       >
         <div>
-          <h2 className="text-sm font-semibold text-slate-700">Saved plans ({items.length})</h2>
+          <h2 className="text-sm font-semibold text-slate-700">
+            Plan history ({counts.total})
+          </h2>
           <p className="text-xs text-slate-400">
-            Re-open a plan you generated earlier — plans stay saved even after you close the
-            platform or switch tools.
+            Every plan you generated, with its approval state — {counts.approved} approved,{" "}
+            {counts.pending} pending, {counts.rejected} rejected. Re-open any to review or revise.
           </p>
         </div>
         <span className={`text-slate-400 transition ${open ? "rotate-90" : ""}`}>▸</span>
       </button>
       {open && (
-        <div className="mt-3 max-h-72 divide-y divide-slate-100 overflow-auto">
-          {items.map((p) => {
-            const active = activeId === p.id;
-            return (
+        <>
+          {/* Status filter chips */}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {FILTERS.map((f) => (
               <button
-                key={p.id}
+                key={f.key || "all"}
                 type="button"
-                onClick={() => onOpen(p.id)}
-                className={`flex w-full items-center justify-between py-2 text-left text-sm hover:bg-slate-50 ${
-                  active ? "bg-brand-50" : ""
+                onClick={() => setFilter(f.key)}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                  filter === f.key
+                    ? "border-brand-500 bg-brand-50 text-brand-700"
+                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <span className="font-medium text-slate-800">
-                  {p.campus}
-                  {active && <span className="ml-2 text-xs font-normal text-brand-600">open</span>}
-                </span>
-                <span className="text-xs text-slate-400">
-                  {new Date(p.created_at).toLocaleDateString()} · #{p.id}
-                </span>
+                <span className={filter === f.key ? "" : f.cls}>{f.label}</span>
+                <span className="ml-1 text-slate-400">{f.n}</span>
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+
+          <div className="mt-3 max-h-80 divide-y divide-slate-100 overflow-auto">
+            {items.length === 0 && (
+              <div className="py-6 text-center text-xs text-slate-400">
+                No plans in this state.
+              </div>
+            )}
+            {items.map((p) => {
+              const active = activeId === p.id;
+              const st = p.approval_status || "draft";
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onOpen(p.id)}
+                  className={`flex w-full items-center justify-between gap-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                    active ? "bg-brand-50" : ""
+                  }`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate font-medium text-slate-800">{p.campus}</span>
+                      {p.edited && (
+                        <span className="text-[10px] font-semibold text-violet-600" title="Edited after generation">
+                          ✎ edited
+                        </span>
+                      )}
+                      {active && <span className="text-xs font-normal text-brand-600">open</span>}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-slate-400">
+                      {new Date(p.created_at).toLocaleDateString()} · #{p.id}
+                      {p.budget ? ` · ${money(p.budget)}` : ""}
+                      {p.ad_manager ? ` · ${p.ad_manager}` : ""}
+                      {st === "approved" && p.reviewer_name ? ` · by ${p.reviewer_name}` : ""}
+                    </span>
+                  </span>
+                  <Badge className={PLAN_STATUS_STYLE[st] ?? PLAN_STATUS_STYLE.draft}>
+                    {PLAN_STATUS_LABEL[st] ?? st}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
       {loading && <div className="mt-2 text-xs text-slate-400">Loading plan…</div>}
     </Card>

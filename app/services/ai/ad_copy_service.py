@@ -582,19 +582,67 @@ class AdCopyService:
         ]
         return {"items": items, "week_alerts": build_week_alerts(items)}
 
-    def history_rows(self, *, campus: str | None = None, limit: int = 50) -> dict[str, Any]:
-        rows = self.repo.recent(campus=campus, limit=limit)
+    def history_rows(
+        self, *, campus: str | None = None, limit: int = 50,
+        status: str | None = None,
+    ) -> dict[str, Any]:
+        """Plan history with the approval state, owner, budget and lead target.
+
+        ``status`` filters to a single approval state (draft | submitted | approved |
+        rejected | changes_requested); ``counts`` is always the full breakdown for
+        the campus scope so the UI can show approved/pending/rejected tallies even
+        while a filter is applied.
+        """
+        statuses = [status] if status else None
+        rows = self.repo.recent(campus=campus, limit=limit, statuses=statuses)
+        counts = self.repo.status_counts(campus=campus)
+
+        def _budget(r) -> float | None:
+            plan = ((r.scores or {}).get("campaign_plan") or {})
+            return ((plan.get("forecast") or {}).get("budget"))
+
+        def _leads(r) -> float | None:
+            plan = ((r.scores or {}).get("campaign_plan") or {})
+            rev = plan.get("reverse_plan") or {}
+            return rev.get("target_leads")
+
+        items = []
+        for r in rows:
+            edits = r.keyword_edits or {}
+            items.append({
+                "id": r.id,
+                "campus": r.campus,
+                "final_url": r.final_url,
+                "backend": r.backend,
+                "created_at": r.created_at,
+                "approval_status": r.approval_status or "draft",
+                "ad_manager": r.ad_manager,
+                "reviewer_name": r.reviewer_name,
+                "submitted_at": r.submitted_at,
+                "reviewed_at": r.reviewed_at,
+                "budget": _budget(r),
+                "target_leads": _leads(r),
+                "edited": bool(
+                    (edits.get("added") or edits.get("removed") or edits.get("overrides"))
+                    or r.asset_edits or r.pacing_overrides
+                ),
+            })
+        pending = (
+            counts.get("draft", 0)
+            + counts.get("submitted", 0)
+            + counts.get("changes_requested", 0)
+        )
         return {
-            "items": [
-                {
-                    "id": r.id,
-                    "campus": r.campus,
-                    "final_url": r.final_url,
-                    "backend": r.backend,
-                    "created_at": r.created_at,
-                }
-                for r in rows
-            ]
+            "items": items,
+            "counts": {
+                "total": sum(counts.values()),
+                "approved": counts.get("approved", 0),
+                "rejected": counts.get("rejected", 0),
+                "submitted": counts.get("submitted", 0),
+                "draft": counts.get("draft", 0),
+                "changes_requested": counts.get("changes_requested", 0),
+                "pending": pending,
+            },
         }
 
     def get_generation(self, gen_id: int):  # type: ignore[no-untyped-def]

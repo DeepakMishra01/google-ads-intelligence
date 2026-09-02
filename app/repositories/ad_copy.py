@@ -65,13 +65,27 @@ class AdCopyRepository(BaseRepository[AdCopyGeneration]):
         return self.add(AdCopyGeneration(**values))
 
     def recent(
-        self, *, campus: str | None = None, limit: int = 50
+        self, *, campus: str | None = None, limit: int = 50,
+        statuses: list[str] | None = None,
     ) -> list[AdCopyGeneration]:
         stmt = select(AdCopyGeneration)
         if campus:
             stmt = stmt.where(AdCopyGeneration.campus.ilike(f"%{campus}%"))
+        if statuses:
+            stmt = stmt.where(AdCopyGeneration.approval_status.in_(statuses))
         stmt = stmt.order_by(desc(AdCopyGeneration.created_at)).limit(limit)
         return list(self.db.execute(stmt).scalars().all())
+
+    def status_counts(self, *, campus: str | None = None) -> dict[str, int]:
+        """Count of generations by approval status (optionally scoped to a campus)."""
+        from sqlalchemy import func
+
+        stmt = select(AdCopyGeneration.approval_status, func.count()).group_by(
+            AdCopyGeneration.approval_status
+        )
+        if campus:
+            stmt = stmt.where(AdCopyGeneration.campus.ilike(f"%{campus}%"))
+        return {row[0] or "draft": int(row[1]) for row in self.db.execute(stmt).all()}
 
     def latest_per_campus(self) -> list[AdCopyGeneration]:
         """The newest generation for each campus — one row per campaign portfolio."""

@@ -574,7 +574,26 @@ class AdCopyHistoryRow(BaseModel):
     final_url: str | None
     backend: str | None
     created_at: datetime
+    approval_status: str = "draft"
+    ad_manager: str | None = None
+    reviewer_name: str | None = None
+    submitted_at: datetime | None = None
+    reviewed_at: datetime | None = None
+    budget: float | None = None
+    target_leads: float | None = None
+    edited: bool = False
+
+
+class AdCopyHistoryCounts(BaseModel):
+    total: int = 0
+    approved: int = 0
+    rejected: int = 0
+    submitted: int = 0
+    draft: int = 0
+    changes_requested: int = 0
+    pending: int = 0
 
 
 class AdCopyHistoryResponse(BaseModel):
     items: list[AdCopyHistoryRow]
+    counts: AdCopyHistoryCounts = AdCopyHistoryCounts()
