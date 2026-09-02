@@ -231,6 +231,76 @@ class AdCopyService:
             )
         return int(total) or None
 
+    @staticmethod
+    def _seasonality_from(keywords, brief, *, fallback=None):
+        """Build the month-on-month demand curve from a keyword set.
+
+        Prefers the plan's *selected* keywords so the curve reflects the actual
+        campaign (removing "NMAT" drops that demand). Falls back to a wider set
+        only when none of the selected keywords carry Keyword-Planner monthly
+        volumes (e.g. an all-manual keyword list).
+        """
+        has_exam = bool(getattr(brief, "exam", None))
+        seas = build_seasonality(keywords or [], has_exam=has_exam)
+        picked = [k for k in (keywords or []) if k.get("monthly_search_volumes")]
+        if not picked and fallback:
+            seas = build_seasonality(fallback, has_exam=has_exam)
+        return seas
+
+    def _recompute_demand(self, gen, effective: list[dict[str, Any]], brief) -> bool:
+        """Re-derive the demand curve + month-wise budget pacing after a keyword edit.
+
+        Keeps the plan's total budget fixed and redistributes it across the year
+        by the *edited* keyword set's demand (so removing a peak-season keyword
+        flattens the curve). The AM's manual per-month pacing overrides are stored
+        separately and re-applied on top, so this never clobbers them. No-ops when
+        the edited keywords carry no Keyword-Planner monthly data.
+        """
+        from app.services.ai.budget_planner import (
+            MONTH_NAMES,
+            _level_from_weight,
+            _pacing_weights,
+        )
+
+        scores = dict(gen.scores or {})
+        plan = scores.get("campaign_plan") or {}
+        if not plan:
+            return False
+        picked = [k for k in effective if k.get("monthly_search_volumes")]
+        if not picked:
+            return False  # all-manual edit — leave the existing curve untouched
+
+        seas = build_seasonality(picked, has_exam=bool(getattr(brief, "exam", None)))
+        budget = ((plan.get("forecast") or {}).get("budget")) or 0
+        if not budget:
+            scores["seasonality"] = seas
+            gen.scores = scores
+            return True
+
+        weights, pacing_source = _pacing_weights(seas)
+        levels = {mo["month"]: mo["level"] for mo in seas.get("months", [])}
+        raw = {m: round(budget * weights[m]) for m in range(1, 13)}
+        drift = round(budget) - sum(raw.values())
+        peak_m = max(range(1, 13), key=lambda m: weights[m])
+        raw[peak_m] += drift
+        plan = dict(plan)
+        plan["monthly_pacing"] = [
+            {"month": m, "name": MONTH_NAMES[m], "budget": raw[m],
+             "level": levels.get(m, _level_from_weight(weights[m]))}
+            for m in range(1, 13)
+        ]
+        plan["pacing_source"] = pacing_source
+        scores["campaign_plan"] = plan
+        scores["seasonality"] = seas
+        gen.scores = scores
+        # Mirror into the re-openable payload so the UI shows the new curve too.
+        if gen.result_payload:
+            rp = dict(gen.result_payload)
+            rp["seasonality"] = seas
+            rp["campaign_plan"] = plan
+            gen.result_payload = rp
+        return True
+
     def generate(
         self,
         *,
@@ -332,7 +402,10 @@ class AdCopyService:
         #     e.g. "gibs"; full name otherwise, e.g. "indus university").
         base = (brief.short if len(brief.brand.split()) >= 3 else brief.brand).lower()
         campus_kw = [k for k in raw_kw if base in k["keyword"].lower()]
-        seasonality = build_seasonality(campus_kw, has_exam=bool(brief.exam))
+        # Demand curve from the keywords actually SELECTED for this plan (so editing
+        # the keyword set later shifts the curve). Fall back to the campus-wide set
+        # only when the chosen keywords carry no Keyword-Planner monthly data.
+        seasonality = self._seasonality_from(keyword_insights, brief, fallback=campus_kw)
         # Cold-start: when this campus has no CPC history of its own, anchor the plan
         # to the median across your existing colleges instead of a flat constant.
         hist_stats = self._history_stats(brief)
@@ -605,6 +678,15 @@ class AdCopyService:
 
         gen.keyword_edits = {"added": norm_added, "removed": removed_norm,
                              "overrides": clean_overrides, "groups": groups}
+        # Demand follows the SELECTED keywords: re-derive the seasonality curve and
+        # month-wise budget pacing from the edited keyword set (removing a keyword
+        # drops its search demand). AM per-month overrides are stored separately and
+        # layered back on top, so this doesn't overwrite them.
+        demand_updated = False
+        try:
+            demand_updated = self._recompute_demand(gen, effective, brief)
+        except Exception as exc:  # noqa: BLE001
+            log.info("adcopy.recompute_demand_failed", error=str(exc))
         # Refresh the ad copy so it reflects the edited keywords — UNLESS the ad
         # manager has manually edited the copy (their copy then stands; the
         # "Regenerate ad copy" button overrides that on demand).
@@ -623,12 +705,14 @@ class AdCopyService:
             gen_id, "keywords_edited", actor,
             f"+{len(norm_added)} added, -{len(removed_norm)} removed, "
             f"{len(clean_overrides)} edited"
-            + (" · ad copy refreshed" if regenerated else ""),
+            + (" · ad copy refreshed" if regenerated else "")
+            + (" · demand curve updated" if demand_updated else ""),
         )
         self.db.commit()
         return {"ok": True, "gen_id": gen_id, "added": len(norm_added),
                 "removed": len(removed_norm), "edited": len(clean_overrides),
-                "keyword_groups": groups, "copy_regenerated": regenerated}
+                "keyword_groups": groups, "copy_regenerated": regenerated,
+                "demand_updated": demand_updated}
 
     def save_asset_edits(
         self, gen_id: int, *,
@@ -894,6 +978,7 @@ class AdCopyService:
                     "score": round(score, 1),
                     "source": kw.get("source", "historical"),
                     "search_volume": kw.get("search_volume"),
+                    "monthly_search_volumes": kw.get("monthly_search_volumes"),
                     "competition": kw.get("competition"),
                     "historical_clicks": kw.get("historical_clicks"),
                     "historical_ctr": kw.get("historical_ctr"),
