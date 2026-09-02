@@ -156,7 +156,7 @@ def effective_pacing(gen: AdCopyGeneration) -> dict[str, Any] | None:
 # Fields the operator may override on the final strategy. CPC and click-to-lead
 # are editable so the ad manager can correct AI assumptions before approval — an
 # unrealistic auto CPC no longer forces an unrealistic CPL.
-_EDITABLE = ("budget", "avg_cpc", "target_cvr_pct", "target_leads", "bidding")
+_EDITABLE = ("budget", "avg_cpc", "ctr", "target_cvr_pct", "target_leads", "bidding")
 _DEFAULT_TARGET_CVR_PCT = 15.0  # industry-benchmark planning target
 _REFERENCE_CPL = 800.0  # midpoint of the ₹750–850 planning band (default lead target)
 
@@ -185,6 +185,9 @@ def _auto_values(gen: AdCopyGeneration) -> dict[str, Any]:
     cpc = (realism.get("effective_cpc") or forecast.get("blended_cpc")
            or forecast.get("anchor_cpc"))
     est_clicks = forecast.get("est_clicks")  # fallback only (used if CPC is missing)
+    # Blended CTR from the forecast (clicks ÷ impressions), editable.
+    impr = forecast.get("est_impressions") or 0
+    ctr = round(est_clicks / impr * 100, 1) if (est_clicks and impr) else None
     # Campaign-specific default lead target = budget ÷ reference CPL (NOT a flat 2000).
     cplp = plan.get("cpl_plan") or {}
     clo, chi = cplp.get("target_cpl_low"), cplp.get("target_cpl_high")
@@ -193,6 +196,7 @@ def _auto_values(gen: AdCopyGeneration) -> dict[str, Any]:
     return {
         "budget": budget or None,
         "avg_cpc": round(float(cpc), 2) if cpc else None,
+        "ctr": ctr,
         "target_leads": default_leads,
         "target_cvr_pct": target_cvr_pct,
         "bidding": bidding.get("recommended") or bidding.get("primary"),
@@ -212,6 +216,7 @@ def build_final_strategy(gen: AdCopyGeneration) -> dict[str, Any]:
     labels = {
         "budget": "Budget (₹)",
         "avg_cpc": "Avg CPC (₹)",
+        "ctr": "Avg CTR %",
         "target_cvr_pct": "Click-to-lead rate % (planning)",
         "target_leads": "Target leads",
         "bidding": "Bidding strategy",
@@ -239,12 +244,15 @@ def build_final_strategy(gen: AdCopyGeneration) -> dict[str, Any]:
     cpc = _num(eff.get("avg_cpc")) or 0
     cvr = (_num(eff.get("target_cvr_pct")) or 0) / 100.0
     target_leads = _num(eff.get("target_leads"))
+    ctr = (_num(eff.get("ctr")) or 0) / 100.0
     clicks = round(budget / cpc) if (budget and cpc) else (auto.get("_est_clicks") or 0)
+    est_impr = round(clicks / ctr) if (clicks and ctr) else None
     est_leads = round(clicks * cvr) if clicks and cvr else None
     est_cpl = round(budget / est_leads) if est_leads else None
     return {
         "fields": fields,
         "est_clicks": clicks or None,
+        "est_impressions": est_impr,
         "avg_cpc": cpc or None,
         "target_cvr_pct": _num(eff.get("target_cvr_pct")),
         "est_leads": est_leads,

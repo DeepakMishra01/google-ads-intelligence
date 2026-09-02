@@ -2160,6 +2160,10 @@ function ApprovalTab({ genId }: { genId: number }) {
             </table>
           </div>
           <div className="mt-2 flex flex-wrap gap-4 text-sm">
+            <span>Est. clicks: <b>{num(fs.est_clicks)}</b></span>
+            {fs.est_impressions != null && (
+              <span>Est. impressions: <b>{num(fs.est_impressions)}</b></span>
+            )}
             <span>Projected leads: <b>{num(fs.est_leads)}</b> (target {num(fs.target_leads)})</span>
             <span>Projected CPL: <b>{money(fs.est_cpl)}</b></span>
             <Badge className={fs.meets_target ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>

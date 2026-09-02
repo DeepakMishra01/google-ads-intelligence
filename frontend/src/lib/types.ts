@@ -427,6 +427,8 @@ export interface StrategyField {
 export interface FinalStrategy {
   fields: StrategyField[];
   est_clicks: number | null;
+  est_impressions?: number | null;
+  avg_cpc?: number | null;
   target_cvr_pct: number | null;
   est_leads: number | null;
   est_cpl: number | null;
