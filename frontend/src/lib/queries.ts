@@ -24,6 +24,7 @@ import type {
   DayComparison,
   FinalUrlResponse,
   GrowthPoint,
+  KeywordGroup,
   KeywordHealthRow,
   KeywordInsight,
   Overview,
@@ -457,6 +458,34 @@ export function useSaveKeywordEdits(genId: number) {
       removed: string[];
       overrides?: Record<string, { intent?: string; match_type?: string }>;
     }) => api.post(`/ai/ad-copy/${genId}/keywords`, p).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
+  });
+}
+
+// Bulk-add keywords from a pasted/uploaded CSV/TSV/newline list. The list text is
+// posted as-is; the backend parses, enriches with Planner metrics, and folds them
+// in through the same pipeline as manual edits (regroups, refreshes copy, re-paces).
+export function useImportKeywords(genId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) =>
+      api
+        .post(`/ai/ad-copy/${genId}/keywords/import`, { text }, { timeout: 60_000 })
+        .then(
+          (r) =>
+            r.data as {
+              ok: boolean;
+              reason?: string;
+              imported?: number;
+              skipped?: number;
+              copy_regenerated?: boolean;
+              demand_updated?: boolean;
+              keyword_groups?: KeywordGroup[];
+              added_keywords?: KeywordInsight[];
+              removed_keywords?: string[];
+              overrides?: Record<string, { intent?: string; match_type?: string }>;
+            }
+        ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["approval", genId] }),
   });
 }

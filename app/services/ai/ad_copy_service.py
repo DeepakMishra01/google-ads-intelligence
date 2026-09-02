@@ -626,6 +626,133 @@ class AdCopyService:
 
         return KeywordResearchService(self.db).lookup_metrics(keywords)
 
+    @staticmethod
+    def _parse_keyword_import(text: str) -> tuple[list[dict[str, Any]], int]:
+        """Parse a pasted/uploaded keyword list into (rows, skipped).
+
+        Accepts CSV, TSV, or a plain newline list. First column = keyword; optional
+        columns (in any order, header-driven when a header row is present, else
+        positional) supply match type (EXACT/PHRASE/BROAD) and intent. A leading
+        header row naming these columns is auto-detected and skipped.
+        """
+        import csv
+        import io
+
+        rows: list[dict[str, Any]] = []
+        skipped = 0
+        seen: set[str] = set()
+        lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+        if not lines:
+            return [], 0
+        # Sniff delimiter from the first non-empty line (comma, tab, else newline-list).
+        sample = lines[0]
+        delim = "," if "," in sample else ("\t" if "\t" in sample else ",")
+        reader = list(csv.reader(io.StringIO("\n".join(lines)), delimiter=delim))
+
+        # Header detection: a first row whose first cell is "keyword"/"keywords".
+        header: list[str] | None = None
+        first = [c.strip().lower() for c in reader[0]] if reader else []
+        if first and first[0] in ("keyword", "keywords", "term", "search term"):
+            header = first
+            reader = reader[1:]
+        col = {name: i for i, name in enumerate(header)} if header else {}
+
+        def pick(cells: list[str], *names: str, default: str = "") -> str:
+            for n in names:
+                if n in col and col[n] < len(cells):
+                    return cells[col[n]].strip()
+            return default
+
+        MATCHES = {"EXACT", "PHRASE", "BROAD"}
+        INTENTS = {"brand", "high_intent", "mid_intent", "research", "competitor", "custom"}
+        for cells in reader:
+            if not cells:
+                continue
+            kw = (cells[0] or "").strip()
+            if not kw or kw.lower() in seen:
+                skipped += 1
+                continue
+            seen.add(kw.lower())
+            row: dict[str, Any] = {"keyword": kw}
+            # match type / intent — header-named if we have a header, else scan cells.
+            mt = pick(cells, "match_type", "match", "match type").upper()
+            it = pick(cells, "intent", "ad_group", "ad group").lower().replace(" ", "_")
+            if not header:
+                for c in cells[1:]:
+                    cu = c.strip().upper()
+                    cl = c.strip().lower().replace(" ", "_")
+                    if cu in MATCHES:
+                        mt = cu
+                    elif cl in INTENTS:
+                        it = cl
+            if mt in MATCHES:
+                row["match_type"] = mt
+            if it in INTENTS:
+                row["intent"] = it
+            rows.append(row)
+        return rows, skipped
+
+    def import_keywords(
+        self, gen_id: int, *, text: str, actor: str | None, cap: int = 300,
+    ) -> dict[str, Any]:
+        """Bulk-add keywords from a pasted/uploaded CSV/Excel list.
+
+        Parses the list, enriches each keyword with Keyword Planner metrics (so the
+        demand curve and bids stay real), then folds them into the plan through the
+        same add/regroup pipeline as manual edits (which also refreshes ad copy and
+        re-paces the budget). Per-row match type / intent become overrides.
+        """
+        gen = self.repo.get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        parsed, skipped = self._parse_keyword_import(text)
+        if not parsed:
+            return {"ok": False, "reason": "no keywords found in the file"}
+        if len(parsed) > cap:
+            skipped += len(parsed) - cap
+            parsed = parsed[:cap]
+
+        # Preserve any keywords / overrides the user already added by hand — a bulk
+        # import adds to the plan, it doesn't wipe prior edits. (save_keyword_edits
+        # replaces the edit sets wholesale, so we hand it the merged sets.)
+        prior = gen.keyword_edits or {}
+        added: list[dict[str, Any]] = list(prior.get("added") or [])
+        overrides: dict[str, dict[str, Any]] = dict(prior.get("overrides") or {})
+        removed: list[str] = list(prior.get("removed") or [])
+        seen = {(k.get("keyword") or "").lower() for k in added}
+
+        # Enrich the new keywords with real Planner metrics (volume / bids / curve).
+        fresh = [p for p in parsed if p["keyword"].lower() not in seen]
+        metrics = {m["keyword"].lower(): m
+                   for m in self.lookup_keywords([p["keyword"] for p in fresh])}
+        imported = 0
+        for p in fresh:
+            enriched = dict(metrics.get(p["keyword"].lower()) or {})
+            enriched["keyword"] = p["keyword"]
+            enriched["source"] = "imported"
+            added.append(enriched)
+            imported += 1
+            ov: dict[str, Any] = {}
+            if p.get("match_type"):
+                ov["match_type"] = p["match_type"]
+            if p.get("intent"):
+                ov["intent"] = p["intent"]
+            if ov:
+                overrides[p["keyword"]] = ov
+        skipped += len(parsed) - len(fresh)  # already-present keywords
+
+        res = self.save_keyword_edits(
+            gen_id, added=added, removed=removed, overrides=overrides, actor=actor,
+        )
+        # Hand the editor the full merged state so it can adopt it without a reload.
+        merged = gen.keyword_edits or {}
+        res["added_keywords"] = merged.get("added") or []
+        res["removed_keywords"] = merged.get("removed") or []
+        res["overrides"] = merged.get("overrides") or {}
+        res["imported"] = imported
+        res["skipped"] = skipped
+        return res
+
     def save_keyword_edits(
         self, gen_id: int, *, added: list[dict[str, Any]], removed: list[str],
         overrides: dict[str, dict[str, Any]] | None = None, actor: str | None,
@@ -855,8 +982,9 @@ class AdCopyService:
             seen.add(text.lower())
             cls = intent_classifier.classify(text, brand_terms=brand_terms)
             base = {
-                "keyword": text, "source": "user_added",
+                "keyword": text, "source": a.get("source") or "user_added",
                 "search_volume": a.get("search_volume"), "competition": a.get("competition"),
+                "monthly_search_volumes": a.get("monthly_search_volumes"),
                 "historical_clicks": None, "historical_ctr": None,
                 "historical_cpc": a.get("historical_cpc"),
                 "top_of_page_bid_low": a.get("top_of_page_bid_low"),

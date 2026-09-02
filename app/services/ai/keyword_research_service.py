@@ -266,6 +266,11 @@ class GoogleKeywordPlannerProvider:
                 m = getattr(r, "keyword_metrics", None)
                 low = getattr(m, "low_top_of_page_bid_micros", None) if m else None
                 high = getattr(m, "high_top_of_page_bid_micros", None) if m else None
+                monthly = [
+                    {"year": int(v.year), "month": int(v.month),
+                     "searches": int(v.monthly_searches or 0)}
+                    for v in getattr(m, "monthly_search_volumes", [])
+                ] if m else []
                 out.append({
                     "keyword": r.text,
                     "source": "user_added",
@@ -274,6 +279,7 @@ class GoogleKeywordPlannerProvider:
                     "historical_cpc": (high / _MICROS) if high else None,
                     "top_of_page_bid_low": (low / _MICROS) if low else None,
                     "top_of_page_bid_high": (high / _MICROS) if high else None,
+                    "monthly_search_volumes": monthly,
                     "quality_score": None,
                 })
             return out

@@ -8,7 +8,7 @@ import {
   Search,
   Wand2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge, Card, PageHeader, StateBlock } from "@/components/ui";
 import { apiErrorMessage } from "@/lib/api";
@@ -23,6 +23,7 @@ import {
   useFinalUrl,
   useGenerateAdCopy,
   useKeywordLookup,
+  useImportKeywords,
   useRegenerateAdCopy,
   useSaveAssetEdits,
   useSaveKeywordEdits,
@@ -164,6 +165,62 @@ function KeywordEditor({
   );
   const lookup = useKeywordLookup();
   const save = useSaveKeywordEdits(genId ?? 0);
+  const bulk = useImportKeywords(genId ?? 0);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+
+  const runImport = async (text: string) => {
+    if (genId == null || !text.trim()) return;
+    setImportMsg(null);
+    try {
+      const res = await bulk.mutateAsync(text);
+      if (res.ok === false) {
+        setImportMsg(res.reason ?? "Couldn't import the keywords.");
+        return;
+      }
+      // Adopt the server's merged edit state so the imported keywords appear at
+      // once (no reload), on top of anything already added/removed by hand.
+      if (res.added_keywords) setAdded(res.added_keywords);
+      if (res.removed_keywords) setRemoved(new Set(res.removed_keywords));
+      if (res.overrides) {
+        const o: Record<string, { intent?: string; match?: string }> = {};
+        for (const [kw, v] of Object.entries(res.overrides)) {
+          const e: { intent?: string; match?: string } = {};
+          if (v.intent) e.intent = v.intent;
+          if (v.match_type) e.match = v.match_type;
+          if (Object.keys(e).length) o[kw] = e;
+        }
+        setOverrides(o);
+      }
+      if (res.keyword_groups) onGroupsSaved?.(res.keyword_groups);
+      setSavedAt(true);
+      setImportMsg(
+        `Imported ${res.imported ?? 0} keyword${(res.imported ?? 0) === 1 ? "" : "s"}` +
+          (res.skipped ? ` · ${res.skipped} skipped` : "") +
+          (res.demand_updated ? " · demand curve updated" : "") +
+          ". Plan reset to draft — re-submit for approval."
+      );
+      setPasteText("");
+      setShowPaste(false);
+      onSaved?.();
+    } catch {
+      setImportMsg("Couldn't import — please try again.");
+    }
+  };
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!f) return;
+    if (/\.xlsx?$/i.test(f.name)) {
+      setImportMsg("Excel files: please “Save As → CSV” and upload that (or paste the list).");
+      return;
+    }
+    const text = await f.text();
+    runImport(text);
+  };
 
   const norm = (s: string) => s.trim().toLowerCase();
   const known = new Set([...keywords.map((k) => norm(k.keyword)), ...added.map((k) => norm(k.keyword))]);
@@ -366,6 +423,67 @@ function KeywordEditor({
         >
           {lookup.isPending ? "Fetching volume…" : "Add keyword"}
         </button>
+      </div>
+
+      {/* Bulk import from a CSV / list */}
+      <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-600">Bulk import</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.tsv,.txt,text/csv,text/plain"
+            className="hidden"
+            onChange={onPickFile}
+          />
+          <button
+            type="button"
+            className="btn btn-secondary h-8 px-3 text-xs"
+            onClick={() => fileRef.current?.click()}
+            disabled={genId == null || bulk.isPending}
+          >
+            {bulk.isPending ? "Importing…" : "Upload CSV file"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost h-8 px-3 text-xs"
+            onClick={() => setShowPaste((v) => !v)}
+            disabled={genId == null || bulk.isPending}
+          >
+            {showPaste ? "Hide paste box" : "Paste a list"}
+          </button>
+          <span className="text-[11px] text-slate-400">
+            One keyword per line, or CSV: <code>keyword, match_type, intent</code>. Volumes fetched automatically.
+          </span>
+        </div>
+        {showPaste && (
+          <div className="mt-2 flex flex-col gap-2">
+            <textarea
+              className="input min-h-[96px] w-full font-mono text-xs"
+              placeholder={"mba admission, EXACT, high_intent\nnmims fees, PHRASE\npgdm colleges"}
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+            />
+            <div>
+              <button
+                type="button"
+                className="btn btn-primary h-8 px-4 text-xs"
+                onClick={() => runImport(pasteText)}
+                disabled={bulk.isPending || !pasteText.trim()}
+              >
+                {bulk.isPending ? "Importing…" : "Import pasted keywords"}
+              </button>
+            </div>
+          </div>
+        )}
+        {importMsg && (
+          <div className="mt-2 text-xs text-slate-600">{importMsg}</div>
+        )}
+        {genId == null && (
+          <div className="mt-2 text-[11px] text-slate-400">
+            Generate & save the plan first to import keywords.
+          </div>
+        )}
       </div>
 
       {/* Save edits */}

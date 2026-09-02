@@ -185,6 +185,22 @@ def save_keyword_edits(
     )
 
 
+class KeywordImportRequest(BaseModel):
+    # Raw CSV / TSV / newline-separated keyword list (the frontend reads the file's
+    # text and posts it here). First column = keyword; optional match_type / intent.
+    text: str
+
+
+@router.post("/{gen_id}/keywords/import", response_model=None, summary="Bulk-add keywords from a CSV/Excel list")
+def import_keywords(
+    gen_id: int,
+    body: KeywordImportRequest,
+    x_actor: str | None = Header(None),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.import_keywords(gen_id, text=body.text, actor=x_actor)
+
+
 class AssetEditsRequest(BaseModel):
     # Each list is the FULL desired set for that asset kind (edited + added lines).
     # Omit a field (null) to leave that asset kind untouched.
