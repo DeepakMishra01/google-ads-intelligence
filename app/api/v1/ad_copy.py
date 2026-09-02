@@ -201,6 +201,22 @@ def import_keywords(
     return svc.import_keywords(gen_id, text=body.text, actor=x_actor)
 
 
+class AdGroupsRequest(BaseModel):
+    # The FULL desired ad_groups array (the UI manages add-ad / edit / duplicate
+    # client-side, then saves the whole set).
+    ad_groups: list[dict[str, Any]] = []
+
+
+@router.post("/{gen_id}/ad-groups", response_model=None, summary="Save ad-group ad edits (multi-ad-group)")
+def save_ad_groups(
+    gen_id: int,
+    body: AdGroupsRequest,
+    x_actor: str | None = Header(None),
+    svc: AdCopyService = Depends(get_ad_copy_service),
+) -> dict:
+    return svc.save_ad_groups(gen_id, ad_groups=body.ad_groups, actor=x_actor)
+
+
 class AssetEditsRequest(BaseModel):
     # Each list is the FULL desired set for that asset kind (edited + added lines).
     # Omit a field (null) to leave that asset kind untouched.

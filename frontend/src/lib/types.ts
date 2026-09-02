@@ -348,6 +348,23 @@ export interface KeywordGroup {
   match_keywords: string[];
 }
 
+// One RSA within an ad group (multi-ad-group support).
+export interface AdGroupAd {
+  label: string;
+  headlines: string[];
+  descriptions: string[];
+}
+
+// An ad group = distinct intent + its keywords + one or more ads.
+export interface AdGroupPlan {
+  name: string;
+  intent: string | null;
+  keywords: string[];
+  match_keywords: string[];
+  recommended_bid: number | null;
+  ads: AdGroupAd[];
+}
+
 export interface GeneratedAsset {
   text: string;
   length: number;
@@ -565,6 +582,7 @@ export interface AdCopyGenerateResponse {
   historical: HistoricalInsights;
   keywords: KeywordInsight[];
   keyword_groups: KeywordGroup[];
+  ad_groups?: AdGroupPlan[] | null;
   campaign_recommendation: CampaignRecommendation;
   assets: GeneratedAssets;
   quality: QualityPrediction;

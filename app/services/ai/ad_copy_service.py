@@ -371,6 +371,13 @@ class AdCopyService:
         negatives = build_negative_keywords(self.db, brief)
         assets["negative_keywords"] = negatives["keywords"]
 
+        # Per-ad-group RSAs: each ad group (distinct intent) gets its own tailored ad
+        # so copy matches that group's keywords. Deterministic so it works without an
+        # LLM key. The ad manager can edit these and add more ads ("Ad +") per group.
+        ad_groups = self._build_ad_groups(
+            brief, landing, historical, keyword_groups, assets
+        )
+
         # Step 10: validation + quality prediction.
         quality = validate_assets(
             headlines=[a["text"] for a in assets["headlines"]],
@@ -498,6 +505,7 @@ class AdCopyService:
             "historical": historical,
             "keywords": keyword_insights,
             "keyword_groups": keyword_groups,
+            "ad_groups": ad_groups,
             "campaign_recommendation": recommendation,
             "assets": assets,
             "quality": quality,
@@ -872,6 +880,12 @@ class AdCopyService:
                 regenerated = True
             except Exception as exc:  # noqa: BLE001
                 log.info("adcopy.regen_on_edit_failed", error=str(exc))
+        # Rebuild the per-ad-group RSAs from the new groups too — unless the ad
+        # manager has hand-edited the ad groups (then theirs stand).
+        try:
+            self._refresh_ad_groups(gen, brief, groups)
+        except Exception as exc:  # noqa: BLE001
+            log.info("adcopy.refresh_ad_groups_failed", error=str(exc))
         # A changed plan can't keep a stale approval.
         if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
             gen.approval_status = "draft"
@@ -1256,6 +1270,154 @@ class AdCopyService:
                  "fees", "course", "eligibility", "placement", "location"]
         out.sort(key=lambda g: (order.index(g["intent"]) if g["intent"] in order else 99))
         return out
+
+    def _build_ad_groups(
+        self, brief, landing, historical, keyword_groups, base_assets,
+    ) -> list[dict[str, Any]]:
+        """One tailored RSA per ad group (distinct intent).
+
+        Each ad group's ad is generated deterministically from THAT group's own
+        keywords, so the Brand / Admission / Fees / Exam groups get copy specific to
+        how people search in each — instead of one shared ad for the whole campaign.
+        The Brand group additionally seeds with the campaign's primary (base) ad, and
+        every group gets exactly one ad to start; the UI lets the ad manager edit them
+        and add more ads ("Ad +", up to Google's 3-per-ad-group best practice).
+        """
+        base_h = [a["text"] for a in (base_assets.get("headlines") or [])]
+        base_d = [a["text"] for a in (base_assets.get("descriptions") or [])]
+        out: list[dict[str, Any]] = []
+        for g in keyword_groups or []:
+            kws = g.get("keywords") or []
+            insights = [
+                {"keyword": k, "intent": g.get("intent") or "generic",
+                 "score": 100 - i, "search_volume": None}
+                for i, k in enumerate(kws)
+            ]
+            try:
+                ctx = self._build_context(brief, landing, historical, insights, None)
+                assets = self._template_assets(ctx)
+                heads = [a["text"] for a in assets.get("headlines", [])]
+                descs = [a["text"] for a in assets.get("descriptions", [])]
+            except Exception as exc:  # noqa: BLE001 — never fail generation over this
+                log.info("adcopy.ad_group_assets_failed", error=str(exc))
+                heads, descs = [], []
+            # The Brand group leads with the campaign's primary ad; others use their
+            # own tailored copy, backfilled from the base ad to reach a full RSA.
+            if (g.get("intent") or "").lower() == "brand":
+                heads = list(dict.fromkeys(base_h + heads))
+                descs = list(dict.fromkeys(base_d + descs))
+            else:
+                heads = list(dict.fromkeys(heads + base_h))
+                descs = list(dict.fromkeys(descs + base_d))
+            out.append({
+                "name": g.get("name") or _titlecase(g.get("intent") or "Ad group"),
+                "intent": g.get("intent"),
+                "keywords": kws,
+                "match_keywords": g.get("match_keywords") or [],
+                "recommended_bid": g.get("recommended_bid"),
+                "ads": [{
+                    "label": "Ad 1",
+                    "headlines": heads[:15],
+                    "descriptions": descs[:4],
+                }],
+            })
+        return out
+
+    def _refresh_ad_groups(self, gen, brief, groups: list[dict[str, Any]]) -> bool:
+        """Regenerate per-ad-group RSAs after a keyword edit, in result_payload.
+
+        Skips when the ad manager has hand-edited the ad groups (``ad_groups_edited``)
+        so manual work is never clobbered. No-ops on old plans with no payload.
+        """
+        rp = gen.result_payload
+        if not rp or rp.get("ad_groups_edited"):
+            return False
+        payload = dict(rp)
+        landing = payload.get("landing_page") or {}
+        hist = gen.historical_features_used or {}
+        historical = {
+            "top_headlines": hist.get("top_headlines", []) or [],
+            "top_descriptions": [],
+            "best_keyword_themes": hist.get("keyword_themes", []) or [],
+        }
+        assets = gen.generated_assets or {}
+        payload["ad_groups"] = self._build_ad_groups(
+            brief, landing, historical, groups, assets
+        )
+        gen.result_payload = payload
+        return True
+
+    def save_ad_groups(
+        self, gen_id: int, *, ad_groups: list[dict[str, Any]], actor: str | None,
+    ) -> dict[str, Any]:
+        """Persist the ad manager's ad-group edits (edited/added ads per group).
+
+        The UI sends the FULL desired ad_groups array (it manages add-ad / edit /
+        duplicate client-side). We validate character limits, mark the ad groups as
+        hand-edited so keyword edits don't overwrite them, and reset approval to draft.
+        """
+        gen = self.repo.get(gen_id)
+        if gen is None:
+            return {"ok": False, "reason": "not found"}
+        rp = gen.result_payload
+        if not rp:
+            return {"ok": False, "reason": "plan predates ad groups — regenerate it"}
+
+        # Validate + trim each ad to Google's RSA limits (15 headlines / 4 descriptions).
+        invalid: list[dict[str, Any]] = []
+        clean_groups: list[dict[str, Any]] = []
+        for g in ad_groups or []:
+            ads_out: list[dict[str, Any]] = []
+            for ad in (g.get("ads") or [])[:3]:  # Google allows up to 3 ads/ad group
+                heads, descs = [], []
+                for h in (ad.get("headlines") or []):
+                    t = (h or "").strip()
+                    if not t:
+                        continue
+                    if len(t) > H_MAX:
+                        invalid.append({"kind": "headline", "text": t, "length": len(t), "limit": H_MAX})
+                    else:
+                        heads.append(t)
+                for d in (ad.get("descriptions") or []):
+                    t = (d or "").strip()
+                    if not t:
+                        continue
+                    if len(t) > D_MAX:
+                        invalid.append({"kind": "description", "text": t, "length": len(t), "limit": D_MAX})
+                    else:
+                        descs.append(t)
+                ads_out.append({
+                    "label": ad.get("label") or f"Ad {len(ads_out) + 1}",
+                    "headlines": heads[:15],
+                    "descriptions": descs[:4],
+                })
+            clean_groups.append({
+                "name": g.get("name"),
+                "intent": g.get("intent"),
+                "keywords": g.get("keywords") or [],
+                "match_keywords": g.get("match_keywords") or [],
+                "recommended_bid": g.get("recommended_bid"),
+                "ads": ads_out or [{"label": "Ad 1", "headlines": [], "descriptions": []}],
+            })
+        if invalid:
+            return {"ok": False, "reason": "Some lines exceed Google's limits.", "invalid": invalid}
+
+        from app.services.ai.approval_service import ApprovalService
+
+        payload = dict(rp)
+        payload["ad_groups"] = clean_groups
+        payload["ad_groups_edited"] = True
+        gen.result_payload = payload
+        if gen.approval_status in ("submitted", "approved", "rejected", "changes_requested"):
+            gen.approval_status = "draft"
+        self.db.flush()
+        ApprovalService(self.db).events.add_event(
+            gen_id, "ad_groups_edited", actor,
+            f"{len(clean_groups)} ad groups, "
+            f"{sum(len(g['ads']) for g in clean_groups)} ads",
+        )
+        self.db.commit()
+        return {"ok": True, "gen_id": gen_id, "ad_groups": clean_groups}
 
     # ------------------------------------------------------------------ #
     # generation — LLM (hybrid) and deterministic backends

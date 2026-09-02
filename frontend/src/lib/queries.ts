@@ -39,6 +39,7 @@ import type {
   TrendPoint,
   AccountBudgetOverview,
   AccountsAudit,
+  AdGroupPlan,
   WeeklyBudgetOverview,
 } from "./types";
 
@@ -505,6 +506,32 @@ export interface AssetEditsResult {
   reason?: string;
   edited_count?: number;
   invalid?: { kind: string; text: string; length: number; limit: number }[];
+}
+
+// Save the ad manager's ad-group edits (edited/added ads per ad group). The UI
+// sends the FULL desired ad_groups array; the backend validates RSA limits, marks
+// the ad groups hand-edited (so keyword edits won't overwrite them) and resets to
+// draft.
+export function useSaveAdGroups(genId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (adGroups: AdGroupPlan[]) =>
+      api
+        .post(`/ai/ad-copy/${genId}/ad-groups`, { ad_groups: adGroups })
+        .then(
+          (r) =>
+            r.data as {
+              ok: boolean;
+              reason?: string;
+              ad_groups?: AdGroupPlan[];
+              invalid?: { kind: string; text: string; length: number; limit: number }[];
+            }
+        ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["approval", genId] });
+      qc.invalidateQueries({ queryKey: ["adcopy-history"] });
+    },
+  });
 }
 
 // Rebuild the ad copy from the plan's current (edited) keywords. Discards manual

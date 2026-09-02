@@ -548,6 +548,9 @@ class AdCopyGenerateResponse(BaseModel):
     historical: HistoricalInsights
     keywords: list[KeywordInsight]
     keyword_groups: list[KeywordGroup]
+    # Per-ad-group RSAs (distinct intents), each with one or more ads. Loose dicts so
+    # the ad-group ad shape can evolve without a schema migration. Null on old plans.
+    ad_groups: list[dict] | None = None
     campaign_recommendation: CampaignRecommendation
     assets: GeneratedAssets
     quality: QualityPrediction

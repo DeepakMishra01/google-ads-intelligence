@@ -25,6 +25,7 @@ import {
   useKeywordLookup,
   useImportKeywords,
   useRegenerateAdCopy,
+  useSaveAdGroups,
   useSaveAssetEdits,
   useSaveKeywordEdits,
   useSaveScorecard,
@@ -35,6 +36,7 @@ import { useFilters } from "@/state/FiltersContext";
 import type {
   AdCopyGenerateResponse,
   AdCopySearchTerm,
+  AdGroupPlan,
   AssetEdits,
   BidAudit,
   BudgetPacing,
@@ -2598,6 +2600,193 @@ function EditableAdCopy({
 
 // Saved-plan records: generations persist in the DB, so a plan can be re-opened
 // after closing the platform or switching tools. Lists recent plans; click to load.
+function AdGroupsView({
+  genId,
+  adGroups,
+  onSaved,
+}: {
+  genId: number | null;
+  adGroups: AdGroupPlan[];
+  onSaved?: () => void;
+}) {
+  // Deep-clone so edits are local until saved.
+  const [groups, setGroups] = useState<AdGroupPlan[]>(() =>
+    JSON.parse(JSON.stringify(adGroups))
+  );
+  const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const save = useSaveAdGroups(genId ?? 0);
+
+  const H_LIMIT = 30;
+  const D_LIMIT = 90;
+
+  const mutate = (fn: (g: AdGroupPlan[]) => void) => {
+    setGroups((prev) => {
+      const next = JSON.parse(JSON.stringify(prev)) as AdGroupPlan[];
+      fn(next);
+      return next;
+    });
+    setDirty(true);
+    setSavedAt(false);
+  };
+
+  const setText = (
+    gi: number,
+    ai: number,
+    kind: "headlines" | "descriptions",
+    value: string
+  ) => mutate((g) => { g[gi].ads[ai][kind] = value.split("\n"); });
+
+  const addAd = (gi: number) =>
+    mutate((g) => {
+      const ads = g[gi].ads;
+      if (ads.length >= 3) return; // Google allows up to 3 ads/ad group
+      const src = ads[ads.length - 1] ?? { headlines: [], descriptions: [] };
+      ads.push({
+        label: `Ad ${ads.length + 1}`,
+        headlines: [...src.headlines],
+        descriptions: [...src.descriptions],
+      });
+    });
+
+  const removeAd = (gi: number, ai: number) =>
+    mutate((g) => {
+      g[gi].ads.splice(ai, 1);
+      g[gi].ads.forEach((a, i) => (a.label = `Ad ${i + 1}`));
+    });
+
+  const doSave = () => {
+    if (genId == null) return;
+    setSaveErr(null);
+    save.mutate(groups, {
+      onSuccess: (data) => {
+        if (data.ok === false) {
+          setSavedAt(false);
+          setSaveErr(
+            data.invalid?.length
+              ? `${data.invalid.length} line(s) exceed Google's limits — shorten them and save again.`
+              : data.reason ?? "Couldn't save the ad groups."
+          );
+          return;
+        }
+        if (data.ad_groups) setGroups(data.ad_groups);
+        setDirty(false);
+        setSavedAt(true);
+        onSaved?.();
+      },
+      onError: () => setSaveErr("Couldn't save — please try again."),
+    });
+  };
+
+  const lineClass = (lines: string[], limit: number) =>
+    lines.some((l) => l.trim().length > limit) ? "border-red-300 bg-red-50" : "";
+
+  return (
+    <Section
+      title="Ad groups — one tailored ad per intent"
+      hint={`${groups.length} ad groups · up to 3 ads each`}
+    >
+      <p className="mb-3 text-xs text-slate-500">
+        Each ad group targets a distinct intent with its own keywords and ad copy. Edit
+        the headlines/descriptions (one per line — headlines ≤{H_LIMIT}, descriptions ≤
+        {D_LIMIT} chars) and use <b>+ Add another ad</b> to run 2–3 ads per group (Google
+        rotates them and learns the winner).
+      </p>
+      <div className="space-y-4">
+        {groups.map((g, gi) => (
+          <div key={`${g.name}-${gi}`} className="rounded-lg border border-slate-200 p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-slate-800">{g.name}</span>
+              {g.intent && (
+                <Badge className="bg-slate-100 text-slate-600">{g.intent}</Badge>
+              )}
+              <span className="text-xs text-slate-400">
+                {g.keywords.length} keyword{g.keywords.length === 1 ? "" : "s"}
+                {g.recommended_bid != null ? ` · bid ${money(g.recommended_bid)}` : ""}
+              </span>
+            </div>
+            {g.keywords.length > 0 && (
+              <div className="mb-3">
+                <Chips items={g.keywords.slice(0, 12)} tone="brand" />
+              </div>
+            )}
+            <div className="space-y-3">
+              {g.ads.map((ad, ai) => (
+                <div key={ai} className="rounded-md bg-slate-50 p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-600">{ad.label}</span>
+                    {g.ads.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-red-500 hover:text-red-700"
+                        onClick={() => removeAd(gi, ai)}
+                      >
+                        Remove ad
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <div>
+                      <div className="mb-1 text-[11px] font-medium text-slate-500">
+                        Headlines ({ad.headlines.filter((h) => h.trim()).length})
+                      </div>
+                      <textarea
+                        className={`input min-h-[140px] w-full text-xs ${lineClass(ad.headlines, H_LIMIT)}`}
+                        value={ad.headlines.join("\n")}
+                        onChange={(e) => setText(gi, ai, "headlines", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 text-[11px] font-medium text-slate-500">
+                        Descriptions ({ad.descriptions.filter((d) => d.trim()).length})
+                      </div>
+                      <textarea
+                        className={`input min-h-[140px] w-full text-xs ${lineClass(ad.descriptions, D_LIMIT)}`}
+                        value={ad.descriptions.join("\n")}
+                        onChange={(e) => setText(gi, ai, "descriptions", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {g.ads.length < 3 && (
+              <button
+                type="button"
+                className="btn btn-ghost mt-2 h-8 px-3 text-xs"
+                onClick={() => addAd(gi)}
+              >
+                + Add another ad
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {(dirty || savedAt) && (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-primary h-9 px-4"
+            onClick={doSave}
+            disabled={!dirty || save.isPending || genId == null}
+          >
+            {save.isPending ? "Saving…" : "Save ad groups"}
+          </button>
+          <span className={`text-xs ${saveErr ? "text-red-600" : "text-slate-500"}`}>
+            {saveErr
+              ? saveErr
+              : savedAt && !save.isPending
+                ? "Saved ✓ — plan reset to draft; re-submit for approval."
+                : "Editing ad groups resets the plan to draft."}
+          </span>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 const PLAN_STATUS_STYLE: Record<string, string> = {
   approved: "bg-green-100 text-green-700",
   rejected: "bg-red-100 text-red-700",
@@ -3193,6 +3382,15 @@ export default function AiAdCopyGeneratorPage() {
               assetEdits={result.asset_edits}
               onSaved={refreshPlan}
             />
+
+            {result.ad_groups && result.ad_groups.length > 0 && (
+              <AdGroupsView
+                key={`ag-${result.id ?? "new"}-${result.ad_groups.length}`}
+                genId={result.id ?? null}
+                adGroups={result.ad_groups}
+                onSaved={refreshPlan}
+              />
+            )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Section title="Display paths">
