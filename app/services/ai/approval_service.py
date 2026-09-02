@@ -153,37 +153,67 @@ def effective_pacing(gen: AdCopyGeneration) -> dict[str, Any] | None:
     }
 
 
-# Fields the operator may override on the final strategy.
-_EDITABLE = ("budget", "target_leads", "target_cvr_pct", "bidding")
-_DEFAULT_TARGET_LEADS = 2000
+# Fields the operator may override on the final strategy. CPC and click-to-lead
+# are editable so the ad manager can correct AI assumptions before approval — an
+# unrealistic auto CPC no longer forces an unrealistic CPL.
+_EDITABLE = ("budget", "avg_cpc", "target_cvr_pct", "target_leads", "bidding")
 _DEFAULT_TARGET_CVR_PCT = 15.0  # industry-benchmark planning target
+_REFERENCE_CPL = 800.0  # midpoint of the ₹750–850 planning band (default lead target)
+
+
+def _num(v: Any) -> float | None:
+    """Coerce an editable value ('40', '₹40', '1,500') to a float; None if blank."""
+    if v is None:
+        return None
+    try:
+        return float(str(v).replace(",", "").replace("₹", "").strip())
+    except (TypeError, ValueError):
+        return None
 
 
 def _auto_values(gen: AdCopyGeneration) -> dict[str, Any]:
     plan = (gen.scores or {}).get("campaign_plan") or {}
     forecast = plan.get("forecast") or {}
     bidding = plan.get("bidding") or {}
-    # Use the plan's own conversion rate so the Final Strategy projection matches the
-    # Budget forecast (a hardcoded 15% here contradicted the forecast's assumed_cvr).
+    realism = plan.get("realism") or {}
+    # Use the plan's own click-to-lead rate so the projection matches the forecast.
     cvr = forecast.get("assumed_cvr")
     target_cvr_pct = round(float(cvr) * 100, 1) if cvr else _DEFAULT_TARGET_CVR_PCT
+    budget = forecast.get("budget") or 0
+    # Prefer the realism-adjusted CPC (CPC rises at scale) so the DEFAULT clicks /
+    # leads / CPL aren't wildly optimistic; fall back to the flat blended/anchor CPC.
+    cpc = (realism.get("effective_cpc") or forecast.get("blended_cpc")
+           or forecast.get("anchor_cpc"))
+    est_clicks = forecast.get("est_clicks")  # fallback only (used if CPC is missing)
+    # Campaign-specific default lead target = budget ÷ reference CPL (NOT a flat 2000).
+    cplp = plan.get("cpl_plan") or {}
+    clo, chi = cplp.get("target_cpl_low"), cplp.get("target_cpl_high")
+    ref_cpl = ((float(clo) + float(chi)) / 2) if (clo and chi) else _REFERENCE_CPL
+    default_leads = round(budget / ref_cpl) if (budget and ref_cpl) else None
     return {
-        "budget": forecast.get("budget"),
-        "target_leads": _DEFAULT_TARGET_LEADS,
+        "budget": budget or None,
+        "avg_cpc": round(float(cpc), 2) if cpc else None,
+        "target_leads": default_leads,
         "target_cvr_pct": target_cvr_pct,
         "bidding": bidding.get("recommended") or bidding.get("primary"),
-        "_est_clicks": forecast.get("est_clicks"),
+        "_est_clicks": est_clicks,
     }
 
 
 def build_final_strategy(gen: AdCopyGeneration) -> dict[str, Any]:
-    """Merge auto values with operator overrides and recompute leads/CPL."""
+    """Merge auto values with operator overrides and recompute clicks/leads/CPL.
+
+    Editing CPC recomputes clicks (budget÷CPC); editing click-to-lead or leads
+    recomputes CPL — so the numbers are always internally consistent and the ad
+    manager can dial them to reality before sending for approval.
+    """
     auto = _auto_values(gen)
     overrides = gen.overrides or {}
     labels = {
         "budget": "Budget (₹)",
+        "avg_cpc": "Avg CPC (₹)",
+        "target_cvr_pct": "Click-to-lead rate % (planning)",
         "target_leads": "Target leads",
-        "target_cvr_pct": "Target conversion rate % (planning)",
         "bidding": "Bidding strategy",
     }
     fields: list[dict[str, Any]] = []
@@ -203,22 +233,25 @@ def build_final_strategy(gen: AdCopyGeneration) -> dict[str, Any]:
             "at": ov.get("at"),
         })
 
-    # Recompute leads/CPL from the effective numbers.
-    clicks = auto.get("_est_clicks") or 0
-    budget = eff.get("budget") or 0
-    cvr = (eff.get("target_cvr_pct") or 0) / 100.0
+    # Recompute from the effective numbers. Clicks follow the (editable) CPC so a
+    # corrected CPC flows through to a realistic CPL.
+    budget = _num(eff.get("budget")) or 0
+    cpc = _num(eff.get("avg_cpc")) or 0
+    cvr = (_num(eff.get("target_cvr_pct")) or 0) / 100.0
+    target_leads = _num(eff.get("target_leads"))
+    clicks = round(budget / cpc) if (budget and cpc) else (auto.get("_est_clicks") or 0)
     est_leads = round(clicks * cvr) if clicks and cvr else None
     est_cpl = round(budget / est_leads) if est_leads else None
     return {
         "fields": fields,
         "est_clicks": clicks or None,
-        "target_cvr_pct": eff.get("target_cvr_pct"),
+        "avg_cpc": cpc or None,
+        "target_cvr_pct": _num(eff.get("target_cvr_pct")),
         "est_leads": est_leads,
         "est_cpl": est_cpl,
-        "target_leads": eff.get("target_leads"),
-        "meets_target": (est_leads is not None
-                         and eff.get("target_leads")
-                         and est_leads >= eff["target_leads"]),
+        "target_leads": round(target_leads) if target_leads else None,
+        "meets_target": (est_leads is not None and target_leads
+                         and est_leads >= target_leads),
     }
 
 

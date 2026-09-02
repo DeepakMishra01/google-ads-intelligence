@@ -2138,7 +2138,9 @@ function ApprovalTab({ genId }: { genId: number }) {
                   <tr key={f.key} className="border-b border-slate-50">
                     <td className="py-1.5 text-slate-600">{f.label}</td>
                     <td className="font-medium text-slate-800">
-                      {f.key === "budget" ? money(Number(f.value)) : String(f.value ?? "—")}
+                      {f.key === "budget" || f.key === "avg_cpc"
+                        ? money(Number(f.value))
+                        : String(f.value ?? "—")}
                     </td>
                     <td>
                       {f.edited ? (
@@ -2165,8 +2167,8 @@ function ApprovalTab({ genId }: { genId: number }) {
             </Badge>
           </div>
           <div className="mt-1 text-[11px] text-slate-400">
-            Editing conversion %, budget or leads updates the projection instantly. Changing keywords/
-            copy needs a re-generate.
+            Editing CPC, click-to-lead %, budget or leads updates the projection instantly (CPL is
+            recomputed). Changing keywords/copy needs a re-generate.
           </div>
         </Section>
       )}
